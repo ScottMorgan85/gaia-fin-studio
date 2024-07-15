@@ -1,0 +1,15 @@
+streamlit
+groq
+pandas
+numpy
+reportlab
+fpdf
+io
+os
+sys
+traceback
+datetime
+typing
+base64
+json
+random

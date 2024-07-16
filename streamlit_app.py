@@ -2,7 +2,7 @@ import io
 import os
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -27,16 +27,63 @@ models = {
 
 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# fake_clients = ["", "Warren Miller","Sandor Clegane", "Hari Seldon", "James Holden", "Alice Johnson", "Bob Smith", "Carol White", "David Brown", "Eve Black"]
-
-# genai-commentary-copilot
-
 clients = ["Warren Miller", "Sandor Clegane", "Hari Seldon", "James Holden", "Alice Johnson", "Bob Smith", "Carol White", "David Brown", "Eve Black"]
-strategies = ["Equity", "Government Bonds", "High Yield Bonds", "Leveraged Loans", "Commodities", "Private Equity", "Long Short Equity", "Long Short High Yield Bonds"]
-risks = ["High", "Medium", "Low"]
+strategies = [
+    "Equity", 
+    "Government Bonds", 
+    "High Yield Bonds", 
+    "Leveraged Loans", 
+    "Commodities", 
+    "Private Equity", 
+    "Long Short Equity Hedge Fund", 
+    "Long Short High Yield Bond"
+]
 
-client_strategy_map = {client: random.choice(strategies) for client in clients}
-client_risk_profile = {client: random.choice(risks) for client in clients}
+# Define the risk mapping for strategies
+strategy_risk_mapping = {
+    "Equity": "High",
+    "Government Bonds": "Low",
+    "High Yield Bonds": "High",
+    "Leveraged Loans": "High",
+    "Commodities": "Medium",
+    "Private Equity": "High",
+    "Long Short Equity Hedge Fund": "Medium",
+    "Long Short High Yield Bond": "Medium"
+}
+
+# Client-Strategy mapping (as an example, could be shuffled)
+client_strategy_risk_mapping = {
+    "Warren Miller": ("Equity", "High"),
+    "Sandor Clegane": ("Government Bonds", "Low"),
+    "Hari Seldon": ("High Yield Bonds", "High"),
+    "James Holden": ("Leveraged Loans", "High"),
+    "Alice Johnson": ("Commodities", "Medium"),
+    "Bob Smith": ("Private Equity", "High"),
+    "Carol White": ("Long Short Equity Hedge Fund", "Medium"),
+    "David Brown": ("Long Short High Yield Bond", "Medium"),
+    "Eve Black": ("High Yield Bonds", "High")
+}
+
+# Generate a random date in the last 20 years
+def generate_random_date():
+    start_date = datetime(2004, 1, 1)
+    end_date = datetime.now()
+    random_date = start_date + (end_date - start_date) * random.random()
+    return random_date.strftime("%m/%Y")
+
+# Generate a random total assets value
+def generate_random_assets():
+    return f"${random.uniform(10, 100):.1f} m"
+
+# Get the last four quarter ends
+def get_last_four_quarters():
+    current_date = datetime.now()
+    quarters = []
+    for i in range(4):
+        quarter_end = (current_date.replace(day=1) - timedelta(days=1)).strftime("%m/%Y")
+        quarters.append(quarter_end)
+        current_date = current_date.replace(day=1) - timedelta(days=1)
+    return quarters
 
 firm_name = "Morgan Investment Management"
 # logo_path = "/mnt/c/Users/Scott Morgan/documents/github/genai-commentary-copilot/images/logo.png"
@@ -108,42 +155,98 @@ if st.session_state.selected_model != model_option:
     st.session_state.messages = []
     st.session_state.selected_model = model_option
     
+# Streamlit sidebar for client selection
 selected_client = st.sidebar.selectbox("Select Client", clients)
-selected_strategy = st.sidebar.selectbox("Select Strategy", strategies)
+selected_strategy, selected_risk = client_strategy_risk_mapping[selected_client]
 
-    
-def generate_investment_commentary(model_option, selected_client,selected_strategy):
-    COMMENTARY_PROMPT = f"""
-    Always start with "Dear {selected_client},"
+# Dropdown for last four quarter ends
+quarter_ends = get_last_four_quarters()
+selected_quarter = st.sidebar.selectbox("Select Quarter End", quarter_ends)
 
-    Limit the commentary to a maximum of 1 page or 20 sentences.
-    
-    This commentary while be focus on {selected_strategy}.
-    
-    If it is a long short equity or long short high yield, discuss longs and shorts and net and gross exposures.
+# Display client information and strategy in two columns
+col1, col2 = st.columns(2)
+with col1:
+    st.write(f"**Name:** {selected_client}")
+    st.write(f"**Strategy:** {selected_strategy}")
+    st.write(f"**Risk Profile:** {selected_risk}")
+with col2:
+    st.write(f"**Client Since:** {generate_random_date()}")
+    st.write(f"**Total Assets:** {generate_random_assets()}")
 
-    Focus on:
+# Add a dark line
+st.markdown("---")
+
+commentary_structure = {
+    "Equity": {
+        "headings": ["Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook"],
+        "index": "S&P 500"
+    },
+    "Government Bonds": {
+        "headings": ["Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook"],
+        "index": "Bloomberg Barclays US Aggregate Bond Index"
+    },
+    "High Yield Bonds": {
+        "headings": ["Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook"],
+        "index": "ICE BofAML US High Yield Index"
+    },
+    "Leveraged Loans": {
+        "headings": ["Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook"],
+        "index": "S&P/LSTA Leveraged Loan Index"
+    },
+    "Commodities": {
+        "headings": ["Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook"],
+        "index": "Bloomberg Commodity Index"
+    },
+    "Private Equity": {
+        "headings": ["Market Overview", "Exits", "Failures", "Successes", "Outlook"],
+        "index": "Cambridge Associates US Private Equity Index"
+    },
+    "Long Short Equity Hedge Fund": {
+        "headings": ["Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook"],
+        "index": "HFRI Equity Hedge Index"
+    },
+    "Long Short High Yield Bond": {
+        "headings": ["Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook"],
+        "index": "HFRI Fixed Income - Credit Index"
+    }
+}
+
+def generate_investment_commentary(model_option,selected_client,selected_strategy,selected_quarter):
+    structure = commentary_structure[selected_strategy]
+    headings = structure["headings"]
+    index = structure["index"]
+
+    commentary_prompt = f"""
+    Dear {selected_client},
+
+    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes.
+
+    {headings[0]}:
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
+
+    {headings[1]}:
     - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark.
+
+    {headings[2]}:
     - Mention any strategic adjustments made in response to market conditions.
+
+    {headings[3]}:
     - Provide an analysis of major sectors and stocks or bonds, explaining their impact on the portfolio.
+
+    {headings[4]}:
     - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
+<Add a few spaces>
 
-    Tone:
-    - Professional and analytical, focusing on detailed market analysis and specific investment performance.
-    - Use precise financial terminology and ensure the commentary is data-driven.
-    - Reflect a sophisticated understanding of market trends and investment strategies.
-    - Be succinct yet informative, providing clear insights that help understand the investment decisions and outlook.
-    
-    Always end with  "Disclaimer: This document is confidential and intended solely for the addressee. "
-        "It may contain privileged information. If you are not the intended recipient, "
-        "you must not disclose or use the information contained in it. If you have received this document in error, please notify us immediately and delete it from your system."
+    - Best Regards,
+    Scott Morgan
+    Managing Partner
+
     """.strip()
-
+    
     try:
         chat_completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": COMMENTARY_PROMPT},
+                {"role": "system", "content": commentary_prompt},
                 {"role": "user", "content": "Generate investment commentary based on the provided details."}
             ],
             model=model_option,
@@ -158,7 +261,7 @@ def generate_investment_commentary(model_option, selected_client,selected_strate
 
 if st.sidebar.button("Generate Commentary"):
     with st.spinner('Generating...'):
-        commentary = generate_investment_commentary(model_option,selected_client, selected_strategy)
+        commentary = generate_investment_commentary(model_option,selected_client, selected_strategy,selected_quarter)
     if commentary:
         st.success('Commentary generated successfully!')
         formatted_commentary = commentary.replace("\n", "\n\n")
@@ -173,3 +276,7 @@ if st.sidebar.button("Reset"):
 
 
 
+
+    # Disclaimer: This document is confidential and intended solely for the addressee. 
+    # It may contain privileged information. If you are not the intended recipient, 
+    # you must not disclose or use the information contained in it. If you have received this document in error, please notify us immediately and delete it from your system.

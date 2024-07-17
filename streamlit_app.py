@@ -1,23 +1,33 @@
 import os
-import sys
-import traceback
-from datetime import datetime, timedelta
-import pandas as pd
-import numpy as np
 import streamlit as st
-from groq import Groq
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from typing import Generator
-from fpdf import FPDF
-import base64
-import json
-import random
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
+import base64
+import random
+from groq import Groq
+
+
+# import os
+# import sys
+# import traceback
+# from datetime import datetime, timedelta
+# import pandas as pd
+# import numpy as np
+# import streamlit as st
+# from groq import Groq
+# from reportlab.lib.pagesizes import letter
+# from reportlab.pdfgen import canvas
+# from typing import Generator
+# from fpdf import FPDF
+# import base64
+# import json
+# import random
+# from reportlab.lib.pagesizes import letter
+# from reportlab.pdfgen import canvas
+# from reportlab.lib.units import inch
+# from reportlab.lib.styles import getSampleStyleSheet
+# from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 
 # Groq configuration
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])

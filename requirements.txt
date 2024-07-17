@@ -4,7 +4,6 @@ pandas
 numpy
 reportlab
 fpdf
-io
 os
 sys
 traceback

@@ -272,11 +272,6 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
 
     {headings[5]}:
     - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
-
-    # - Best Regards,
-    # Scott Morgan
-    # Managing Partner
-
     """.strip()
     
     try:

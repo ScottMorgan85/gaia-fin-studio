@@ -26,20 +26,21 @@ models = {
 
 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-clients = ["Warren Miller", "Sandor Clegane", "Hari Seldon", "James Holden", "Alice Johnson", "Bob Smith", "Carol White", "David Brown", "Eve Black"]
+clients = [" ","Warren Miller", "Sandor Clegane", "Hari Seldon", "James Holden", "Alice Johnson", "Bob Smith", "Carol White", "David Brown", "Eve Black"]
 strategies = [
+    " ",
     "Equity", 
     "Government Bonds", 
     "High Yield Bonds", 
     "Leveraged Loans", 
     "Commodities", 
-    "Private Equity", 
     "Long Short Equity Hedge Fund", 
     "Long Short High Yield Bond"
 ]
 
 # Define the risk mapping for strategies
 strategy_risk_mapping = {
+    "":"",
     "Equity": "High",
     "Government Bonds": "Low",
     "High Yield Bonds": "High",
@@ -52,6 +53,7 @@ strategy_risk_mapping = {
 
 # Client-Strategy mapping (as an example, could be shuffled)
 client_strategy_risk_mapping = {
+    " ": (" ", " "),
     "Warren Miller": ("Equity", "High"),
     "Sandor Clegane": ("Government Bonds", "Low"),
     "Hari Seldon": ("High Yield Bonds", "High"),
@@ -83,6 +85,10 @@ def get_last_four_quarters():
         quarters.append(quarter_end)
         current_date = current_date.replace(day=1) - timedelta(days=1)
     return quarters
+    
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
 
 firm_name = "Morgan Investment Management"
 # logo_path = "/mnt/c/Users/Scott Morgan/documents/github/genai-commentary-copilot/images/logo.png"
@@ -154,10 +160,17 @@ if st.session_state.selected_model != model_option:
     st.session_state.messages = []
     st.session_state.selected_model = model_option
     
+
 # Streamlit sidebar for client selection
 selected_client = st.sidebar.selectbox("Select Client", clients)
 selected_strategy, selected_risk = client_strategy_risk_mapping[selected_client]
 
+if selected_client in client_strategy_risk_mapping:
+    selected_strategy, selected_risk = client_strategy_risk_mapping[selected_client]
+else:
+    selected_strategy = ""
+    selected_risk = ""
+    
 # Dropdown for last four quarter ends
 quarter_ends = get_last_four_quarters()
 selected_quarter = st.sidebar.selectbox("Select Quarter End", quarter_ends)
@@ -176,36 +189,37 @@ with col2:
 st.markdown("---")
 
 commentary_structure = {
+
     "Equity": {
-        "headings": ["Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
         "index": "S&P 500"
     },
     "Government Bonds": {
-        "headings": ["Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
         "index": "Bloomberg Barclays US Aggregate Bond Index"
     },
     "High Yield Bonds": {
-        "headings": ["Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
         "index": "ICE BofAML US High Yield Index"
     },
     "Leveraged Loans": {
-        "headings": ["Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
         "index": "S&P/LSTA Leveraged Loan Index"
     },
     "Commodities": {
-        "headings": ["Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
         "index": "Bloomberg Commodity Index"
     },
     "Private Equity": {
-        "headings": ["Market Overview", "Exits", "Failures", "Successes", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
         "index": "Cambridge Associates US Private Equity Index"
     },
     "Long Short Equity Hedge Fund": {
-        "headings": ["Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
         "index": "HFRI Equity Hedge Index"
     },
     "Long Short High Yield Bond": {
-        "headings": ["Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook"],
+        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
         "index": "HFRI Fixed Income - Credit Index"
     }
 }
@@ -220,21 +234,20 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
 
     This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes.
 
-    {headings[0]}:
+    {headings[1]}:
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
 
-    {headings[1]}:
+    {headings[2]}:
     - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark.
 
-    {headings[2]}:
+    {headings[3]}:
     - Mention any strategic adjustments made in response to market conditions.
 
-    {headings[3]}:
+    {headings[4]}:
     - Provide an analysis of major sectors and stocks or bonds, explaining their impact on the portfolio.
 
-    {headings[4]}:
+    {headings[5]}:
     - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
-<Add a few spaces>
 
     - Best Regards,
     Scott Morgan
@@ -257,25 +270,47 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
 
     return commentary
 
+def create_pdf(commentary):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 16)
+    for line in commentary.split('\n'):
+        pdf.cell(200, 10, line, ln=True)
+    return pdf.output(dest="S").encode("latin-1")
 
 if st.sidebar.button("Generate Commentary"):
     with st.spinner('Generating...'):
-        commentary = generate_investment_commentary(model_option,selected_client, selected_strategy,selected_quarter)
+        commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
+        st.session_state.commentary = commentary
     if commentary:
         st.success('Commentary generated successfully!')
+        pdf_data = create_pdf(commentary)
+        download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
+        st.markdown(download_link, unsafe_allow_html=True)
         formatted_commentary = commentary.replace("\n", "\n\n")
         st.markdown(formatted_commentary, unsafe_allow_html=False)
+        
+    
     else:
         st.error("No commentary generated.")
 
 if st.sidebar.button("Reset"):
     st.session_state.pop('commentary', None)
-    st.session_state.pop('pdf_file', None)
-    st.session_state.messages = []
+    st.session_state.pop('selected_client', None)
+    st.session_state.selected_strategy = ""
+    st.session_state.selected_quarter = ""
 
+# if st.sidebar.button("Generate PDF"):
+#     commentary
 
-
+    # if st.sidebar.button("Reset"):
+#     st.session_state.pop('commentary', None)
+#     st.session_state.pop('pdf_file', None)
+#     st.session_state.messages = []
+#     # st.session_state.selected_client = []
+#     # st.session_state.selected_strategy = []
+#     # st.session_state.selected_quarter = []
 
     # Disclaimer: This document is confidential and intended solely for the addressee. 
     # It may contain privileged information. If you are not the intended recipient, 
-    # you must not disclose or use the information contained in it. If you have received this document in error, please notify us immediately and delete it from your system.
+    # you must not disclose or use the information contained in it. If you have received this document in error, please notify us immediately and delete it from your system. 

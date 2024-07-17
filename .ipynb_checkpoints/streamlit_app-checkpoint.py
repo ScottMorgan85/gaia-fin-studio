@@ -13,6 +13,11 @@ from fpdf import FPDF
 import base64
 import json
 import random
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 
 # Groq configuration
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -91,9 +96,11 @@ def create_download_link(val, filename):
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
 
 firm_name = "Morgan Investment Management"
-# logo_path = "/mnt/c/Users/Scott Morgan/documents/github/genai-commentary-copilot/images/logo.png"
-# signature_path = "/mnt/c/Users/Scott Morgan/Documents/GitHub/genai-commentary-copilot/images/signature.png"
-# file_path = '/mnt/c/Users/Scott Morgan/documents/github/genai-commentary-copilot/commentaries/'  # Path to save PDFs
+# logo_path = "/images/logo.png"
+# signature_path = "/images/signature.png"
+# file_path = '/mnt/c/Users/Scott Morgan/documents/github/genai-commentary-copilot/commentaries/'  # 
+# logo_path = '/images/logo.png'
+# signature_path = '/images/signature.png'
 
 # Initialize chat history and selected model
 if "messages" not in st.session_state:
@@ -104,6 +111,16 @@ if "selected_model" not in st.session_state:
 
 if "commentary" not in st.session_state:
     st.session_state.commentary = None
+
+if "selected_client" not in st.session_state:
+    st.session_state.selected_client = " "
+    
+if "selected_quarter" not in st.session_state:
+    st.session_state.selected_quarter = " "
+    
+if "selected_strategy" not in st.session_state:
+    st.session_state.selected_strategy = " "
+
 
 # if "pdf_file" not in st.session_state:
 #     st.session_state.pdf_file = None
@@ -159,7 +176,8 @@ model_option = st.sidebar.selectbox(
 if st.session_state.selected_model != model_option:
     st.session_state.messages = []
     st.session_state.selected_model = model_option
-    
+
+# Initialize state variables if they do not exist
 
 # Streamlit sidebar for client selection
 selected_client = st.sidebar.selectbox("Select Client", clients)
@@ -173,7 +191,12 @@ else:
     
 # Dropdown for last four quarter ends
 quarter_ends = get_last_four_quarters()
-selected_quarter = st.sidebar.selectbox("Select Quarter End", quarter_ends)
+selected_quarter = st.sidebar.selectbox("Select Quarter End", quarter_ends, index=quarter_ends.index(st.session_state.selected_quarter) if st.session_state.selected_quarter in quarter_ends else 0)
+
+# Update session state with the selections
+st.session_state.selected_client = selected_client
+st.session_state.selected_strategy = selected_strategy
+st.session_state.selected_quarter = selected_quarter
 
 # Display client information and strategy in two columns
 col1, col2 = st.columns(2)
@@ -182,8 +205,9 @@ with col1:
     st.write(f"**Strategy:** {selected_strategy}")
     st.write(f"**Risk Profile:** {selected_risk}")
 with col2:
-    st.write(f"**Client Since:** {generate_random_date()}")
-    st.write(f"**Total Assets:** {generate_random_assets()}")
+    if selected_client.strip() != "":
+        st.write(f"**Client Since:** {generate_random_date()}")
+        st.write(f"**Total Assets:** {generate_random_assets()}")
 
 # Add a dark line
 st.markdown("---")
@@ -232,7 +256,7 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     commentary_prompt = f"""
     Dear {selected_client},
 
-    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes.
+    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be releatively detailed so this goes about 2 pages.
 
     {headings[1]}:
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
@@ -249,9 +273,9 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     {headings[5]}:
     - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
 
-    - Best Regards,
-    Scott Morgan
-    Managing Partner
+    # - Best Regards,
+    # Scott Morgan
+    # Managing Partner
 
     """.strip()
     
@@ -271,12 +295,70 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     return commentary
 
 def create_pdf(commentary):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 16)
-    for line in commentary.split('\n'):
-        pdf.cell(200, 10, line, ln=True)
-    return pdf.output(dest="S").encode("latin-1")
+    margin = 25  # Define a margin for the page
+    page_width, page_height = letter  # Standard letter page size
+
+    file_path = "/tmp/commentary.pdf"  # Temporary file path
+    doc = SimpleDocTemplate(file_path, pagesize=letter, rightMargin=margin, leftMargin=margin, topMargin=margin, bottomMargin=margin)
+    styles = getSampleStyleSheet()
+    Story = []
+
+    # Placeholder paths for logo and signature
+    logo_path = "./images/logo.png"
+    signature_path = "./images/signature.png"
+
+    # Add the logo
+    logo = Image(logo_path, width=150, height=100)  # Adjust the logo size as needed
+    logo.hAlign = 'CENTER'
+    Story.append(logo)
+    Story.append(Spacer(1, 12))
+
+    # Add the title
+    Story.append(Paragraph("Quarterly Investment Commentary", styles['Title']))
+    Story.append(Spacer(1, 20))
+
+    # Add spacing between paragraphs
+    def add_paragraph_spacing(text):
+        return text.replace('\n', '\n\n')
+
+    spaced_commentary = add_paragraph_spacing(commentary)
+    paragraphs = spaced_commentary.split('\n\n')
+    for paragraph in paragraphs:
+        Story.append(Paragraph(paragraph, styles['BodyText']))
+        Story.append(Spacer(1, 5))
+
+    # Add the closing statement
+    Story.append(Paragraph("Together, we create financial solutions that lead the way to a prosperous future.", styles['Italic']))
+    Story.append(Spacer(1, 20))
+
+    # Add the signature
+    signature = Image(signature_path, width=75, height=25)  # Adjust the signature size as needed
+    signature.hAlign = 'LEFT'
+    Story.append(signature)
+    Story.append(Spacer(1, 12))
+    Story.append(Paragraph("Scott M. Morgan", styles['Normal']))
+    Story.append(Paragraph("President", styles['Normal']))
+    Story.append(Spacer(1, 24))
+
+    # Add the disclaimer
+    disclaimer_text = (
+        "Performance data quoted represents past performance, which does not guarantee future results. Current performance may be lower or higher than the figures shown. "
+        "Principal value and investment returns will fluctuate, and investors’ shares, when redeemed, may be worth more or less than the original cost. Performance would have "
+        "been lower if fees had not been waived in various periods. Total returns assume the reinvestment of all distributions and the deduction of all fund expenses. Returns "
+        "for periods of less than one year are not annualized. All classes of shares may not be available to all investors or through all distribution channels."
+    )
+    disclaimer_style = styles['BodyText']
+    disclaimer_style.fontSize = 6
+    Story.append(Paragraph(disclaimer_text, disclaimer_style))
+
+    # Build the PDF
+    doc.build(Story)
+    
+    # Read the PDF and return its content
+    with open(file_path, "rb") as f:
+        pdf_data = f.read()
+    
+    return pdf_data
 
 if st.sidebar.button("Generate Commentary"):
     with st.spinner('Generating...'):
@@ -284,32 +366,41 @@ if st.sidebar.button("Generate Commentary"):
         st.session_state.commentary = commentary
     if commentary:
         st.success('Commentary generated successfully!')
+
+        formatted_commentary = commentary.replace("\n", "\n\n")
+        st.markdown(formatted_commentary, unsafe_allow_html=False)
+
         pdf_data = create_pdf(commentary)
         download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
         st.markdown(download_link, unsafe_allow_html=True)
-        formatted_commentary = commentary.replace("\n", "\n\n")
-        st.markdown(formatted_commentary, unsafe_allow_html=False)
-        
-    
     else:
         st.error("No commentary generated.")
 
 if st.sidebar.button("Reset"):
-    st.session_state.pop('commentary', None)
-    st.session_state.pop('selected_client', None)
+    st.session_state.selected_client = " "
     st.session_state.selected_strategy = ""
-    st.session_state.selected_quarter = ""
+    st.session_state.selected_quarter = " "
+    st.experimental_rerun() 
 
-# if st.sidebar.button("Generate PDF"):
-#     commentary
+# if st.sidebar.button("Generate Commentary"):
+#     with st.spinner('Generating...'):
+#         commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
+#         st.session_state.commentary = commentary
+#     if commentary:
+#         st.success('Commentary generated successfully!')
+#         pdf_data = create_pdf(commentary)
+#         download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
+#         st.markdown(download_link, unsafe_allow_html=True)
+#         formatted_commentary = commentary.replace("\n", "\n\n")
+#         st.markdown(formatted_commentary, unsafe_allow_html=False)
+#     else:
+#         st.error("No commentary generated.")
 
-    # if st.sidebar.button("Reset"):
-#     st.session_state.pop('commentary', None)
-#     st.session_state.pop('pdf_file', None)
-#     st.session_state.messages = []
-#     # st.session_state.selected_client = []
-#     # st.session_state.selected_strategy = []
-#     # st.session_state.selected_quarter = []
+# if st.sidebar.button("Reset"):
+#     st.session_state.selected_client = " "
+#     st.session_state.selected_strategy = ""
+#     st.session_state.selected_quarter = " "
+#     st.experimental_rerun()  
 
     # Disclaimer: This document is confidential and intended solely for the addressee. 
     # It may contain privileged information. If you are not the intended recipient, 

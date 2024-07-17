@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import pandas as pd
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
@@ -8,6 +9,11 @@ import base64
 import random
 from groq import Groq
 
+# Load generated data
+monthly_returns_df = pd.read_csv('monthly_returns.csv', index_col='Date', parse_dates=True)
+trailing_returns_df = pd.read_csv('trailing_returns.csv', index_col='Date', parse_dates=True)
+portfolio_characteristics_df = pd.read_csv('portfolio_characteristics.csv')
+client_demographics_df = pd.read_csv('client_demographics.csv')
 
 # import os
 # import sys
@@ -223,6 +229,9 @@ with col2:
 # Add a dark line
 st.markdown("---")
 
+# Create tabs for Commentary and Insight
+tabs = st.tabs(["Commentary", "Insight"])
+
 commentary_structure = {
 
     "Equity": {
@@ -261,6 +270,9 @@ commentary_structure = {
 
 def generate_investment_commentary(model_option,selected_client,selected_strategy,selected_quarter):
     structure = commentary_structure[selected_strategy]
+    monthly_returns = monthly_returns_df[selected_strategy].tail(12).to_dict()
+    trailing_returns = trailing_returns_df[[col for col in trailing_returns_df.columns if col.startswith(selected_strategy)]].tail(1).to_dict()
+    portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
     headings = structure["headings"]
     index = structure["index"]
 
@@ -268,6 +280,9 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     Dear {selected_client},
 
     This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be releatively detailed so this goes about 2 pages.
+
+    Trailing Returns:
+    Discuss trailing returns for the {selected_strategy} strategy during the most recent period:{trailing_returns}
 
     {headings[1]}:
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
@@ -365,49 +380,65 @@ def create_pdf(commentary):
         pdf_data = f.read()
     
     return pdf_data
+with tabs[0]:
+    if st.sidebar.button("Generate Commentary"):
+        with st.spinner('Generating...'):
+            commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
+            st.session_state.commentary = commentary
+        if commentary:
+            st.success('Commentary generated successfully!')
+    
+            formatted_commentary = commentary.replace("\n", "\n\n")
+            st.markdown(formatted_commentary, unsafe_allow_html=False)
+    
+            pdf_data = create_pdf(commentary)
+            download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
+            st.markdown(download_link, unsafe_allow_html=True)
+        else:
+            st.error("No commentary generated.")
 
-if st.sidebar.button("Generate Commentary"):
-    with st.spinner('Generating...'):
-        commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
-        st.session_state.commentary = commentary
-    if commentary:
-        st.success('Commentary generated successfully!')
 
-        formatted_commentary = commentary.replace("\n", "\n\n")
-        st.markdown(formatted_commentary, unsafe_allow_html=False)
 
-        pdf_data = create_pdf(commentary)
-        download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
-        st.markdown(download_link, unsafe_allow_html=True)
-    else:
-        st.error("No commentary generated.")
+# Debug: Print the index of portfolio_characteristics_df to ensure it contains the expected strategy names
+st.write("Available portfolio characteristics indices:", portfolio_characteristics_df.index.tolist())
+
+# Insight Tab
+with tabs[1]:
+    st.header("Insight")
+
+    # Displaying monthly returns for the selected strategy
+    if selected_strategy.strip() != "":
+        st.subheader(f"{selected_strategy} - Monthly Returns")
+        if selected_strategy in monthly_returns_df.columns:
+            st.line_chart(monthly_returns_df[selected_strategy])
+        else:
+            st.write(f"No monthly returns data available for {selected_strategy}")
+
+        st.subheader(f"{selected_strategy} - Trailing Period Returns")
+        trailing_columns = [col for col in trailing_returns_df.columns if col.startswith(selected_strategy)]
+        if trailing_columns:
+            st.dataframe(trailing_returns_df[trailing_columns].tail(12))  # Show last 12 months of trailing returns
+        else:
+            st.write(f"No trailing period returns data available for {selected_strategy}")
+
+        st.subheader(f"{selected_strategy} - Portfolio Characteristics")
+        if selected_strategy in portfolio_characteristics_df.index:
+            st.table(portfolio_characteristics_df.loc[selected_strategy])
+        else:
+            st.write(f"No portfolio characteristics data available for {selected_strategy}")
+
+    # Displaying client demographic information
+    if selected_client.strip() != "":
+        st.subheader(f"Client Information - {selected_client}")
+        if selected_client in client_demographics_df.index:
+            st.table(client_demographics_df.loc[selected_client])
+        else:
+            st.write(f"No demographic data available for {selected_client}")
 
 if st.sidebar.button("Reset"):
+    st.empty()
+    st.session_state.selected_client = " "
     st.session_state.selected_client = " "
     st.session_state.selected_strategy = ""
     st.session_state.selected_quarter = " "
     st.experimental_rerun() 
-
-# if st.sidebar.button("Generate Commentary"):
-#     with st.spinner('Generating...'):
-#         commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
-#         st.session_state.commentary = commentary
-#     if commentary:
-#         st.success('Commentary generated successfully!')
-#         pdf_data = create_pdf(commentary)
-#         download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
-#         st.markdown(download_link, unsafe_allow_html=True)
-#         formatted_commentary = commentary.replace("\n", "\n\n")
-#         st.markdown(formatted_commentary, unsafe_allow_html=False)
-#     else:
-#         st.error("No commentary generated.")
-
-# if st.sidebar.button("Reset"):
-#     st.session_state.selected_client = " "
-#     st.session_state.selected_strategy = ""
-#     st.session_state.selected_quarter = " "
-#     st.experimental_rerun()  
-
-    # Disclaimer: This document is confidential and intended solely for the addressee. 
-    # It may contain privileged information. If you are not the intended recipient, 
-    # you must not disclose or use the information contained in it. If you have received this document in error, please notify us immediately and delete it from your system. 

@@ -1,6 +1,8 @@
 import os
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
@@ -14,34 +16,13 @@ monthly_returns_df = pd.read_csv('monthly_returns.csv', index_col='Date', parse_
 trailing_returns_df = pd.read_csv('trailing_returns.csv', index_col='Date', parse_dates=True)
 portfolio_characteristics_df = pd.read_csv('portfolio_characteristics.csv')
 client_demographics_df = pd.read_csv('client_demographics.csv')
-
-# import os
-# import sys
-# import traceback
-# from datetime import datetime, timedelta
-# import pandas as pd
-# import numpy as np
-# import streamlit as st
-# from groq import Groq
-# from reportlab.lib.pagesizes import letter
-# from reportlab.pdfgen import canvas
-# from typing import Generator
-# from fpdf import FPDF
-# import base64
-# import json
-# import random
-# from reportlab.lib.pagesizes import letter
-# from reportlab.pdfgen import canvas
-# from reportlab.lib.units import inch
-# from reportlab.lib.styles import getSampleStyleSheet
-# from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
+portfolio_characteristics_df.set_index('Strategy', inplace=True)
 
 # Groq configuration
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 models = {
     "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
     "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
-    "llama2-70b-4096": {"name": "LLaMA2-70b-chat", "tokens": 4096, "developer": "Meta"},
     "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
     "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
 }
@@ -58,6 +39,17 @@ strategies = [
     "Commodities", 
     "Long Short Equity Hedge Fund", 
     "Long Short High Yield Bond"
+]
+
+
+benchmarks = [
+    "S&P 500", 
+    "Bloomberg Barclays US Aggregate Bond Index", 
+    "ICE BofAML US High Yield Index", 
+    "S&P/LSTA Leveraged Loan Index", 
+    "Bloomberg Commodity Index", 
+    "HFRI Equity Hedge Index", 
+    "HFRI Fixed Income - Credit Index"
 ]
 
 # Define the risk mapping for strategies
@@ -113,21 +105,16 @@ def create_download_link(val, filename):
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
 
 firm_name = "Morgan Investment Management"
-# logo_path = "/images/logo.png"
-# signature_path = "/images/signature.png"
-# file_path = '/mnt/c/Users/Scott Morgan/documents/github/genai-commentary-copilot/commentaries/'  # 
-# logo_path = '/images/logo.png'
-# signature_path = '/images/signature.png'
 
 # Initialize chat history and selected model
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# if "messages" not in st.session_state:
+#     st.session_state.messages = []
 
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = None
 
-if "commentary" not in st.session_state:
-    st.session_state.commentary = None
+# if "commentary" not in st.session_state:
+#     st.session_state.commentary = None
 
 if "selected_client" not in st.session_state:
     st.session_state.selected_client = " "
@@ -135,12 +122,8 @@ if "selected_client" not in st.session_state:
 if "selected_quarter" not in st.session_state:
     st.session_state.selected_quarter = " "
     
-if "selected_strategy" not in st.session_state:
-    st.session_state.selected_strategy = " "
-
-
-# if "pdf_file" not in st.session_state:
-#     st.session_state.pdf_file = None
+# if "selected_strategy" not in st.session_state:
+#     st.session_state.selected_strategy = " "
 
 # --- STREAMLIT APP ---
 # Styling and Page Setup
@@ -168,6 +151,11 @@ st.markdown(
             text-align: center;
             color: #4a7bab;
         }
+        .section-title {
+            font-size: 30px; /* Adjust the font size as needed */
+            font-weight: bold;
+            color: #4a7bab; /* Adjust the color as needed */
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -193,8 +181,6 @@ model_option = st.sidebar.selectbox(
 if st.session_state.selected_model != model_option:
     st.session_state.messages = []
     st.session_state.selected_model = model_option
-
-# Initialize state variables if they do not exist
 
 # Streamlit sidebar for client selection
 selected_client = st.sidebar.selectbox("Select Client", clients)
@@ -230,7 +216,11 @@ with col2:
 st.markdown("---")
 
 # Create tabs for Commentary and Insight
+
+st.markdown("<div class='section-title'>Commentary</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-title'>Insights</div>", unsafe_allow_html=True)
 tabs = st.tabs(["Commentary", "Insight"])
+
 
 commentary_structure = {
 
@@ -298,6 +288,8 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
 
     {headings[5]}:
     - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
+
+    Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
     """.strip()
     
     try:
@@ -316,10 +308,10 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     return commentary
 
 def create_pdf(commentary):
-    margin = 25  # Define a margin for the page
-    page_width, page_height = letter  # Standard letter page size
+    margin = 25 
+    page_width, page_height = letter  
 
-    file_path = "/tmp/commentary.pdf"  # Temporary file path
+    file_path = "/tmp/commentary.pdf"  
     doc = SimpleDocTemplate(file_path, pagesize=letter, rightMargin=margin, leftMargin=margin, topMargin=margin, bottomMargin=margin)
     styles = getSampleStyleSheet()
     Story = []
@@ -380,7 +372,11 @@ def create_pdf(commentary):
         pdf_data = f.read()
     
     return pdf_data
+
+
 with tabs[0]:
+
+    
     if st.sidebar.button("Generate Commentary"):
         with st.spinner('Generating...'):
             commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
@@ -397,30 +393,93 @@ with tabs[0]:
         else:
             st.error("No commentary generated.")
 
+
+
 # Insight Tab
 with tabs[1]:
     st.header("Insight")
 
-    # Displaying monthly returns for the selected strategy
+    # Displaying trailing return performance
     if selected_strategy.strip() != "":
-        st.subheader(f"{selected_strategy} - Monthly Returns")
-        if selected_strategy in monthly_returns_df.columns:
-            st.line_chart(monthly_returns_df[selected_strategy])
-        else:
-            st.write(f"No monthly returns data available for {selected_strategy}")
+        st.subheader(f"{selected_strategy} - Annualized Total Return Performance")
+        
+        # Create a DataFrame similar to the example provided and pivot it
+        trailing_returns_data = {
+            "Period": ["Q1", "1 year", "3 years", "5 years", "10 years"],
+            "Fund A (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
+            "Fund B (Inception 12/18/08) before sales charge": [12.41, 33.43, 11.09, 12.95, 10.77],
+            "Fund A after sales charge": [5.95, 25.78, 8.02, 11.62, 10.12],
+            "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
+            "Linked Benchmark": [10.56, 29.08, 11.49, 14.98, 10.99]
+        }
+        trailing_returns_df = pd.DataFrame(trailing_returns_data).set_index("Period").T
 
-        st.subheader(f"{selected_strategy} - Trailing Period Returns")
-        trailing_columns = [col for col in trailing_returns_df.columns if col.startswith(selected_strategy)]
-        if trailing_columns:
-            st.dataframe(trailing_returns_df[trailing_columns].tail(12))  # Show last 12 months of trailing returns
-        else:
-            st.write(f"No trailing period returns data available for {selected_strategy}")
+        # Create columns for side-by-side display
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.table(trailing_returns_df)
 
-        st.subheader(f"{selected_strategy} - Portfolio Characteristics")
-        if selected_strategy in portfolio_characteristics_df.index:
-            st.table(portfolio_characteristics_df.loc[selected_strategy])
-        else:
-            st.write(f"No portfolio characteristics data available for {selected_strategy}")
+        with col2:
+           
+            fig, ax = plt.subplots(figsize=(6, 4))  # Adjust the figure size
+            ax.plot(monthly_returns_df.index, (monthly_returns_df[selected_strategy].cumsum() + 1) * 10000, label=f'{selected_strategy} Fund')
+            ax.plot(monthly_returns_df.index, (monthly_returns_df[benchmarks[strategies.index(selected_strategy)]].cumsum() + 1) * 10000, label='Benchmark')
+            ax.legend()
+            ax.set_title("Growth of $10K Since Inception")
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Value ($)")
+            st.pyplot(fig)
+
+        # Add Fund Facts, Geographic Breakdown, Sector Weightings, and Top 10 Holdings
+        st.subheader(f"{selected_strategy} - Fund Insights")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("**Fund Facts**")
+            fund_facts_data = {
+                "Metric": [
+                    "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "PEG Ratio", 
+                    "Debt to Capital", "ROIC", "Median Market Capitalization (mil)", 
+                    "Weighted Average Market Capitalization (mil)"
+                ],
+                "Fund": [
+                    55, "$138.4 M", "76.6%", 2.0, "38.6%", "28.0%", "$87,445", "$949,838"
+                ],
+                "Benchmark": [
+                    1427, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
+                ]
+            }
+            fund_facts_df = pd.DataFrame(fund_facts_data)
+            st.table(fund_facts_df)
+
+            st.write("**Geographic Breakdown**")
+            geo_breakdown_data = {
+                "Region": ["Developed", "Emerging"],
+                "Fund %": [86.9, 12.6],
+                "Benchmark %": [99.9, 0.1]
+            }
+            geo_breakdown_df = pd.DataFrame(geo_breakdown_data)
+            st.table(geo_breakdown_df)
+
+        with col2:
+            st.write("**Sector Weightings**")
+            sector_weightings_data = {
+                "Sector": ["Information Technology", "Industrials", "Consumer Discretionary", "Health Care", "Communication Services", "Financials", "Energy", "Consumer Staples", "Materials", "Real Estate", "Utilities", "Other"],
+                "Fund %": [34.5, 16.6, 13.1, 11.2, 6.9, 5.4, 3.5, 2.3, 2.1, 1.3, 0.0, 0.0],
+                "Benchmark %": [26.0, 10.7, 10.2, 14.8, 7.8, 14.3, 6.3, 4.3, 2.8, 2.4, 2.0, 0.0]
+            }
+            sector_weightings_df = pd.DataFrame(sector_weightings_data)
+            st.table(sector_weightings_df)
+
+            st.write("**Top 10 Holdings**")
+            top_holdings_data = {
+                "Holding": ["NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc.", "Amazon.com, Inc.", "Micron Technology, Inc.", "Hitachi, Ltd.", "Taiwan Semiconductor Mfg", "MakeMyTrip, Ltd."],
+                "Industry": ["Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware", "Broadline Retail", "Semiconductors", "Industrial Conglomerates", "Semiconductors", "Hotels, Resorts & Cruise Lines"],
+                "Country": ["United States", "United States", "United States", "Denmark", "United States", "United States", "United States", "Japan", "Taiwan", "India"],
+                "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9, 3.5, 3.0, 2.5, 2.5, 2.4]
+            }
+            top_holdings_df = pd.DataFrame(top_holdings_data)
+            st.table(top_holdings_df)
 
     # Displaying client demographic information
     if selected_client.strip() != "":
@@ -430,13 +489,10 @@ with tabs[1]:
         else:
             st.write(f"No demographic data available for {selected_client}")
 
-# Chat Input Section
-st.text_area("Enter your message:", key="chat_input")
-
-if st.sidebar.button("Reset"):
-    st.empty()
-    st.session_state.selected_client = " "
-    st.session_state.selected_client = " "
-    st.session_state.selected_strategy = ""
-    st.session_state.selected_quarter = " "
-    st.experimental_rerun() 
+# r.sidebar.button("Reset"):
+#         st.empty()
+#         st.session_state.selected_client = " "
+#         st.session_state.selected_client = " "
+#         st.session_state.selected_strategy = ""
+#         st.session_state.selected_quarter = " "
+#         st.experimental_rerun() 

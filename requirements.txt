@@ -4,7 +4,6 @@ pandas
 numpy
 reportlab
 fpdf
-os
 sys
 traceback
 datetime

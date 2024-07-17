@@ -1,11 +1,4 @@
 streamlit
-groq
 pandas
-numpy
 reportlab
-fpdf
-datetime
-typing
-base64
-json
-random
+groq

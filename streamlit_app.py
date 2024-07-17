@@ -397,11 +397,6 @@ with tabs[0]:
         else:
             st.error("No commentary generated.")
 
-
-
-# Debug: Print the index of portfolio_characteristics_df to ensure it contains the expected strategy names
-st.write("Available portfolio characteristics indices:", portfolio_characteristics_df.index.tolist())
-
 # Insight Tab
 with tabs[1]:
     st.header("Insight")
@@ -434,6 +429,9 @@ with tabs[1]:
             st.table(client_demographics_df.loc[selected_client])
         else:
             st.write(f"No demographic data available for {selected_client}")
+
+# Chat Input Section
+st.text_area("Enter your message:", key="chat_input")
 
 if st.sidebar.button("Reset"):
     st.empty()

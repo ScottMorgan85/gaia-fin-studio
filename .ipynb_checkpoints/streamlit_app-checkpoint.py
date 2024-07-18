@@ -5,12 +5,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Frame, PageTemplate
 from reportlab.lib.styles import getSampleStyleSheet
-import base64
+from reportlab.pdfgen import canvas
 import random
 from groq import Groq
 import plotly.graph_objects as go
+
 
 # Load generated data
 monthly_returns_df = pd.read_csv('data/monthly_returns.csv', index_col='Date', parse_dates=True)
@@ -18,6 +19,8 @@ trailing_returns_df = pd.read_csv('data/trailing_returns.csv', index_col='Date',
 portfolio_characteristics_df = pd.read_csv('data/portfolio_characteristics.csv')
 client_demographics_df = pd.read_csv('data/client_demographics.csv')
 transactions_df = pd.read_csv('data/client_transactions.csv')
+transactions_df['Transaction Type'] = transactions_df['Transaction Type'].str.strip()
+
 
 portfolio_characteristics_df.set_index('Strategy', inplace=True)
 
@@ -51,6 +54,7 @@ benchmarks = [
     "ICE BofAML US High Yield Index", 
     "S&P/LSTA Leveraged Loan Index", 
     "Bloomberg Commodity Index", 
+    "Cambridge Associates Private Equity Index",
     "HFRI Equity Hedge Index", 
     "HFRI Fixed Income - Credit Index"
 ]
@@ -80,8 +84,8 @@ client_strategy_risk_mapping = {
     "James Holden": ("Leveraged Loans", "High"),
     "Alice Johnson": ("Commodities", "Medium"),
     "Bob Smith": ("Private Equity", "High"),
-    "Carol White": ("Long Short Equity Hedge Fund", "Medium"),
-    "David Brown": ("Long Short High Yield Bond", "Medium"),
+    "Carol White": ("Long Short Equity Hedge Fund", "High"),
+    "David Brown": ("Long Short High Yield Bond", "High"),
     "Eve Black": ("High Yield Bonds", "High")
 }
 
@@ -128,9 +132,15 @@ trailing_returns = {
         "Gross (Inception 12/18/08)": [6.47, 11.78, 9.95, 10.22, 8.04],
         "Net": [5.95, 10.78, 8.82, 9.62, 7.12],
         "Primary Benchmark": [6.56, 12.08, 10.49, 11.05, 9.28],
+    },
+    "Private Equity": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [7.47, 14.78, 12.95, 13.22, 11.04],
+        "Net": [6.95, 13.78, 11.82, 12.62, 10.12],
+        "Primary Benchmark": [7.56, 15.08, 13.49, 14.05, 12.28],
     }
 }
-
+    
 sector_allocations = {
     "Equity": {
         "Sector": [
@@ -182,28 +192,28 @@ sector_allocations = {
         "Benchmark %": [40.0, 35.0, 15.0, 5.0, 5.0]
     },
     "Private Equity": {
-        "Portfolio Allocation": {
+        # "Portfolio Allocation": {
             "Type": ["Buyouts", "Growth Capital", "Venture Capital", "Distressed/Turnaround", "Secondaries", "Mezzanine", "Real Assets"],
             "Fund %": [40.0, 25.0, 15.0, 10.0, 5.0, 3.0, 2.0],
             "Benchmark %": [45.0, 20.0, 10.0, 15.0, 5.0, 3.0, 2.0]
-        },
-        "Geographic Allocation": {
-            "Region": ["North America", "Europe", "Asia-Pacific", "Latin America", "Middle East & Africa"],
-            "Fund %": [50.0, 25.0, 15.0, 5.0, 5.0],
-            "Benchmark %": [55.0, 20.0, 15.0, 5.0, 5.0]
-        },
-        "Sector Allocation": {
-            "Sector": ["Information Technology", "Healthcare", "Consumer Discretionary", "Industrials", "Financials", "Energy", "Communication Services", "Real Estate", "Utilities", "Materials"],
-            "Fund %": [25.0, 20.0, 15.0, 10.0, 10.0, 5.0, 5.0, 5.0, 3.0, 2.0],
-            "Benchmark %": [20.0, 15.0, 15.0, 15.0, 10.0, 10.0, 5.0, 5.0, 3.0, 2.0]
-        },
-        "Investment Stage Allocation": {
-            "Stage": ["Early Stage", "Mid Stage", "Late Stage"],
-            "Fund %": [30.0, 40.0, 30.0],
-            "Benchmark %": [25.0, 35.0, 40.0]
+        # },
+        # "Geographic Allocation": {
+        #     "Region": ["North America", "Europe", "Asia-Pacific", "Latin America", "Middle East & Africa"],
+        #     "Fund %": [50.0, 25.0, 15.0, 5.0, 5.0],
+        #     "Benchmark %": [55.0, 20.0, 15.0, 5.0, 5.0]
+        # },
+        # "Sector Allocation": {
+        #     "Sector": ["Information Technology", "Healthcare", "Consumer Discretionary", "Industrials", "Financials", "Energy", "Communication Services", "Real Estate", "Utilities", "Materials"],
+        #     "Fund %": [25.0, 20.0, 15.0, 10.0, 10.0, 5.0, 5.0, 5.0, 3.0, 2.0],
+        #     "Benchmark %": [20.0, 15.0, 15.0, 15.0, 10.0, 10.0, 5.0, 5.0, 3.0, 2.0]
+        # },
+        # "Investment Stage Allocation": {
+        #     "Stage": ["Early Stage", "Mid Stage", "Late Stage"],
+        #     "Fund %": [30.0, 40.0, 30.0],
+        #     "Benchmark %": [25.0, 35.0, 40.0]
         }
     }
-}
+
 
 
 portfolio_characteristics = {
@@ -248,15 +258,15 @@ portfolio_characteristics = {
     },
     "Leveraged Loans": {
         "Metric": [
-            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Duration", 
-            "Average Credit Quality", "Yield to Maturity", "Current Yield", 
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "DM-3YR", 
+            "Average Credit Quality", "Yield-3 YR", "Current Yield", 
             "Effective Duration"
         ],
         "Fund": [
-            100, "$300 M", "60.0%", "0.25 years", "B+", "6.75%", "6.5%", "0.2 years"
+            100, "$300 M", "60.0%", "450bps", "B+", "6.75%", "6.5%", "0.2 years"
         ],
         "Benchmark": [
-            500, "N/A", "N/A", "0.5 years", "BB-", "7.00%", "6.8%", "0.3 years"
+            500, "N/A", "N/A", "421 bps", "BB-", "7.00%", "6.8%", "0.3 years"
         ]
     },
     "Commodities": {
@@ -419,6 +429,21 @@ top_holdings = {
     }
 }
 
+# Convert the dictionary to DataFrame format
+portfolio_characteristics_list = []
+
+for strategy, data in portfolio_characteristics.items():
+    for i, metric in enumerate(data['Metric']):
+        portfolio_characteristics_list.append({
+            'Strategy': strategy,
+            'Metric': metric,
+            'Fund': data['Fund'][i],
+            'Benchmark': data['Benchmark'][i]
+        })
+
+portfolio_characteristics_df = pd.DataFrame(portfolio_characteristics_list)
+portfolio_characteristics_df.set_index('Strategy', inplace=True)
+
 
 # Generate a random date in the last 20 years
 def generate_random_date():
@@ -482,6 +507,8 @@ def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
     )
     
     return fig
+
+
 
 # Example usage:
 # Assuming `monthly_returns_df` is a DataFrame with the cumulative returns for each strategy and benchmark
@@ -586,7 +613,7 @@ st.markdown("<div class='motto'>Together, we create financial solutions that lea
 # st.title(f"{firm_name} Commentary Co-Pilot")
 st.markdown(f"<h1 class='custom-title'>{firm_name} Commentary Co-Pilot</h1>", unsafe_allow_html=True)
 
-st.markdown("<div style='font-size:18px; font-style:italic; color:#4a7bab;'>Navigate Your Financial Narrative!</div>", unsafe_allow_html=True)
+# st.markdown("<div style='font-size:18px; font-style:italic; color:#4a7bab;'>Navigate Your Financial Narrative!</div>", unsafe_allow_html=True)
 
 username = st.sidebar.text_input("Username", "amos_butcher@ceres.com")
 password = st.sidebar.text_input("Password", type="password", value="password123")
@@ -680,6 +707,15 @@ commentary_structure = {
     }
 }
 
+def get_top_transactions(selected_strategy):
+    filtered_transactions = transactions_df[transactions_df['Select_Strategy'] == selected_strategy]
+    top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
+    top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
+    top_transactions = pd.concat([top_buys, top_sells])
+    top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
+    return top_transactions_df
+
+
 
 def generate_investment_commentary(model_option,selected_client,selected_strategy,selected_quarter):
     structure = commentary_structure[selected_strategy]
@@ -691,10 +727,12 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
     headings = structure["headings"]
     index = structure["index"]
-    # index = benchmarks[strategies.index(selected_strategy) - 1]  # Assuming the indexes of benchmarks match strategies
 
 
-
+   # Create the transactions narrative
+    transaction_narratives = []
+    top_transactions_df=get_top_transactions(selected_strategy)
+  
     commentary_prompt = f"""
     Dear {selected_client},
 
@@ -708,7 +746,7 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
 
     {headings[2]}:
-    - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark.
+    - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark. Mention transactions during the period {top_transactions_df} and create a robust narraive. Never list out details from the actual transaction dataframe, keep it general.
 
     {headings[3]}:
     - Mention any strategic adjustments made in response to market conditions.
@@ -736,6 +774,7 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
         commentary = f"Failed to generate commentary: {str(e)}"
 
     return commentary
+
 
 def create_pdf(commentary):
     margin = 25 
@@ -803,7 +842,6 @@ def create_pdf(commentary):
     
     return pdf_data
 
-
 with tabs[0]:
    
     if st.sidebar.button("Generate Commentary"):
@@ -865,6 +903,7 @@ with tabs[1]:
                 st.dataframe(characteristics_df, hide_index=True)
             else:
                 st.write(f"No portfolio characteristics data for {selected_strategy}")
+                
     if selected_strategy.strip() != "":
         st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
         filtered_transactions = transactions_df[transactions_df['Select_Strategy'] == selected_strategy]
@@ -873,9 +912,8 @@ with tabs[1]:
         top_transactions = pd.concat([top_buys, top_sells])
         top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
         st.dataframe(top_transactions_df, hide_index=True)
+        
     if selected_strategy.strip() != "":
-            
-            # st.write("**Top Holdings**")
         st.markdown("<div class='subsection-title'>Top Holdings</div>", unsafe_allow_html=True)
         if selected_strategy in top_holdings:
             holdings_data = top_holdings[selected_strategy]
@@ -885,11 +923,3 @@ with tabs[1]:
             st.dataframe(holdings_df, hide_index=True)
         else:
             st.write(f"No top holdings data for {selected_strategy}")
-
-# r.sidebar.button("Reset"):
-#         st.empty()
-#         st.session_state.selected_client = " "
-#         st.session_state.selected_client = " "
-#         st.session_state.selected_strategy = ""
-#         st.session_state.selected_quarter = " "
-#         st.experimental_rerun() 

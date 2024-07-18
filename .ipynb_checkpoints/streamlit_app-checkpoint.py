@@ -217,8 +217,8 @@ st.markdown("---")
 
 # Create tabs for Commentary and Insight
 
-st.markdown("<div class='section-title'>Commentary</div>", unsafe_allow_html=True)
-st.markdown("<div class='section-title'>Insights</div>", unsafe_allow_html=True)
+# st.markdown("<div class='section-title'>Commentary</div>", unsafe_allow_html=True)
+# st.markdown("<div class='section-title'>Insights</div>", unsafe_allow_html=True)
 tabs = st.tabs(["Commentary", "Insight"])
 
 
@@ -262,6 +262,14 @@ def generate_investment_commentary(model_option,selected_client,selected_strateg
     structure = commentary_structure[selected_strategy]
     monthly_returns = monthly_returns_df[selected_strategy].tail(12).to_dict()
     trailing_returns = trailing_returns_df[[col for col in trailing_returns_df.columns if col.startswith(selected_strategy)]].tail(1).to_dict()
+
+    def format_returns(returns_dict):
+        return {k: f"{v:.2%}" for k, v in returns_dict.items() if isinstance(v, (int, float))}
+    
+    # Applying formatting to returns
+    monthly_returns = format_returns(monthly_returns)
+    trailing_returns = format_returns(trailing_returns)
+    
     portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
     headings = structure["headings"]
     index = structure["index"]
@@ -375,8 +383,7 @@ def create_pdf(commentary):
 
 
 with tabs[0]:
-
-    
+   
     if st.sidebar.button("Generate Commentary"):
         with st.spinner('Generating...'):
             commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
@@ -393,8 +400,6 @@ with tabs[0]:
         else:
             st.error("No commentary generated.")
 
-
-
 # Insight Tab
 with tabs[1]:
     st.header("Insight")
@@ -410,7 +415,6 @@ with tabs[1]:
             "Fund B (Inception 12/18/08) before sales charge": [12.41, 33.43, 11.09, 12.95, 10.77],
             "Fund A after sales charge": [5.95, 25.78, 8.02, 11.62, 10.12],
             "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
-            "Linked Benchmark": [10.56, 29.08, 11.49, 14.98, 10.99]
         }
         trailing_returns_df = pd.DataFrame(trailing_returns_data).set_index("Period").T
 
@@ -431,7 +435,7 @@ with tabs[1]:
             st.pyplot(fig)
 
         # Add Fund Facts, Geographic Breakdown, Sector Weightings, and Top 10 Holdings
-        st.subheader(f"{selected_strategy} - Fund Insights")
+        st.subheader(f"{selected_strategy} - Characteristics & Exposures")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -471,12 +475,12 @@ with tabs[1]:
             sector_weightings_df = pd.DataFrame(sector_weightings_data)
             st.table(sector_weightings_df)
 
-            st.write("**Top 10 Holdings**")
+            st.write("**Top 5 Holdings**")
             top_holdings_data = {
-                "Holding": ["NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc.", "Amazon.com, Inc.", "Micron Technology, Inc.", "Hitachi, Ltd.", "Taiwan Semiconductor Mfg", "MakeMyTrip, Ltd."],
-                "Industry": ["Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware", "Broadline Retail", "Semiconductors", "Industrial Conglomerates", "Semiconductors", "Hotels, Resorts & Cruise Lines"],
-                "Country": ["United States", "United States", "United States", "Denmark", "United States", "United States", "United States", "Japan", "Taiwan", "India"],
-                "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9, 3.5, 3.0, 2.5, 2.5, 2.4]
+                "Holding": ["NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc."],
+                "Industry": ["Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware"],
+                "Country": ["United States", "United States", "United States", "Denmark", "United States"],
+                "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9]
             }
             top_holdings_df = pd.DataFrame(top_holdings_data)
             st.table(top_holdings_df)

@@ -10,12 +10,15 @@ from reportlab.lib.styles import getSampleStyleSheet
 import base64
 import random
 from groq import Groq
+import plotly.graph_objects as go
 
 # Load generated data
 monthly_returns_df = pd.read_csv('data/monthly_returns.csv', index_col='Date', parse_dates=True)
 trailing_returns_df = pd.read_csv('data/trailing_returns.csv', index_col='Date', parse_dates=True)
 portfolio_characteristics_df = pd.read_csv('data/portfolio_characteristics.csv')
 client_demographics_df = pd.read_csv('data/client_demographics.csv')
+transactions_df = pd.read_csv('data/client_transactions.csv')
+
 portfolio_characteristics_df.set_index('Strategy', inplace=True)
 
 # Groq configuration
@@ -65,6 +68,9 @@ strategy_risk_mapping = {
     "Long Short High Yield Bond": "Medium"
 }
 
+benchmark_dict = {strategy: benchmark for strategy, benchmark in zip(strategies[1:], benchmarks)}
+
+
 # Client-Strategy mapping (as an example, could be shuffled)
 client_strategy_risk_mapping = {
     " ": (" ", " "),
@@ -79,6 +85,341 @@ client_strategy_risk_mapping = {
     "Eve Black": ("High Yield Bonds", "High")
 }
 
+# Define the trailing return data for each strategy
+trailing_returns = {
+    "Equity": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
+        "Net": [5.95, 25.78, 8.02, 11.62, 10.12],
+        "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
+    },
+    "Government Bonds": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [2.47, 4.78, 3.95, 4.22, 3.04],
+        "Net": [1.95, 3.78, 2.82, 3.62, 2.12],
+        "Primary Benchmark": [2.56, 5.08, 4.49, 4.05, 3.28],
+    },
+    "High Yield Bonds": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [4.47, 9.78, 7.95, 8.22, 6.04],
+        "Net": [3.95, 8.78, 6.82, 7.62, 5.12],
+        "Primary Benchmark": [4.56, 10.08, 8.49, 9.05, 7.28],
+    },
+    "Leveraged Loans": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [3.47, 7.78, 6.95, 7.22, 5.04],
+        "Net": [2.95, 6.78, 5.82, 6.62, 4.12],
+        "Primary Benchmark": [3.56, 8.08, 7.49, 8.05, 6.28],
+    },
+    "Commodities": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [5.47, 12.78, 9.95, 10.22, 8.04],
+        "Net": [4.95, 11.78, 8.82, 9.62, 7.12],
+        "Primary Benchmark": [5.56, 13.08, 10.49, 11.05, 9.28],
+    },
+    "Long Short Equity Hedge Fund": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [8.47, 15.78, 12.95, 13.22, 11.04],
+        "Net": [7.95, 14.78, 11.82, 12.62, 10.12],
+        "Primary Benchmark": [8.56, 16.08, 13.49, 14.05, 12.28],
+    },
+    "Long Short High Yield Bond": {
+        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [6.47, 11.78, 9.95, 10.22, 8.04],
+        "Net": [5.95, 10.78, 8.82, 9.62, 7.12],
+        "Primary Benchmark": [6.56, 12.08, 10.49, 11.05, 9.28],
+    }
+}
+
+sector_allocations = {
+    "Equity": {
+        "Sector": [
+            "Information Technology", "Industrials", "Consumer Discretionary", "Health Care",
+            "Communication Services", "Financials", "Energy", "Consumer Staples",
+            "Materials", "Real Estate", "Utilities", "Other"
+        ],
+        "Fund %": [34.5, 16.6, 13.1, 11.2, 6.9, 5.4, 3.5, 2.3, 2.1, 1.3, 0.0, 0.0],
+        "Benchmark %": [26.0, 10.7, 10.2, 14.8, 7.8, 14.3, 6.3, 4.3, 2.8, 2.4, 2.0, 0.0]
+    },
+    "Government Bonds": {
+        "Sector": [
+            "Treasuries", "Agency Bonds", "Municipal Bonds", "Inflation-Protected", "Foreign Government"
+        ],
+        "Fund %": [45.0, 15.0, 10.0, 20.0, 10.0],
+        "Benchmark %": [50.0, 20.0, 5.0, 15.0, 10.0]
+    },
+    "High Yield Bonds": {
+        "Credit Rating": ["BB", "B", "CCC", "Below CCC", "Unrated"],
+        "Fund %": [40.0, 35.0, 15.0, 5.0, 5.0],
+        "Benchmark %": [45.0, 40.0, 10.0, 3.0, 2.0]
+    },
+    "Leveraged Loans": {
+        "Sector": [
+            "Technology", "Healthcare", "Industrials", "Consumer Discretionary", "Financials",
+            "Energy", "Telecommunications", "Utilities", "Real Estate"
+        ],
+        "Fund %": [20.0, 15.0, 14.0, 12.0, 10.0, 9.0, 8.0, 7.0, 5.0],
+        "Benchmark %": [18.0, 17.0, 12.0, 10.0, 15.0, 10.0, 8.0, 6.0, 4.0]
+    },
+    "Commodities": {
+        "Commodity": ["Energy", "Precious Metals", "Industrial Metals", "Agriculture", "Livestock"],
+        "Fund %": [40.0, 25.0, 15.0, 10.0, 10.0],
+        "Benchmark %": [35.0, 30.0, 15.0, 12.0, 8.0]
+    },
+    "Long Short Equity Hedge Fund": {
+        "Sector": [
+            "Information Technology", "Healthcare", "Consumer Discretionary", "Industrials", "Financials",
+            "Energy", "Communication Services", "Real Estate", "Utilities"
+        ],
+        "Long %": [40.0, 30.0, 20.0, 15.0, 15.0, 7.0, 6.0, 4.0, 3.0],
+        "Short %": [10.0, 10.0, 5.0, 5.0, 5.0, 2.0, 1.0, 1.0, 1.0],
+        "Benchmark %": [25.0, 15.0, 12.0, 10.0, 15.0, 8.0, 7.0, 4.0, 4.0]
+    },
+    "Long Short High Yield Bond": {
+        "Credit Rating": ["BB", "B", "CCC", "Below CCC", "Unrated"],
+        "Long %": [45.0, 40.0, 25.0, 15.0, 10.0],
+        "Short %": [10.0, 10.0, 5.0, 5.0, 5.0],
+        "Benchmark %": [40.0, 35.0, 15.0, 5.0, 5.0]
+    },
+    "Private Equity": {
+        "Portfolio Allocation": {
+            "Type": ["Buyouts", "Growth Capital", "Venture Capital", "Distressed/Turnaround", "Secondaries", "Mezzanine", "Real Assets"],
+            "Fund %": [40.0, 25.0, 15.0, 10.0, 5.0, 3.0, 2.0],
+            "Benchmark %": [45.0, 20.0, 10.0, 15.0, 5.0, 3.0, 2.0]
+        },
+        "Geographic Allocation": {
+            "Region": ["North America", "Europe", "Asia-Pacific", "Latin America", "Middle East & Africa"],
+            "Fund %": [50.0, 25.0, 15.0, 5.0, 5.0],
+            "Benchmark %": [55.0, 20.0, 15.0, 5.0, 5.0]
+        },
+        "Sector Allocation": {
+            "Sector": ["Information Technology", "Healthcare", "Consumer Discretionary", "Industrials", "Financials", "Energy", "Communication Services", "Real Estate", "Utilities", "Materials"],
+            "Fund %": [25.0, 20.0, 15.0, 10.0, 10.0, 5.0, 5.0, 5.0, 3.0, 2.0],
+            "Benchmark %": [20.0, 15.0, 15.0, 15.0, 10.0, 10.0, 5.0, 5.0, 3.0, 2.0]
+        },
+        "Investment Stage Allocation": {
+            "Stage": ["Early Stage", "Mid Stage", "Late Stage"],
+            "Fund %": [30.0, 40.0, 30.0],
+            "Benchmark %": [25.0, 35.0, 40.0]
+        }
+    }
+}
+
+
+portfolio_characteristics = {
+    "Equity": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "PEG Ratio", 
+            "Debt to Capital", "ROIC", "Median Market Capitalization (mil)", 
+            "Weighted Average Market Capitalization (mil)"
+        ],
+        "Fund": [
+            55, "$138.4 M", "76.6%", 2.0, "38.6%", "28.0%", "$87,445", "$949,838"
+        ],
+        "Benchmark": [
+            1427, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
+        ]
+    },
+    "Government Bonds": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Duration", 
+            "Average Credit Quality", "Yield to Maturity", "Current Yield", 
+            "Effective Duration"
+        ],
+        "Fund": [
+            200, "$500 M", "12.0%", "5.5 years", "AA", "1.75%", "1.5%", "5.2 years"
+        ],
+        "Benchmark": [
+            1000, "N/A", "N/A", "6.0 years", "AA+", "1.80%", "1.6%", "5.8 years"
+        ]
+    },
+    "High Yield Bonds": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Duration", 
+            "Average Credit Quality", "Yield to Maturity", "Current Yield", 
+            "Effective Duration"
+        ],
+        "Fund": [
+            150, "$250 M", "45.0%", "4.0 years", "BB-", "5.25%", "5.0%", "3.8 years"
+        ],
+        "Benchmark": [
+            800, "N/A", "N/A", "4.5 years", "BB", "5.50%", "5.3%", "4.2 years"
+        ]
+    },
+    "Leveraged Loans": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Duration", 
+            "Average Credit Quality", "Yield to Maturity", "Current Yield", 
+            "Effective Duration"
+        ],
+        "Fund": [
+            100, "$300 M", "60.0%", "0.25 years", "B+", "6.75%", "6.5%", "0.2 years"
+        ],
+        "Benchmark": [
+            500, "N/A", "N/A", "0.5 years", "BB-", "7.00%", "6.8%", "0.3 years"
+        ]
+    },
+    "Commodities": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Standard Deviation", 
+            "Sharpe Ratio", "Beta", "Correlation to Equities", 
+            "Correlation to Bonds"
+        ],
+        "Fund": [
+            30, "$200 M", "80.0%", "15.0%", "0.75", "0.5", "0.3", "0.1"
+        ],
+        "Benchmark": [
+            50, "N/A", "N/A", "14.0%", "0.8", "0.4", "0.35", "0.15"
+        ]
+    },
+    "Long Short Equity Hedge Fund": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Long Exposure", 
+            "Short Exposure", "Gross Exposure", "Net Exposure", 
+            "Alpha"
+        ],
+        "Fund": [
+            75, "$1.2 B", "150.0%", "130%", "70%", "200%", "60%", "2.5%"
+        ],
+        "Benchmark": [
+            "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+        ]
+    },
+    "Long Short High Yield Bond": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Long Exposure", 
+            "Short Exposure", "Gross Exposure", "Net Exposure", 
+            "Alpha"
+        ],
+        "Fund": [
+            60, "$400 M", "130.0%", "110%", "40%", "150%", "70%", "1.8%"
+        ],
+        "Benchmark": [
+            "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+        ]
+    },
+    "Private Equity": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Internal Rate of Return (IRR)", 
+            "Investment Multiple", "Average Investment Duration", "Median Fund Size", 
+            "Standard Deviation"
+        ],
+        "Fund": [
+            25, "$2.5 B", "10.0%", "18.0%", "1.5x", "7 years", "$500 M", "12.0%"
+        ],
+        "Benchmark": [
+            "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+        ]
+    }
+}
+
+top_holdings = {
+    "Equity": {
+        "Holding": [
+            "NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc."
+        ],
+        "Industry": [
+            "Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "Denmark", "United States"
+        ],
+        "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9]
+    },
+    "Government Bonds": {
+        "Holding": [
+            "US Treasury Bond 2.375% 2029", "US Treasury Bond 1.75% 2024", "US Treasury Bond 2.25% 2027", 
+            "US Treasury Bond 3.00% 2049", "US Treasury Bond 2.625% 2025"
+        ],
+        "Industry": [
+            "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [15.0, 12.0, 10.0, 8.0, 7.0]
+    },
+    "High Yield Bonds": {
+        "Holding": [
+            "Sprint Capital Corp 6.875% 2028", "Tenet Healthcare Corp 6.75% 2023", "CenturyLink Inc 7.5% 2024", 
+            "T-Mobile USA Inc 6.375% 2025", "Dish Network Corp 5.875% 2027"
+        ],
+        "Industry": [
+            "Telecommunications", "Healthcare Services", "Telecommunications", "Telecommunications", "Media"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [4.5, 4.0, 3.5, 3.0, 2.5]
+    },
+    "Leveraged Loans": {
+        "Holding": [
+            "Dell International LLC Term Loan B", "Charter Communications Term Loan", "Intelsat Jackson Holdings Term Loan B", 
+            "American Airlines Inc Term Loan B", "Bausch Health Companies Term Loan"
+        ],
+        "Industry": [
+            "Technology", "Media", "Telecommunications", "Airlines", "Healthcare"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "Canada"
+        ],
+        "% of Net Assets": [5.0, 4.5, 4.0, 3.5, 3.0]
+    },
+    "Commodities": {
+        "Holding": [
+            "SPDR Gold Trust", "iShares Silver Trust", "United States Oil Fund", 
+            "Invesco DB Agriculture Fund", "Aberdeen Standard Physical Platinum Shares ETF"
+        ],
+        "Industry": [
+            "Precious Metals", "Precious Metals", "Energy", "Agriculture", "Precious Metals"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [10.0, 8.0, 6.0, 5.0, 4.0]
+    },
+    "Long Short Equity Hedge Fund": {
+        "Holding": [
+            "Amazon.com Inc", "Alphabet Inc", "Johnson & Johnson", 
+            "Mastercard Inc", "Visa Inc"
+        ],
+        "Industry": [
+            "E-Commerce", "Internet Services", "Pharmaceuticals", "Financial Services", "Financial Services"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [9.0, 7.0, 6.5, 6.0, 5.5]
+    },
+    "Long Short High Yield Bond": {
+        "Holding": [
+            "HCA Inc 7.5% 2026", "First Data Corp 7.0% 2024", "TransDigm Inc 6.5% 2025", 
+            "Community Health Systems 6.25% 2023", "CSC Holdings LLC 5.5% 2026"
+        ],
+        "Industry": [
+            "Healthcare", "Financial Services", "Aerospace", "Healthcare", "Telecommunications"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [5.5, 5.0, 4.5, 4.0, 3.5]
+    },
+    "Private Equity": {
+        "Holding": [
+            "Blackstone Group", "Kohlberg Kravis Roberts", "The Carlyle Group", 
+            "Apollo Global Management", "TPG Capital"
+        ],
+        "Industry": [
+            "Private Equity", "Private Equity", "Private Equity", "Private Equity", "Private Equity"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [12.0, 10.0, 8.0, 7.0, 6.0]
+    }
+}
+
+
 # Generate a random date in the last 20 years
 def generate_random_date():
     start_date = datetime(2004, 1, 1)
@@ -89,6 +430,17 @@ def generate_random_date():
 # Generate a random total assets value
 def generate_random_assets():
     return f"${random.uniform(10, 100):.1f} m"
+
+def display_recent_interactions(client_name):
+    if client_name.strip() != "":
+        recent_interactions = client_demographics_df[client_demographics_df['Client'] == client_name]
+        if not recent_interactions.empty:
+            return ', '.join(recent_interactions['Recent Interactions'].astype(str).tolist())
+        else:
+            return "No recent interactions data available"
+    else:
+        return "No client selected"
+
 
 # Get the last four quarter ends
 def get_last_four_quarters():
@@ -104,17 +456,58 @@ def create_download_link(val, filename):
     b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
 
+def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=monthly_returns_df.index,
+        y=(monthly_returns_df[selected_strategy].cumsum() + 1) * 10000,
+        mode='lines',
+        name=f'{selected_strategy} Fund'
+    ))
+    
+    if benchmark != "N/A":
+        fig.add_trace(go.Scatter(
+            x=monthly_returns_df.index,
+            y=(monthly_returns_df[benchmark].cumsum() + 1) * 10000,
+            mode='lines',
+            name='Benchmark'
+        ))
+
+    fig.update_layout(
+        title=f"Growth of $10K - {selected_strategy} Fund",
+        xaxis_title="Date",
+        yaxis_title="Value ($)",
+        legend_title="Legend",
+        template="plotly_dark"
+    )
+    
+    return fig
+
+# Example usage:
+# Assuming `monthly_returns_df` is a DataFrame with the cumulative returns for each strategy and benchmark
+strategies = {
+    "Equity": "Equity Benchmark",
+    "Government Bonds": "Government Bonds Benchmark",
+    "High Yield Bonds": "High Yield Bonds Benchmark",
+    "Leveraged Loans": "Leveraged Loans Benchmark",
+    "Commodities": "Commodities Benchmark",
+    "Long Short Equity Hedge Fund": "N/A",
+    "Long Short High Yield Bond": "N/A",
+    "Private Equity": "N/A"
+}
+
+
 firm_name = "Morgan Investment Management"
 
 # Initialize chat history and selected model
-# if "messages" not in st.session_state:
-#     st.session_state.messages = []
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = None
 
-# if "commentary" not in st.session_state:
-#     st.session_state.commentary = None
+if "commentary" not in st.session_state:
+    st.session_state.commentary = None
 
 if "selected_client" not in st.session_state:
     st.session_state.selected_client = " "
@@ -122,15 +515,14 @@ if "selected_client" not in st.session_state:
 if "selected_quarter" not in st.session_state:
     st.session_state.selected_quarter = " "
     
-# if "selected_strategy" not in st.session_state:
-#     st.session_state.selected_strategy = " "
+if "selected_strategy" not in st.session_state:
+    st.session_state.selected_strategy = " "
 
 # --- STREAMLIT APP ---
 # Styling and Page Setup
 st.set_page_config(page_icon=":bar_chart:", layout="wide", page_title="Quarterly Investment Commentary")
 
-st.markdown(
-    """
+st.markdown("""
     <style>
         .fake-username .stTextInput input {
             color: lightgrey;
@@ -154,17 +546,47 @@ st.markdown(
         .section-title {
             font-size: 30px; /* Adjust the font size as needed */
             font-weight: bold;
-            color: #4a7bab; /* Adjust the color as needed */
+            color: black; /* Adjust the color as needed */
         }
+        .stDataFrame th, .stDataFrame td {
+            border-bottom: 1px solid #ddd;
+            padding: 10px;
+        }
+        .stDataFrame tbody tr:nth-child(odd) {
+            background-color: #f9f9f9;
+        }
+        .stDataFrame tbody tr:nth-child(even) {
+            background-color: #f1f1f1;
+        }
+        .stDataFrame thead th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: black;
+        }
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: black;
+        }
+        .custom-title {
+            font-family: 'Courier New', Courier, monospace; /* Change this to the desired font */
+            font-size: 40px; /* Adjust the font size as needed */
+            color: #4a7bab; /* Adjust the color as needed */
+    }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+    """, unsafe_allow_html=True)
+
 
 st.markdown("<div class='motto'>Together, we create financial solutions that lead the way to a prosperous future.</div>", unsafe_allow_html=True)
 
-st.title(f"{firm_name} Commentary Co-Pilot")
-st.markdown("<div style='font-size:20px; font-style:italic; color:#4a7bab;'>Navigate Your Financial Narrative!</div>", unsafe_allow_html=True)
+# st.title(f"{firm_name} Commentary Co-Pilot")
+st.markdown(f"<h1 class='custom-title'>{firm_name} Commentary Co-Pilot</h1>", unsafe_allow_html=True)
+
+st.markdown("<div style='font-size:18px; font-style:italic; color:#4a7bab;'>Navigate Your Financial Narrative!</div>", unsafe_allow_html=True)
 
 username = st.sidebar.text_input("Username", "amos_butcher@ceres.com")
 password = st.sidebar.text_input("Password", type="password", value="password123")
@@ -208,9 +630,11 @@ with col1:
     st.write(f"**Strategy:** {selected_strategy}")
     st.write(f"**Risk Profile:** {selected_risk}")
 with col2:
-    if selected_client.strip() != "":
-        st.write(f"**Client Since:** {generate_random_date()}")
-        st.write(f"**Total Assets:** {generate_random_assets()}")
+    # if selected_client.strip() != "":
+    st.write(f"**Client Since:** {generate_random_date()}")
+    st.write(f"**Total Assets:** {generate_random_assets()}")
+    st.write(f"**Recent Interactions:** {display_recent_interactions(selected_client)}")
+
 
 # Add a dark line
 st.markdown("---")
@@ -256,29 +680,29 @@ commentary_structure = {
     }
 }
 
+
 def generate_investment_commentary(model_option,selected_client,selected_strategy,selected_quarter):
     structure = commentary_structure[selected_strategy]
-    monthly_returns = monthly_returns_df[selected_strategy].tail(12).to_dict()
-    trailing_returns = trailing_returns_df[[col for col in trailing_returns_df.columns if col.startswith(selected_strategy)]].tail(1).to_dict()
+  
+    trailing_returns_data = trailing_returns[selected_strategy]
+    selected_quarter = trailing_returns_data["Period"][0]
+    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
 
-    def format_returns(returns_dict):
-        return {k: f"{v:.2%}" for k, v in returns_dict.items() if isinstance(v, (int, float))}
-    
-    # Applying formatting to returns
-    monthly_returns = format_returns(monthly_returns)
-    trailing_returns = format_returns(trailing_returns)
-    
     portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
     headings = structure["headings"]
     index = structure["index"]
+    # index = benchmarks[strategies.index(selected_strategy) - 1]  # Assuming the indexes of benchmarks match strategies
+
+
 
     commentary_prompt = f"""
     Dear {selected_client},
 
-    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be releatively detailed so this goes about 2 pages.
-
-    Trailing Returns:
-    Discuss trailing returns for the {selected_strategy} strategy during the most recent period:{trailing_returns}
+    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be relatively detailed so this goes about 2 pages.
+    
+    Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
+    
+    Fabricate realistic narratives for the following sections given you are an expert investor with 65 years of experience. 
 
     {headings[1]}:
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
@@ -386,109 +810,82 @@ with tabs[0]:
         with st.spinner('Generating...'):
             commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
             st.session_state.commentary = commentary
-        if commentary:
+            
+        if st.session_state.commentary:
             st.success('Commentary generated successfully!')
-    
-            formatted_commentary = commentary.replace("\n", "\n\n")
-            st.markdown(formatted_commentary, unsafe_allow_html=False)
-    
-            pdf_data = create_pdf(commentary)
+
+            pdf_data = create_pdf(st.session_state.commentary)
             download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
             st.markdown(download_link, unsafe_allow_html=True)
+    
+            formatted_commentary = st.session_state.commentary.replace("\n", "\n\n")
+            st.markdown(formatted_commentary, unsafe_allow_html=False)
         else:
             st.error("No commentary generated.")
-
 # Insight Tab
 with tabs[1]:
-    st.header("Insight")
-
     # Displaying trailing return performance
     if selected_strategy.strip() != "":
         st.subheader(f"{selected_strategy} - Annualized Total Return Performance")
         
-        # Create a DataFrame similar to the example provided and pivot it
-        trailing_returns_data = {
-            "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-            "Gross (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
-            "Net": [5.95, 25.78, 8.02, 11.62, 10.12],
-            "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
-        }
-        trailing_returns_df = pd.DataFrame(trailing_returns_data).set_index("Period").T
-
-        # Create columns for side-by-side display
-        col1, col2 = st.columns([2, 1])
-        with col1:
+        if selected_strategy != " ":
+            trailing_returns_data = trailing_returns[selected_strategy]
+            trailing_returns_df = pd.DataFrame(trailing_returns_data).set_index("Period").T
             st.table(trailing_returns_df)
 
-        with col2:
-           
-            fig, ax = plt.subplots(figsize=(6, 4))  # Adjust the figure size
-            ax.plot(monthly_returns_df.index, (monthly_returns_df[selected_strategy].cumsum() + 1) * 10000, label=f'{selected_strategy} Fund')
-            ax.plot(monthly_returns_df.index, (monthly_returns_df[benchmarks[strategies.index(selected_strategy)]].cumsum() + 1) * 10000, label='Benchmark')
-            ax.legend()
-            ax.set_title("Growth of $10K Since Inception")
-            ax.set_xlabel("Date")
-            ax.set_ylabel("Value ($)")
-            st.pyplot(fig)
+        # Plot the growth of $10K chart
+        benchmark = benchmark_dict.get(selected_strategy, "N/A")
+        fig = plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark)
+        st.plotly_chart(fig)
 
         # Add Fund Facts, Geographic Breakdown, Sector Weightings, and Top 10 Holdings
         st.subheader(f"{selected_strategy} - Characteristics & Exposures")
 
         col1, col2 = st.columns(2)
+        
         with col1:
-            st.write("**Fund Facts**")
-            fund_facts_data = {
-                "Metric": [
-                    "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "PEG Ratio", 
-                    "Debt to Capital", "ROIC", "Median Market Capitalization (mil)", 
-                    "Weighted Average Market Capitalization (mil)"
-                ],
-                "Fund": [
-                    55, "$138.4 M", "76.6%", 2.0, "38.6%", "28.0%", "$87,445", "$949,838"
-                ],
-                "Benchmark": [
-                    1427, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
-                ]
-            }
-            fund_facts_df = pd.DataFrame(fund_facts_data)
-            st.table(fund_facts_df)
+            st.markdown("<div class='subsection-title'>Sector Allocations</div>", unsafe_allow_html=True)
 
-            st.write("**Geographic Breakdown**")
-            geo_breakdown_data = {
-                "Region": ["Developed", "Emerging"],
-                "Fund %": [86.9, 12.6],
-                "Benchmark %": [99.9, 0.1]
-            }
-            geo_breakdown_df = pd.DataFrame(geo_breakdown_data)
-            st.table(geo_breakdown_df)
-
+            if selected_strategy in sector_allocations:
+                sector_data = sector_allocations[selected_strategy]
+                sector_df = pd.DataFrame(sector_data)
+                for column in sector_df.columns:
+                    sector_df[column] = sector_df[column].astype(str)
+                st.dataframe(sector_df, hide_index=True)
+            else:
+                st.write(f"No sector allocations data for {selected_strategy}")
+                
         with col2:
-            st.write("**Sector Weightings**")
-            sector_weightings_data = {
-                "Sector": ["Information Technology", "Industrials", "Consumer Discretionary", "Health Care", "Communication Services", "Financials", "Energy", "Consumer Staples", "Materials", "Real Estate", "Utilities", "Other"],
-                "Fund %": [34.5, 16.6, 13.1, 11.2, 6.9, 5.4, 3.5, 2.3, 2.1, 1.3, 0.0, 0.0],
-                "Benchmark %": [26.0, 10.7, 10.2, 14.8, 7.8, 14.3, 6.3, 4.3, 2.8, 2.4, 2.0, 0.0]
-            }
-            sector_weightings_df = pd.DataFrame(sector_weightings_data)
-            st.table(sector_weightings_df)
+            st.markdown("<div class='subsection-title'>Portfolio Characteristics</div>", unsafe_allow_html=True)
 
-            st.write("**Top 5 Holdings**")
-            top_holdings_data = {
-                "Holding": ["NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc."],
-                "Industry": ["Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware"],
-                "Country": ["United States", "United States", "United States", "Denmark", "United States"],
-                "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9]
-            }
-            top_holdings_df = pd.DataFrame(top_holdings_data)
-            st.table(top_holdings_df)
-
-    # Displaying client demographic information
-    if selected_client.strip() != "":
-        st.subheader(f"Client Information - {selected_client}")
-        if selected_client in client_demographics_df.index:
-            st.table(client_demographics_df.loc[selected_client])
+            if selected_strategy in portfolio_characteristics:
+                characteristics_data = portfolio_characteristics[selected_strategy]
+                characteristics_df = pd.DataFrame(characteristics_data)
+                for column in characteristics_df.columns:
+                    characteristics_df[column] = characteristics_df[column].astype(str)
+                st.dataframe(characteristics_df, hide_index=True)
+            else:
+                st.write(f"No portfolio characteristics data for {selected_strategy}")
+    if selected_strategy.strip() != "":
+        st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
+        filtered_transactions = transactions_df[transactions_df['Select_Strategy'] == selected_strategy]
+        top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
+        top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
+        top_transactions = pd.concat([top_buys, top_sells])
+        top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
+        st.dataframe(top_transactions_df, hide_index=True)
+    if selected_strategy.strip() != "":
+            
+            # st.write("**Top Holdings**")
+        st.markdown("<div class='subsection-title'>Top Holdings</div>", unsafe_allow_html=True)
+        if selected_strategy in top_holdings:
+            holdings_data = top_holdings[selected_strategy]
+            holdings_df = pd.DataFrame(holdings_data)
+            for column in holdings_df.columns:
+                holdings_df[column] = holdings_df[column].astype(str)
+            st.dataframe(holdings_df, hide_index=True)
         else:
-            st.write(f"No demographic data available for {selected_client}")
+            st.write(f"No top holdings data for {selected_strategy}")
 
 # r.sidebar.button("Reset"):
 #         st.empty()

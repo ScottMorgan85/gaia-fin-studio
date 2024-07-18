@@ -12,10 +12,10 @@ import random
 from groq import Groq
 
 # Load generated data
-monthly_returns_df = pd.read_csv('monthly_returns.csv', index_col='Date', parse_dates=True)
-trailing_returns_df = pd.read_csv('trailing_returns.csv', index_col='Date', parse_dates=True)
-portfolio_characteristics_df = pd.read_csv('portfolio_characteristics.csv')
-client_demographics_df = pd.read_csv('client_demographics.csv')
+monthly_returns_df = pd.read_csv('data/monthly_returns.csv', index_col='Date', parse_dates=True)
+trailing_returns_df = pd.read_csv('data/trailing_returns.csv', index_col='Date', parse_dates=True)
+portfolio_characteristics_df = pd.read_csv('data/portfolio_characteristics.csv')
+client_demographics_df = pd.read_csv('data/client_demographics.csv')
 portfolio_characteristics_df.set_index('Strategy', inplace=True)
 
 # Groq configuration
@@ -217,8 +217,6 @@ st.markdown("---")
 
 # Create tabs for Commentary and Insight
 
-# st.markdown("<div class='section-title'>Commentary</div>", unsafe_allow_html=True)
-# st.markdown("<div class='section-title'>Insights</div>", unsafe_allow_html=True)
 tabs = st.tabs(["Commentary", "Insight"])
 
 
@@ -410,10 +408,9 @@ with tabs[1]:
         
         # Create a DataFrame similar to the example provided and pivot it
         trailing_returns_data = {
-            "Period": ["Q1", "1 year", "3 years", "5 years", "10 years"],
-            "Fund A (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
-            "Fund B (Inception 12/18/08) before sales charge": [12.41, 33.43, 11.09, 12.95, 10.77],
-            "Fund A after sales charge": [5.95, 25.78, 8.02, 11.62, 10.12],
+            "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
+            "Gross (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
+            "Net": [5.95, 25.78, 8.02, 11.62, 10.12],
             "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
         }
         trailing_returns_df = pd.DataFrame(trailing_returns_data).set_index("Period").T

@@ -810,15 +810,14 @@ with tabs[0]:
         with st.spinner('Generating...'):
             commentary = generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter)
             st.session_state.commentary = commentary
-            
-        if st.session_state.commentary:
+        if commentary:
             st.success('Commentary generated successfully!')
-
-            pdf_data = create_pdf(st.session_state.commentary)
+    
+            formatted_commentary = commentary.replace("\n", "\n\n")
+               
+            pdf_data = create_pdf(commentary)
             download_link = create_download_link(pdf_data, f"{selected_client}_commentary_{selected_quarter}")
             st.markdown(download_link, unsafe_allow_html=True)
-    
-            formatted_commentary = st.session_state.commentary.replace("\n", "\n\n")
             st.markdown(formatted_commentary, unsafe_allow_html=False)
         else:
             st.error("No commentary generated.")

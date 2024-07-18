@@ -12,6 +12,10 @@ import random
 from groq import Groq
 import plotly.graph_objects as go
 import base64 
+from dotenv import load_dotenv
+from pandasai import SmartDataframe
+from langchain_groq.chat_models import ChatGroq
+from pandasai import SmartDatalake
 
 
 # Load generated data
@@ -21,8 +25,6 @@ portfolio_characteristics_df = pd.read_csv('data/portfolio_characteristics.csv')
 client_demographics_df = pd.read_csv('data/client_demographics.csv')
 transactions_df = pd.read_csv('data/client_transactions.csv')
 transactions_df['Transaction Type'] = transactions_df['Transaction Type'].str.strip()
-
-
 portfolio_characteristics_df.set_index('Strategy', inplace=True)
 
 # Groq configuration
@@ -33,6 +35,9 @@ models = {
     "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
     "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
 }
+
+load_dotenv()
+
 
 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -86,8 +91,7 @@ client_strategy_risk_mapping = {
     "Alice Johnson": ("Commodities", "Medium"),
     "Bob Smith": ("Private Equity", "High"),
     "Carol White": ("Long Short Equity Hedge Fund", "High"),
-    "David Brown": ("Long Short High Yield Bond", "High"),
-    "Eve Black": ("High Yield Bonds", "High")
+    "David Brown": ("Long Short High Yield Bond", "High")
 }
 
 
@@ -470,7 +474,7 @@ strategies = {
     "Commodities": "Commodities Benchmark",
     "Long Short Equity Hedge Fund": "N/A",
     "Long Short High Yield Bond": "N/A",
-    "Private Equity": "N/A"
+    "Private Equity": "Cambridge Associates Private Equity Index"
 }
 
 
@@ -558,7 +562,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
-st.markdown("<div class='motto'>Together, we create financial solutions that lead the way to a prosperous future.</div>", unsafe_allow_html=True)
+# st.markdown("<div class='motto'>Together, we create financial solutions that lead the way to a prosperous future.</div>", unsafe_allow_html=True)
 
 # st.title(f"{firm_name} Commentary Co-Pilot")
 st.markdown(f"<h1 class='custom-title'>{firm_name} Commentary Co-Pilot</h1>", unsafe_allow_html=True)
@@ -667,6 +671,30 @@ with col2:
     st.write(f"**Client Since:** {generate_random_date()}")
     st.write(f"**Total Assets:** {generate_random_assets()}")
     st.write(f"**Recent Interactions:** {display_recent_interactions(selected_client)}")
+    
+header = st.container() 
+with header:
+    # st.title("PandasAI Analysis App")
+    st.markdown("Use this Streamlit app to analyze your data in one shot. You can upload your data and ask questions about it. The app will answer your questions and provide you with insights about your data.")
+
+# Filter client demographics based on selected client
+filtered_client_demographics_df = client_demographics_df[client_demographics_df['Client'] == selected_client]
+
+# Filter transactions based on selected strategy
+filtered_transactions_df = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
+
+# Initialize ChatGroq and SmartDatalake with filtered data
+llm = ChatGroq(model_name='llama3-70b-8192', api_key=os.environ['GROQ_API_KEY'])
+lake = SmartDatalake([filtered_client_demographics_df, filtered_transactions_df], config={"llm": llm})
+
+# Display text input box
+user_input = st.text_input("Enter your chat message:", "")
+
+# Process user input if needed
+if st.button("Send"):
+    response = lake.chat(user_input)
+    st.write("Response:")
+    st.write(response)
 
 
 # Add a dark line
@@ -714,7 +742,7 @@ commentary_structure = {
 }
 
 def get_top_transactions(selected_strategy):
-    filtered_transactions = transactions_df[transactions_df['Select_Strategy'] == selected_strategy]
+    filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
     top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
     top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
     top_transactions = pd.concat([top_buys, top_sells])
@@ -916,7 +944,7 @@ with tabs[1]:
     if selected_strategy.strip() != "":
         st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
         
-        filtered_transactions = transactions_df[transactions_df['Select_Strategy'] == selected_strategy]
+        filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
         top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
         top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
         top_transactions = pd.concat([top_buys, top_sells])

@@ -2599,3 +2599,868 @@ result = {'type': 'plot', 'value': '/mnt/c/Users/smm25/Documents/GitHub/groq-str
 2024-07-18 11:40:55 [INFO] Executing Step 7: ResultValidation
 2024-07-18 11:40:55 [INFO] Answer: {'type': 'plot', 'value': '/mnt/c/Users/smm25/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
 2024-07-18 11:40:55 [INFO] Executing Step 8: ResultParsing
+2024-07-18 12:22:27 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:22:50 [INFO] Question: hello!
+2024-07-18 12:22:50 [INFO] Running PandasAI with langchain_groq-chat LLM...
+2024-07-18 12:22:50 [INFO] Prompt ID: 74bf46d3-49b1-4f14-ab8b-2b0df6770436
+2024-07-18 12:22:50 [INFO] Executing Pipeline: GenerateChatPipeline
+2024-07-18 12:22:50 [INFO] Executing Step 0: ValidatePipelineInput
+2024-07-18 12:22:50 [INFO] Executing Step 1: CacheLookup
+2024-07-18 12:22:50 [INFO] Executing Step 2: PromptGeneration
+2024-07-18 12:22:50 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ hello!
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+2024-07-18 12:22:50 [INFO] Executing Step 3: CodeGenerator
+2024-07-18 12:22:53 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:22:53 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ hello!
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+            
+2024-07-18 12:22:53 [INFO] Code generated:
+            ```
+            import pandas as pd
+import matplotlib.pyplot as plt
+
+# Assuming dfs is a list of DataFrames
+dfs = [pd.DataFrame({
+    'Client': ['Sandor Clegane'],
+    'Age': [38],
+    'Income': [95000],
+    'Family': ['Single'],
+    'Occupation': ['Security Consultant'],
+    'Recent Interactions': ['Phone call on 2024-06-25 to review investment strategy']
+}), 
+pd.DataFrame({
+    'Date': [45305, 42132, 43616],
+    'Name': [" TX 3 7/8 12/31/40 Muni,  Texas", " JGB 0.5 06/20/30 Govt,  Japanese Government Bond", " DET 5 1/8 06/15/50 Muni,  Detroit"],
+    'Selected_Strategy': ['Government Bonds', 'Government Bonds', 'Government Bonds'],
+    'Selected_Client': ['Sandor Clegane', 'Sandor Clegane', 'Sandor Clegane'],
+    'Direction': ['Long', 'Long', 'Long'],
+    'Quantity': [14305, 16487, 19477],
+    'Price per Share ($)': [142, 105, 140],
+    'Total Value ($)': [1067946, 3239302, 2077362],
+    'Transaction Type': ['Buy', 'Buy', 'Buy'],
+    'Commentary': ['Long-term corporate debt investment', 'Australian bond yields appeal', 'Muni bonds for public projects']
+})]
+
+# Plot a chart
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('total_value_by_name.png')
+
+# Declare result var
+result = {"type": "plot", "value": "total_value_by_name.png"}
+            ```
+            
+2024-07-18 12:22:53 [INFO] Executing Step 4: CachePopulation
+2024-07-18 12:22:53 [INFO] Executing Step 5: CodeCleaning
+2024-07-18 12:22:53 [INFO] Saving charts to /mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png
+2024-07-18 12:22:53 [INFO] 
+Code running:
+```
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+        ```
+2024-07-18 12:22:53 [INFO] Executing Step 6: CodeExecution
+2024-07-18 12:22:53 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+2024-07-18 12:22:53 [WARNING] Failed to execute code retrying with a correction framework [retry number: 1]
+2024-07-18 12:22:53 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-18 12:22:53 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-18 12:22:53 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+
+Fix the python code above and return the new python code:
+2024-07-18 12:22:53 [INFO] Executing Step 1: CodeGenerator
+2024-07-18 12:22:54 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:22:54 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-18 12:22:54 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+import streamlit as st
+
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+
+st.pyplot(plt)
+
+# No need to return anything
+            ```
+            
+2024-07-18 12:22:54 [INFO] Executing Step 2: CodeCleaning
+2024-07-18 12:22:54 [INFO] 
+Code running:
+```
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+st.pyplot(plt)
+        ```
+2024-07-18 12:22:54 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 6, in <module>
+NameError: name 'st' is not defined
+
+2024-07-18 12:22:54 [WARNING] Failed to execute code retrying with a correction framework [retry number: 2]
+2024-07-18 12:22:54 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-18 12:22:54 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-18 12:22:54 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+st.pyplot(plt)
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 6, in <module>
+NameError: name 'st' is not defined
+
+
+Fix the python code above and return the new python code:
+2024-07-18 12:22:54 [INFO] Executing Step 1: CodeGenerator
+2024-07-18 12:22:55 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:22:55 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+st.pyplot(plt)
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 6, in <module>
+NameError: name 'st' is not defined
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-18 12:22:55 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+            ```
+            
+2024-07-18 12:22:55 [INFO] Executing Step 2: CodeCleaning
+2024-07-18 12:22:55 [INFO] 
+Code running:
+```
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+        ```
+2024-07-18 12:22:55 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+2024-07-18 12:22:55 [WARNING] Failed to execute code retrying with a correction framework [retry number: 3]
+2024-07-18 12:22:55 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-18 12:22:55 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-18 12:22:55 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+
+Fix the python code above and return the new python code:
+2024-07-18 12:22:55 [INFO] Executing Step 1: CodeGenerator
+2024-07-18 12:22:56 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:22:56 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45305," TX 3 7/8 12/31/40 Muni,  Texas",Government Bonds,Sandor Clegane,Long,14305,142,1067946,Buy, Long-term corporate debt investment
+42132," JGB 0.5 06/20/30 Govt,  Japanese Government Bond",Government Bonds,Sandor Clegane,Long,16487,105,3239302,Buy, Australian bond yields appeal
+43616," DET 5 1/8 06/15/50 Muni,  Detroit",Government Bonds,Sandor Clegane,Long,19477,140,2077362,Buy, Muni bonds for public projects
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-18 12:22:56 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+
+# Group the data by 'Name' and calculate the sum of 'Total Value ($)' for each group
+grouped_data = dfs[1].groupby('Name')['Total Value ($)'].sum().reset_index()
+
+# Create the bar chart
+plt.figure(figsize=(10, 6))
+plt.bar(grouped_data['Name'], grouped_data['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+            ```
+            
+2024-07-18 12:22:56 [INFO] Executing Step 2: CodeCleaning
+2024-07-18 12:22:56 [INFO] 
+Code running:
+```
+grouped_data = dfs[1].groupby('Name')['Total Value ($)'].sum().reset_index()
+plt.figure(figsize=(10, 6))
+plt.bar(grouped_data['Name'], grouped_data['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+        ```
+2024-07-18 12:22:56 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+2024-07-18 12:22:56 [ERROR] Pipeline failed on step 6: No result returned
+2024-07-18 12:25:05 [INFO] Question: hello!
+2024-07-18 12:25:05 [INFO] Running PandasAI with langchain_groq-chat LLM...
+2024-07-18 12:25:05 [INFO] Prompt ID: c873022a-1fff-41b9-a9d4-13930eb0a421
+2024-07-18 12:25:05 [INFO] Executing Pipeline: GenerateChatPipeline
+2024-07-18 12:25:05 [INFO] Executing Step 0: ValidatePipelineInput
+2024-07-18 12:25:05 [INFO] Executing Step 1: CacheLookup
+2024-07-18 12:25:05 [INFO] Using cached response
+2024-07-18 12:25:05 [INFO] Executing Step 2: PromptGeneration
+2024-07-18 12:25:05 [INFO] Executing Step 2: Skipping...
+2024-07-18 12:25:05 [INFO] Executing Step 3: CodeGenerator
+2024-07-18 12:25:05 [INFO] Executing Step 3: Skipping...
+2024-07-18 12:25:05 [INFO] Executing Step 4: CachePopulation
+2024-07-18 12:25:05 [INFO] Executing Step 4: Skipping...
+2024-07-18 12:25:05 [INFO] Executing Step 5: CodeCleaning
+2024-07-18 12:25:05 [INFO] Saving charts to /mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png
+2024-07-18 12:25:05 [INFO] 
+Code running:
+```
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+        ```
+2024-07-18 12:25:05 [INFO] Executing Step 6: CodeExecution
+2024-07-18 12:25:05 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+2024-07-18 12:25:05 [WARNING] Failed to execute code retrying with a correction framework [retry number: 1]
+2024-07-18 12:25:05 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-18 12:25:05 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-18 12:25:05 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Alice Johnson,42,110000,"Married, 3 kids",Doctor,Phone call on 2024-06-30 to discuss quarterly performance
+</dataframe>
+<dataframe>
+dfs[1]:15x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43585," HG1 Comdty,  Copper",Commodities,Alice Johnson,Long,1010,4,1255865,Buy,Colder weather forecasts boost natural gas consumption
+44581," OJ1 Comdty,  Orange Juice",Commodities,Alice Johnson,Long,1273,106,2219980,Sell,Safe-haven demand increases due to economic uncertainty
+42985," CT1 Comdty,  Cotton",Commodities,Alice Johnson,Long,1810,14,6588,Sell,Increased global demand for crude oil drives prices up
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+
+Fix the python code above and return the new python code:
+2024-07-18 12:25:05 [INFO] Executing Step 1: CodeGenerator
+2024-07-18 12:25:06 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:25:06 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Alice Johnson,42,110000,"Married, 3 kids",Doctor,Phone call on 2024-06-30 to discuss quarterly performance
+</dataframe>
+<dataframe>
+dfs[1]:15x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43585," HG1 Comdty,  Copper",Commodities,Alice Johnson,Long,1010,4,1255865,Buy,Colder weather forecasts boost natural gas consumption
+44581," OJ1 Comdty,  Orange Juice",Commodities,Alice Johnson,Long,1273,106,2219980,Sell,Safe-haven demand increases due to economic uncertainty
+42985," CT1 Comdty,  Cotton",Commodities,Alice Johnson,Long,1810,14,6588,Sell,Increased global demand for crude oil drives prices up
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-18 12:25:06 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+            ```
+            
+2024-07-18 12:25:06 [INFO] Executing Step 2: CodeCleaning
+2024-07-18 12:25:06 [INFO] 
+Code running:
+```
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+        ```
+2024-07-18 12:25:06 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+2024-07-18 12:25:06 [WARNING] Failed to execute code retrying with a correction framework [retry number: 2]
+2024-07-18 12:25:06 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-18 12:25:06 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-18 12:25:06 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Alice Johnson,42,110000,"Married, 3 kids",Doctor,Phone call on 2024-06-30 to discuss quarterly performance
+</dataframe>
+<dataframe>
+dfs[1]:15x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43585," HG1 Comdty,  Copper",Commodities,Alice Johnson,Long,1010,4,1255865,Buy,Colder weather forecasts boost natural gas consumption
+44581," OJ1 Comdty,  Orange Juice",Commodities,Alice Johnson,Long,1273,106,2219980,Sell,Safe-haven demand increases due to economic uncertainty
+42985," CT1 Comdty,  Cotton",Commodities,Alice Johnson,Long,1810,14,6588,Sell,Increased global demand for crude oil drives prices up
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+
+Fix the python code above and return the new python code:
+2024-07-18 12:25:06 [INFO] Executing Step 1: CodeGenerator
+2024-07-18 12:25:08 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:25:08 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Alice Johnson,42,110000,"Married, 3 kids",Doctor,Phone call on 2024-06-30 to discuss quarterly performance
+</dataframe>
+<dataframe>
+dfs[1]:15x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43585," HG1 Comdty,  Copper",Commodities,Alice Johnson,Long,1010,4,1255865,Buy,Colder weather forecasts boost natural gas consumption
+44581," OJ1 Comdty,  Orange Juice",Commodities,Alice Johnson,Long,1273,106,2219980,Sell,Safe-haven demand increases due to economic uncertainty
+42985," CT1 Comdty,  Cotton",Commodities,Alice Johnson,Long,1810,14,6588,Sell,Increased global demand for crude oil drives prices up
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+plt.figure(figsize=(10, 6))
+plt.bar(dfs[1]['Name'], dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-18 12:25:08 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+
+# Split the 'Name' column into separate categories
+names = [name.split(', ')[1] for name in dfs[1]['Name']]
+
+# Create the bar chart
+plt.figure(figsize=(10, 6))
+plt.bar(names, dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+            ```
+            
+2024-07-18 12:25:08 [INFO] Executing Step 2: CodeCleaning
+2024-07-18 12:25:08 [INFO] 
+Code running:
+```
+names = [name.split(', ')[1] for name in dfs[1]['Name']]
+plt.figure(figsize=(10, 6))
+plt.bar(names, dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+        ```
+2024-07-18 12:25:08 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+2024-07-18 12:25:08 [WARNING] Failed to execute code retrying with a correction framework [retry number: 3]
+2024-07-18 12:25:08 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-18 12:25:08 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-18 12:25:08 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Alice Johnson,42,110000,"Married, 3 kids",Doctor,Phone call on 2024-06-30 to discuss quarterly performance
+</dataframe>
+<dataframe>
+dfs[1]:15x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43585," HG1 Comdty,  Copper",Commodities,Alice Johnson,Long,1010,4,1255865,Buy,Colder weather forecasts boost natural gas consumption
+44581," OJ1 Comdty,  Orange Juice",Commodities,Alice Johnson,Long,1273,106,2219980,Sell,Safe-haven demand increases due to economic uncertainty
+42985," CT1 Comdty,  Cotton",Commodities,Alice Johnson,Long,1810,14,6588,Sell,Increased global demand for crude oil drives prices up
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+names = [name.split(', ')[1] for name in dfs[1]['Name']]
+plt.figure(figsize=(10, 6))
+plt.bar(names, dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+
+Fix the python code above and return the new python code:
+2024-07-18 12:25:08 [INFO] Executing Step 1: CodeGenerator
+2024-07-18 12:25:09 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-18 12:25:09 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Client,Age,Income,Family,Occupation,Recent Interactions
+Alice Johnson,42,110000,"Married, 3 kids",Doctor,Phone call on 2024-06-30 to discuss quarterly performance
+</dataframe>
+<dataframe>
+dfs[1]:15x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43585," HG1 Comdty,  Copper",Commodities,Alice Johnson,Long,1010,4,1255865,Buy,Colder weather forecasts boost natural gas consumption
+44581," OJ1 Comdty,  Orange Juice",Commodities,Alice Johnson,Long,1273,106,2219980,Sell,Safe-haven demand increases due to economic uncertainty
+42985," CT1 Comdty,  Cotton",Commodities,Alice Johnson,Long,1810,14,6588,Sell,Increased global demand for crude oil drives prices up
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ hello!
+
+You generated this python code:
+names = [name.split(', ')[1] for name in dfs[1]['Name']]
+plt.figure(figsize=(10, 6))
+plt.bar(names, dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-18 12:25:09 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+
+names = [name.split(', ')[1] for name in dfs[1]['Name']]
+plt.figure(figsize=(10, 6))
+plt.bar(names, dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+            ```
+            
+2024-07-18 12:25:09 [INFO] Executing Step 2: CodeCleaning
+2024-07-18 12:25:09 [INFO] 
+Code running:
+```
+names = [name.split(', ')[1] for name in dfs[1]['Name']]
+plt.figure(figsize=(10, 6))
+plt.bar(names, dfs[1]['Total Value ($)'])
+plt.xlabel('Name')
+plt.ylabel('Total Value ($)')
+plt.title('Total Value by Name')
+plt.show()
+        ```
+2024-07-18 12:25:09 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 175, in execute_code
+    raise NoResultFoundError("No result returned")
+pandasai.exceptions.NoResultFoundError: No result returned
+
+2024-07-18 12:25:09 [ERROR] Pipeline failed on step 6: No result returned

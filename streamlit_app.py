@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from pandasai import SmartDataframe
 from langchain_groq.chat_models import ChatGroq
 from pandasai import SmartDatalake
-
+# !pip install -qU langchain-groq
 
 # Load generated data
 monthly_returns_df = pd.read_csv('data/monthly_returns.csv', index_col='Date', parse_dates=True)
@@ -687,14 +687,26 @@ filtered_transactions_df = transactions_df[transactions_df['Selected_Strategy'] 
 llm = ChatGroq(model_name='llama3-70b-8192', api_key=os.environ['GROQ_API_KEY'])
 lake = SmartDatalake([filtered_client_demographics_df, filtered_transactions_df], config={"llm": llm})
 
-# Display text input box
-user_input = st.text_input("Enter your chat message:", "")
+# Display text input box and process input on Enter press
+user_input = st.text_input("Enter your chat message:", key="input_message")
 
-# Process user input if needed
+# Initialize a placeholder for the response
+response_placeholder = st.empty()
+
+
+# Handle response on Enter press
 if st.button("Send"):
     response = lake.chat(user_input)
-    st.write("Response:")
-    st.write(response)
+    with st.expander("Response", expanded=True):
+        st.write(response)
+# # Predefined questions
+# predefined_questions = [
+#     "What are the recent trends in the market?",
+#     "Can you provide a summary of the latest financial reports?",
+#     "How does our portfolio perform against the benchmark?",
+#     "What are the key insights from the recent client data?",
+#     "Can you explain the impact of recent economic events?"
+# ]
 
 
 # Add a dark line

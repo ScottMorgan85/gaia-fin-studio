@@ -9,21 +9,21 @@
 44619," GE 4.5 12/01/40 Corp,  General Electric Co.",High Yield Bonds,Long,16552,87,1440024,Buy, Biotech R&D leads to breakthrough
 44853," KO 4.75 06/15/45 Corp,  Coca-Cola Co.",High Yield Bonds,Long,12712,103,1309336,Buy, Industrial demand boosts share prices
 44681," MCD 5.0 03/31/50 Corp,  McDonald's Corp.",High Yield Bonds,Long,19981,102,2038062,Buy, Sustainable products drive market gain
-44992," AAPL US Equity,  Apple Inc.",Equities,Long,560,196,109760,Buy, Software solutions lead to customer growth
-44644," MSFT US Equity,  Microsoft Corp.",Equities,Long,1472,141,207552,Buy, Industrial automation trends upwards
-44653," AMZN US Equity,  Amazon.com Inc.",Equities,Long,410,37,15170,Buy, Telecom sector regains strength
-44960," TSCO LN Equity,  Tesco PLC",Equities,Long,1994,187,372878,Buy, Auto industry recovery post-pandemic
-45173," 7201 JP Equity,  Toyota Motor Corp.",Equities,Long,1292,153,197676,Buy, Electric vehicle initiative pushes stock up
-45127," NESN SW Equity,  Nestle SA",Equities,Long,201,87,17487,Buy, Strong Q2 earnings with high consumer demand
-45195," NOVN SW Equity,  Novartis AG",Equities,Long,1677,119,199563,Buy, Increased cloud market share
-44646," ROG SW Equity,  Roche Holding AG",Equities,Long,1224,179,219096,Buy, Expansion in new service sectors
-44765," ABBN SW Equity,  ABB Ltd",Equities,Long,1538,56,86128,Buy, Successful market penetration in Europe
-44886," UL VR Equity,  Unilever PLC",Equities,Long,1059,188,199092,Buy, Innovations in hybrid vehicles enhance market position
-44609," SAP GR Equity,  SAP SE",Equities,Long,1120,94,105280,Buy, Consistent dividend yield attracts investors
-45201," SIE GR Equity,  Siemens AG",Equities,Long,1544,87,134328,Buy, Drug pipeline progress sparks interest
-44693," DTE GR Equity,  Deutsche Telekom AG",Equities,Long,894,37,33078,Buy, Biotech R&D leads to breakthrough
-44742," BMW GR Equity,  Bayerische Motoren Werke AG",Equities,Long,644,121,77924,Buy, Industrial demand boosts share prices
-44705," VOW3 GR Equity,  Volkswagen AG",Equities,Long,1177,185,217745,Buy, Sustainable products drive market gain
+44992," AAPL US Equity,  Apple Inc.",Equity,Long,560,196,109760,Buy, Software solutions lead to customer growth
+44644," MSFT US Equity,  Microsoft Corp.",Equity,Long,1472,141,207552,Buy, Industrial automation trends upwards
+44653," AMZN US Equity,  Amazon.com Inc.",Equity,Long,410,37,15170,Buy, Telecom sector regains strength
+44960," TSCO LN Equity,  Tesco PLC",Equity,Long,1994,187,372878,Buy, Auto industry recovery post-pandemic
+45173," 7201 JP Equity,  Toyota Motor Corp.",Equity,Long,1292,153,197676,Buy, Electric vehicle initiative pushes stock up
+45127," NESN SW Equity,  Nestle SA",Equity,Long,201,87,17487,Buy, Strong Q2 earnings with high consumer demand
+45195," NOVN SW Equity,  Novartis AG",Equity,Long,1677,119,199563,Buy, Increased cloud market share
+44646," ROG SW Equity,  Roche Holding AG",Equity,Long,1224,179,219096,Buy, Expansion in new service sectors
+44765," ABBN SW Equity,  ABB Ltd",Equity,Long,1538,56,86128,Buy, Successful market penetration in Europe
+44886," UL VR Equity,  Unilever PLC",Equity,Long,1059,188,199092,Buy, Innovations in hybrid vehicles enhance market position
+44609," SAP GR Equity,  SAP SE",Equity,Long,1120,94,105280,Buy, Consistent dividend yield attracts investors
+45201," SIE GR Equity,  Siemens AG",Equity,Long,1544,87,134328,Buy, Drug pipeline progress sparks interest
+44693," DTE GR Equity,  Deutsche Telekom AG",Equity,Long,894,37,33078,Buy, Biotech R&D leads to breakthrough
+44742," BMW GR Equity,  Bayerische Motoren Werke AG",Equity,Long,644,121,77924,Buy, Industrial demand boosts share prices
+44705," VOW3 GR Equity,  Volkswagen AG",Equity,Long,1177,185,217745,Buy, Sustainable products drive market gain
 45222,"Acme Co. 2023 Term Loan B,  L+400",Leveraged Loans,Long,854968,92,78657056,Buy, Loan facilitates new product line
 44789,"Beta Industries 2024 Term Loan B,  L+350",Leveraged Loans,Long,1410444,103,145275732,Buy, Industrial expansion supported by loan
 45281,"Delta Corp. 2025 Term Loan B,  L+450",Leveraged Loans,Long,664037,97,64411589,Buy, Energy sector financing

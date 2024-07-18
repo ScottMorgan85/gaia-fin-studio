@@ -11,6 +11,7 @@ from reportlab.pdfgen import canvas
 import random
 from groq import Groq
 import plotly.graph_objects as go
+import base64 
 
 
 # Load generated data
@@ -89,57 +90,7 @@ client_strategy_risk_mapping = {
     "Eve Black": ("High Yield Bonds", "High")
 }
 
-# Define the trailing return data for each strategy
-trailing_returns = {
-    "Equity": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
-        "Net": [5.95, 25.78, 8.02, 11.62, 10.12],
-        "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
-    },
-    "Government Bonds": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [2.47, 4.78, 3.95, 4.22, 3.04],
-        "Net": [1.95, 3.78, 2.82, 3.62, 2.12],
-        "Primary Benchmark": [2.56, 5.08, 4.49, 4.05, 3.28],
-    },
-    "High Yield Bonds": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [4.47, 9.78, 7.95, 8.22, 6.04],
-        "Net": [3.95, 8.78, 6.82, 7.62, 5.12],
-        "Primary Benchmark": [4.56, 10.08, 8.49, 9.05, 7.28],
-    },
-    "Leveraged Loans": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [3.47, 7.78, 6.95, 7.22, 5.04],
-        "Net": [2.95, 6.78, 5.82, 6.62, 4.12],
-        "Primary Benchmark": [3.56, 8.08, 7.49, 8.05, 6.28],
-    },
-    "Commodities": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [5.47, 12.78, 9.95, 10.22, 8.04],
-        "Net": [4.95, 11.78, 8.82, 9.62, 7.12],
-        "Primary Benchmark": [5.56, 13.08, 10.49, 11.05, 9.28],
-    },
-    "Long Short Equity Hedge Fund": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [8.47, 15.78, 12.95, 13.22, 11.04],
-        "Net": [7.95, 14.78, 11.82, 12.62, 10.12],
-        "Primary Benchmark": [8.56, 16.08, 13.49, 14.05, 12.28],
-    },
-    "Long Short High Yield Bond": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [6.47, 11.78, 9.95, 10.22, 8.04],
-        "Net": [5.95, 10.78, 8.82, 9.62, 7.12],
-        "Primary Benchmark": [6.56, 12.08, 10.49, 11.05, 9.28],
-    },
-    "Private Equity": {
-        "Period": ["Recent Quarter", "1 year", "3 years", "5 years", "10 years"],
-        "Gross (Inception 12/18/08)": [7.47, 14.78, 12.95, 13.22, 11.04],
-        "Net": [6.95, 13.78, 11.82, 12.62, 10.12],
-        "Primary Benchmark": [7.56, 15.08, 13.49, 14.05, 12.28],
-    }
-}
+
     
 sector_allocations = {
     "Equity": {
@@ -227,7 +178,7 @@ portfolio_characteristics = {
             55, "$138.4 M", "76.6%", 2.0, "38.6%", "28.0%", "$87,445", "$949,838"
         ],
         "Benchmark": [
-            1427, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
+            500, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
         ]
     },
     "Government Bonds": {
@@ -240,7 +191,7 @@ portfolio_characteristics = {
             200, "$500 M", "12.0%", "5.5 years", "AA", "1.75%", "1.5%", "5.2 years"
         ],
         "Benchmark": [
-            1000, "N/A", "N/A", "6.0 years", "AA+", "1.80%", "1.6%", "5.8 years"
+            3000, "N/A", "N/A", "6.0 years", "AA+", "1.80%", "1.6%", "5.8 years"
         ]
     },
     "High Yield Bonds": {
@@ -253,7 +204,7 @@ portfolio_characteristics = {
             150, "$250 M", "45.0%", "4.0 years", "BB-", "5.25%", "5.0%", "3.8 years"
         ],
         "Benchmark": [
-            800, "N/A", "N/A", "4.5 years", "BB", "5.50%", "5.3%", "4.2 years"
+            2350, "N/A", "N/A", "4.5 years", "BB", "5.50%", "5.3%", "4.2 years"
         ]
     },
     "Leveraged Loans": {
@@ -266,7 +217,7 @@ portfolio_characteristics = {
             100, "$300 M", "60.0%", "450bps", "B+", "6.75%", "6.5%", "0.2 years"
         ],
         "Benchmark": [
-            500, "N/A", "N/A", "421 bps", "BB-", "7.00%", "6.8%", "0.3 years"
+            1000, "N/A", "N/A", "421 bps", "BB-", "7.00%", "6.8%", "0.3 years"
         ]
     },
     "Commodities": {
@@ -469,12 +420,11 @@ def display_recent_interactions(client_name):
 
 # Get the last four quarter ends
 def get_last_four_quarters():
-    current_date = datetime.now()
-    quarters = []
-    for i in range(4):
-        quarter_end = (current_date.replace(day=1) - timedelta(days=1)).strftime("%m/%Y")
-        quarters.append(quarter_end)
-        current_date = current_date.replace(day=1) - timedelta(days=1)
+    today = datetime.today()
+    quarters = [
+        f"Q{q} {today.year}"
+        for q in range(1, 5)
+    ]
     return quarters
     
 def create_download_link(val, filename):
@@ -643,12 +593,68 @@ else:
     
 # Dropdown for last four quarter ends
 quarter_ends = get_last_four_quarters()
-selected_quarter = st.sidebar.selectbox("Select Quarter End", quarter_ends, index=quarter_ends.index(st.session_state.selected_quarter) if st.session_state.selected_quarter in quarter_ends else 0)
+selected_quarter = st.sidebar.selectbox(
+    "Select Quarter End",
+    quarter_ends,
+    index=quarter_ends.index(st.session_state.selected_quarter) if st.session_state.selected_quarter in quarter_ends else 0
+)
 
 # Update session state with the selections
 st.session_state.selected_client = selected_client
 st.session_state.selected_strategy = selected_strategy
 st.session_state.selected_quarter = selected_quarter
+
+# Define the trailing return data for each strategy
+trailing_returns = {
+    "Equity": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [12.47, 33.78, 11.95, 13.22, 11.04],
+        "Net": [5.95, 25.78, 8.02, 11.62, 10.12],
+        "Primary Benchmark": [10.56, 29.08, 11.49, 15.05, 12.28],
+    },
+    "Government Bonds": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [2.47, 4.78, 3.95, 4.22, 3.04],
+        "Net": [1.95, 3.78, 2.82, 3.62, 2.12],
+        "Primary Benchmark": [2.56, 5.08, 4.49, 4.05, 3.28],
+    },
+    "High Yield Bonds": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [4.47, 9.78, 7.95, 8.22, 6.04],
+        "Net": [3.95, 8.78, 6.82, 7.62, 5.12],
+        "Primary Benchmark": [4.56, 10.08, 8.49, 9.05, 7.28],
+    },
+    "Leveraged Loans": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [3.47, 7.78, 6.95, 7.22, 5.04],
+        "Net": [2.95, 6.78, 5.82, 6.62, 4.12],
+        "Primary Benchmark": [3.56, 8.08, 7.49, 8.05, 6.28],
+    },
+    "Commodities": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [5.47, 12.78, 9.95, 10.22, 8.04],
+        "Net": [4.95, 11.78, 8.82, 9.62, 7.12],
+        "Primary Benchmark": [5.56, 13.08, 10.49, 11.05, 9.28],
+    },
+    "Long Short Equity Hedge Fund": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [8.47, 15.78, 12.95, 13.22, 11.04],
+        "Net": [7.95, 14.78, 11.82, 12.62, 10.12],
+        "Primary Benchmark": [8.56, 16.08, 13.49, 14.05, 12.28],
+    },
+    "Long Short High Yield Bond": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [6.47, 11.78, 9.95, 10.22, 8.04],
+        "Net": [5.95, 10.78, 8.82, 9.62, 7.12],
+        "Primary Benchmark": [6.56, 12.08, 10.49, 11.05, 9.28],
+    },
+    "Private Equity": {
+        "Period": [selected_quarter, "1 year", "3 years", "5 years", "10 years"],
+        "Gross (Inception 12/18/08)": [7.47, 14.78, 12.95, 13.22, 11.04],
+        "Net": [6.95, 13.78, 11.82, 12.62, 10.12],
+        "Primary Benchmark": [7.56, 15.08, 13.49, 14.05, 12.28],
+    }
+}
 
 # Display client information and strategy in two columns
 col1, col2 = st.columns(2)
@@ -866,6 +872,7 @@ with tabs[1]:
         st.subheader(f"{selected_strategy} - Annualized Total Return Performance")
         
         if selected_strategy != " ":
+            
             trailing_returns_data = trailing_returns[selected_strategy]
             trailing_returns_df = pd.DataFrame(trailing_returns_data).set_index("Period").T
             st.table(trailing_returns_df)
@@ -881,14 +888,15 @@ with tabs[1]:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("<div class='subsection-title'>Sector Allocations</div>", unsafe_allow_html=True)
+            st.markdown("<div class='subsection-title'>Allocations</div>", unsafe_allow_html=True)
 
             if selected_strategy in sector_allocations:
                 sector_data = sector_allocations[selected_strategy]
                 sector_df = pd.DataFrame(sector_data)
                 for column in sector_df.columns:
                     sector_df[column] = sector_df[column].astype(str)
-                st.dataframe(sector_df, hide_index=True)
+                st.dataframe(sector_df.style.set_properties(**{'width': '120%', 'height': '100%'}), hide_index=True)
+
             else:
                 st.write(f"No sector allocations data for {selected_strategy}")
                 
@@ -900,18 +908,22 @@ with tabs[1]:
                 characteristics_df = pd.DataFrame(characteristics_data)
                 for column in characteristics_df.columns:
                     characteristics_df[column] = characteristics_df[column].astype(str)
-                st.dataframe(characteristics_df, hide_index=True)
+                # st.dataframe(characteristics_df, hide_index=True)
+                st.dataframe(characteristics_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
             else:
                 st.write(f"No portfolio characteristics data for {selected_strategy}")
                 
     if selected_strategy.strip() != "":
         st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
+        
         filtered_transactions = transactions_df[transactions_df['Select_Strategy'] == selected_strategy]
         top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
         top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
         top_transactions = pd.concat([top_buys, top_sells])
         top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
-        st.dataframe(top_transactions_df, hide_index=True)
+        # st.dataframe(top_transactions_df, hide_index=True)
+        st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+
         
     if selected_strategy.strip() != "":
         st.markdown("<div class='subsection-title'>Top Holdings</div>", unsafe_allow_html=True)
@@ -920,6 +932,8 @@ with tabs[1]:
             holdings_df = pd.DataFrame(holdings_data)
             for column in holdings_df.columns:
                 holdings_df[column] = holdings_df[column].astype(str)
-            st.dataframe(holdings_df, hide_index=True)
+            # st.dataframe(holdings_df, hide_index=True)
+            st.dataframe(holdings_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+
         else:
             st.write(f"No top holdings data for {selected_strategy}")

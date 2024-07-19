@@ -1,4 +1,4 @@
-Client,Age,Income,Family,Occupation,Recent Interactions
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
 Warren Miller,45,120000,"Married, 2 kids",Engineer,Met on 2024-07-01 to discuss portfolio adjustments
 Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
 Hari Seldon,50,150000,"Married, 1 kid",Professor,Email exchange on 2024-07-10 about market outlook

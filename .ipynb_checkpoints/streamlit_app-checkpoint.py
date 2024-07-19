@@ -413,7 +413,7 @@ def generate_random_assets():
 
 def display_recent_interactions(client_name):
     if client_name.strip() != "":
-        recent_interactions = client_demographics_df[client_demographics_df['Client'] == client_name]
+        recent_interactions = client_demographics_df[client_demographics_df['Selected_Client'] == client_name]
         if not recent_interactions.empty:
             return ', '.join(recent_interactions['Recent Interactions'].astype(str).tolist())
         else:
@@ -467,18 +467,17 @@ def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
 # Example usage:
 # Assuming `monthly_returns_df` is a DataFrame with the cumulative returns for each strategy and benchmark
 strategies = {
-    "Equity": "Equity Benchmark",
-    "Government Bonds": "Government Bonds Benchmark",
-    "High Yield Bonds": "High Yield Bonds Benchmark",
-    "Leveraged Loans": "Leveraged Loans Benchmark",
-    "Commodities": "Commodities Benchmark",
-    "Long Short Equity Hedge Fund": "N/A",
-    "Long Short High Yield Bond": "N/A",
+    "Equity": "S&P 500",
+    "Government Bonds": "Bloomberg Barclays US Aggregate Bond Index",
+    "High Yield Bonds": "ICE BofAML US High Yield Index",
+    "Leveraged Loans": "S&P/LSTA Leveraged Loan Index",
+    "Commodities": "Bloomberg Commodity Index",
+    "Long Short Equity Hedge Fund": "HFRI Equity Hedge Index",
+    "Long Short High Yield Bond": "HFRI Fixed Income - Credit Inde",
     "Private Equity": "Cambridge Associates Private Equity Index"
 }
 
-
-firm_name = "Morgan Investment Management"
+firm_name = "Generative AI Analytics and Insight (GAIA)"
 
 # Initialize chat history and selected model
 if "messages" not in st.session_state:
@@ -562,12 +561,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
-# st.markdown("<div class='motto'>Together, we create financial solutions that lead the way to a prosperous future.</div>", unsafe_allow_html=True)
-
-# st.title(f"{firm_name} Commentary Co-Pilot")
-st.markdown(f"<h1 class='custom-title'>{firm_name} Commentary Co-Pilot</h1>", unsafe_allow_html=True)
-
-# st.markdown("<div style='font-size:18px; font-style:italic; color:#4a7bab;'>Navigate Your Financial Narrative!</div>", unsafe_allow_html=True)
+st.markdown(f"<h5 class='custom-title'>{firm_name} </h5>", unsafe_allow_html=True)
 
 username = st.sidebar.text_input("Username", "amos_butcher@ceres.com")
 password = st.sidebar.text_input("Password", type="password", value="password123")
@@ -674,25 +668,33 @@ with col2:
     
 header = st.container() 
 with header:
-    # st.title("PandasAI Analysis App")
-    st.markdown("Use this Streamlit app to analyze your data in one shot. You can upload your data and ask questions about it. The app will answer your questions and provide you with insights about your data.")
+    # st.subtitle("Smart Data Analysis with GAIA")
+    st.title("Smart Data Analysis with GAIA - Flexible and Interactive Insights at Your Fingertips")
 
 # Filter client demographics based on selected client
-filtered_client_demographics_df = client_demographics_df[client_demographics_df['Client'] == selected_client]
+filtered_client_demographics_df = client_demographics_df[client_demographics_df['Selected_Client'] == selected_client]
+filtered_transactions_df = transactions_df[transactions_df['Selected_Client'] == selected_client]
+trailing_returns_df = pd.concat({k: pd.DataFrame(v) for k, v in trailing_returns.items()}, names=['Strategy']).reset_index(level=0)
 
-# Filter transactions based on selected strategy
-filtered_transactions_df = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
 
 # Initialize ChatGroq and SmartDatalake with filtered data
-llm = ChatGroq(model_name='llama3-70b-8192', api_key=os.environ['GROQ_API_KEY'])
-lake = SmartDatalake([filtered_client_demographics_df, filtered_transactions_df], config={"llm": llm})
+llm = ChatGroq(model_name='llama3-70b-8192'
+               , api_key=os.environ['GROQ_API_KEY']
+               ,temperature=2
+              )
+
+lake = SmartDatalake([
+    filtered_client_demographics_df, 
+    filtered_transactions_df, 
+    trailing_returns_df
+    # filtered_portfolio_characteristics_df
+], config={"llm": llm})
 
 # Display text input box and process input on Enter press
 user_input = st.text_input("Enter your chat message:", key="input_message")
 
 # Initialize a placeholder for the response
-response_placeholder = st.empty()
-
+# response_placeholder = st.empty()
 
 # Handle response on Enter press
 if st.button("Send"):
@@ -707,7 +709,6 @@ if st.button("Send"):
 #     "What are the key insights from the recent client data?",
 #     "Can you explain the impact of recent economic events?"
 # ]
-
 
 # Add a dark line
 st.markdown("---")

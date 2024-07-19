@@ -262,111 +262,7 @@ portfolio_characteristics = {
 }
 
 
-top_holdings = {
-    "Equity": {
-        "Holding": [
-            "NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc."
-        ],
-        "Industry": [
-            "Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "Denmark", "United States"
-        ],
-        "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9]
-    },
-    "Government Bonds": {
-        "Holding": [
-            "US Treasury Bond 2.375% 2029", "US Treasury Bond 1.75% 2024", "US Treasury Bond 2.25% 2027", 
-            "US Treasury Bond 3.00% 2049", "US Treasury Bond 2.625% 2025"
-        ],
-        "Industry": [
-            "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "United States"
-        ],
-        "% of Net Assets": [15.0, 12.0, 10.0, 8.0, 7.0]
-    },
-    "High Yield Bonds": {
-        "Holding": [
-            "Sprint Capital Corp 6.875% 2028", "Tenet Healthcare Corp 6.75% 2023", "CenturyLink Inc 7.5% 2024", 
-            "T-Mobile USA Inc 6.375% 2025", "Dish Network Corp 5.875% 2027"
-        ],
-        "Industry": [
-            "Telecommunications", "Healthcare Services", "Telecommunications", "Telecommunications", "Media"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "United States"
-        ],
-        "% of Net Assets": [4.5, 4.0, 3.5, 3.0, 2.5]
-    },
-    "Leveraged Loans": {
-        "Holding": [
-            "Dell International LLC Term Loan B", "Charter Communications Term Loan", "Intelsat Jackson Holdings Term Loan B", 
-            "American Airlines Inc Term Loan B", "Bausch Health Companies Term Loan"
-        ],
-        "Industry": [
-            "Technology", "Media", "Telecommunications", "Airlines", "Healthcare"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "Canada"
-        ],
-        "% of Net Assets": [5.0, 4.5, 4.0, 3.5, 3.0]
-    },
-    "Commodities": {
-        "Holding": [
-            "SPDR Gold Trust", "iShares Silver Trust", "United States Oil Fund", 
-            "Invesco DB Agriculture Fund", "Aberdeen Standard Physical Platinum Shares ETF"
-        ],
-        "Industry": [
-            "Precious Metals", "Precious Metals", "Energy", "Agriculture", "Precious Metals"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "United States"
-        ],
-        "% of Net Assets": [10.0, 8.0, 6.0, 5.0, 4.0]
-    },
-    "Long Short Equity Hedge Fund": {
-        "Holding": [
-            "Amazon.com Inc", "Alphabet Inc", "Johnson & Johnson", 
-            "Mastercard Inc", "Visa Inc"
-        ],
-        "Industry": [
-            "E-Commerce", "Internet Services", "Pharmaceuticals", "Financial Services", "Financial Services"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "United States"
-        ],
-        "% of Net Assets": [9.0, 7.0, 6.5, 6.0, 5.5]
-    },
-    "Long Short High Yield Bond": {
-        "Holding": [
-            "HCA Inc 7.5% 2026", "First Data Corp 7.0% 2024", "TransDigm Inc 6.5% 2025", 
-            "Community Health Systems 6.25% 2023", "CSC Holdings LLC 5.5% 2026"
-        ],
-        "Industry": [
-            "Healthcare", "Financial Services", "Aerospace", "Healthcare", "Telecommunications"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "United States"
-        ],
-        "% of Net Assets": [5.5, 5.0, 4.5, 4.0, 3.5]
-    },
-    "Private Equity": {
-        "Holding": [
-            "Blackstone Group", "Kohlberg Kravis Roberts", "The Carlyle Group", 
-            "Apollo Global Management", "TPG Capital"
-        ],
-        "Industry": [
-            "Private Equity", "Private Equity", "Private Equity", "Private Equity", "Private Equity"
-        ],
-        "Country": [
-            "United States", "United States", "United States", "United States", "United States"
-        ],
-        "% of Net Assets": [12.0, 10.0, 8.0, 7.0, 6.0]
-    }
-}
+
 
 strategy_risk_mapping = {
     "":"",
@@ -414,6 +310,111 @@ def load_transactions():
     return transactions_df
 
 def load_top_holdings():
+    top_holdings = {
+        "Equity": {
+            "Holding": [
+                "NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc."
+            ],
+            "Industry": [
+                "Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "Denmark", "United States"
+            ],
+            "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9]
+        },
+        "Government Bonds": {
+            "Holding": [
+                "US Treasury Bond 2.375% 2029", "US Treasury Bond 1.75% 2024", "US Treasury Bond 2.25% 2027", 
+                "US Treasury Bond 3.00% 2049", "US Treasury Bond 2.625% 2025"
+            ],
+            "Industry": [
+                "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "United States"
+            ],
+            "% of Net Assets": [15.0, 12.0, 10.0, 8.0, 7.0]
+        },
+        "High Yield Bonds": {
+            "Holding": [
+                "Sprint Capital Corp 6.875% 2028", "Tenet Healthcare Corp 6.75% 2023", "CenturyLink Inc 7.5% 2024", 
+                "T-Mobile USA Inc 6.375% 2025", "Dish Network Corp 5.875% 2027"
+            ],
+            "Industry": [
+                "Telecommunications", "Healthcare Services", "Telecommunications", "Telecommunications", "Media"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "United States"
+            ],
+            "% of Net Assets": [4.5, 4.0, 3.5, 3.0, 2.5]
+        },
+        "Leveraged Loans": {
+            "Holding": [
+                "Dell International LLC Term Loan B", "Charter Communications Term Loan", "Intelsat Jackson Holdings Term Loan B", 
+                "American Airlines Inc Term Loan B", "Bausch Health Companies Term Loan"
+            ],
+            "Industry": [
+                "Technology", "Media", "Telecommunications", "Airlines", "Healthcare"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "Canada"
+            ],
+            "% of Net Assets": [5.0, 4.5, 4.0, 3.5, 3.0]
+        },
+        "Commodities": {
+            "Holding": [
+                "SPDR Gold Trust", "iShares Silver Trust", "United States Oil Fund", 
+                "Invesco DB Agriculture Fund", "Aberdeen Standard Physical Platinum Shares ETF"
+            ],
+            "Industry": [
+                "Precious Metals", "Precious Metals", "Energy", "Agriculture", "Precious Metals"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "United States"
+            ],
+            "% of Net Assets": [10.0, 8.0, 6.0, 5.0, 4.0]
+        },
+        "Long Short Equity Hedge Fund": {
+            "Holding": [
+                "Amazon.com Inc", "Alphabet Inc", "Johnson & Johnson", 
+                "Mastercard Inc", "Visa Inc"
+            ],
+            "Industry": [
+                "E-Commerce", "Internet Services", "Pharmaceuticals", "Financial Services", "Financial Services"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "United States"
+            ],
+            "% of Net Assets": [9.0, 7.0, 6.5, 6.0, 5.5]
+        },
+        "Long Short High Yield Bond": {
+            "Holding": [
+                "HCA Inc 7.5% 2026", "First Data Corp 7.0% 2024", "TransDigm Inc 6.5% 2025", 
+                "Community Health Systems 6.25% 2023", "CSC Holdings LLC 5.5% 2026"
+            ],
+            "Industry": [
+                "Healthcare", "Financial Services", "Aerospace", "Healthcare", "Telecommunications"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "United States"
+            ],
+            "% of Net Assets": [5.5, 5.0, 4.5, 4.0, 3.5]
+        },
+        "Private Equity": {
+            "Holding": [
+                "Blackstone Group", "Kohlberg Kravis Roberts", "The Carlyle Group", 
+                "Apollo Global Management", "TPG Capital"
+            ],
+            "Industry": [
+                "Private Equity", "Private Equity", "Private Equity", "Private Equity", "Private Equity"
+            ],
+            "Country": [
+                "United States", "United States", "United States", "United States", "United States"
+            ],
+            "% of Net Assets": [12.0, 10.0, 8.0, 7.0, 6.0]
+        }
+    }
     top_holdings_list = []
     for strategy, data in top_holdings.items():
         for i, holding in enumerate(data['Holding']):
@@ -429,7 +430,7 @@ def load_top_holdings():
                     })
     top_holdings_df = pd.DataFrame(top_holdings_list)
     return top_holdings_df
-
+    
 def get_top_transactions(selected_strategy,transactions_df):
     filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
     top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')

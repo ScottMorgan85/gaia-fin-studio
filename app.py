@@ -19,6 +19,9 @@ def main():
     
     username, password, selected_client, selected_strategy, selected_risk, selected_quarter, model_option = render_sidebar()
     user_authenticated = authenticate_user(username, password)
+
+    if "commentary" not in st.session_state:
+        st.session_state.commentary = ""
     
     if user_authenticated:
         trailing_returns_df = load_trailing_returns(selected_quarter)
@@ -27,7 +30,7 @@ def main():
         top_holdings_df = load_top_holdings()
         top_transactions_df=get_top_transactions(selected_strategy,transactions_df)
         
-        render_main_content(client, selected_client, selected_strategy, selected_risk, selected_quarter, trailing_returns_df, monthly_returns_df, transactions_df, model_option,top_transactions_df)
+        render_main_content(client, selected_client, selected_strategy, selected_risk, selected_quarter, trailing_returns_df, monthly_returns_df, transactions_df, model_option,top_transactions_df,top_holdings_df)
 
     else:
         st.error("Invalid username or password")

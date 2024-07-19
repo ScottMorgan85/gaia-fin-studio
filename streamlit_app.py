@@ -669,7 +669,7 @@ with col2:
 header = st.container() 
 with header:
     # st.subtitle("Smart Data Analysis with GAIA")
-    st.title("Smart Data Analysis with GAIA - Flexible and Interactive Insights at Your Fingertips")
+    st.title("Smart Data Analysis with GAIA")
 
 # Filter client demographics based on selected client
 filtered_client_demographics_df = client_demographics_df[client_demographics_df['Selected_Client'] == selected_client]

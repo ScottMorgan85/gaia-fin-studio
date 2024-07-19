@@ -5513,3 +5513,286 @@ result = {'type': 'number', 'value': largest_buy_value}
 2024-07-19 12:46:02 [INFO] Executing Step 7: ResultValidation
 2024-07-19 12:46:02 [INFO] Answer: {'type': 'number', 'value': 372878}
 2024-07-19 12:46:02 [INFO] Executing Step 8: ResultParsing
+2024-07-19 15:26:40 [INFO] Question: 
+2024-07-19 15:26:40 [INFO] Running PandasAI with langchain_groq-chat LLM...
+2024-07-19 15:26:40 [INFO] Prompt ID: 3f61df67-a2b5-4efd-9e57-de99b1f955a2
+2024-07-19 15:26:40 [INFO] Executing Pipeline: GenerateChatPipeline
+2024-07-19 15:26:40 [INFO] Executing Step 0: ValidatePipelineInput
+2024-07-19 15:26:40 [INFO] Executing Step 1: CacheLookup
+2024-07-19 15:26:40 [INFO] Executing Step 2: PromptGeneration
+2024-07-19 15:26:41 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Hari Seldon,50,150000,"Married, 1 kid",Professor,Email exchange on 2024-07-10 about market outlook
+</dataframe>
+<dataframe>
+dfs[1]:10x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+45179," GE 4.5 12/01/40 Corp,  General Electric Co.",High Yield Bonds,Hari Seldon,Long,12712,88,2038062,Buy, Biotech R&D leads to breakthrough
+44950," XOM 4.6 08/01/45 Corp,  Exxon Mobil Corp.",High Yield Bonds,Hari Seldon,Long,43085,98,978824,Buy, Industrial demand boosts share prices
+44819," JPM 3.9 11/20/30 Corp,  JPMorgan Chase & Co.",High Yield Bonds,Hari Seldon,Long,16552,86,2523397,Buy, Successful market penetration in Europe
+</dataframe>
+<dataframe>
+dfs[2]:5x5
+Strategy,Period,Gross (Inception 12/18/08),Net,Primary Benchmark
+High Yield Bonds,10 years,4.47,5.12,8.49
+High Yield Bonds,5 years,6.04,7.62,10.08
+High Yield Bonds,3 years,8.22,8.78,9.05
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ 
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+2024-07-19 15:26:41 [INFO] Executing Step 3: CodeGenerator
+2024-07-19 15:26:41 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 15:26:41 [ERROR] Pipeline failed on step 3: No code found in the response
+2024-07-19 15:27:52 [INFO] Question: 
+2024-07-19 15:27:52 [INFO] Running PandasAI with langchain_groq-chat LLM...
+2024-07-19 15:27:52 [INFO] Prompt ID: 708f84a4-5419-4e4a-b212-4100a8f76672
+2024-07-19 15:27:52 [INFO] Executing Pipeline: GenerateChatPipeline
+2024-07-19 15:27:52 [INFO] Executing Step 0: ValidatePipelineInput
+2024-07-19 15:27:52 [INFO] Executing Step 1: CacheLookup
+2024-07-19 15:27:52 [INFO] Executing Step 2: PromptGeneration
+2024-07-19 15:27:52 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Hari Seldon,50,150000,"Married, 1 kid",Professor,Email exchange on 2024-07-10 about market outlook
+</dataframe>
+<dataframe>
+dfs[1]:10x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+44604," GE 4.5 12/01/40 Corp,  General Electric Co.",High Yield Bonds,Hari Seldon,Long,21286,102,1309336,Buy, Innovations in hybrid vehicles enhance market position
+45105," WFC 4.1 09/30/35 Corp,  Wells Fargo & Co.",High Yield Bonds,Hari Seldon,Long,12712,107,2523397,Buy, Strong Q2 earnings with high consumer demand
+45004," AAPL 3.85 02/09/40 Corp,  Apple Inc.",High Yield Bonds,Hari Seldon,Long,21393,103,978824,Buy, Drug pipeline progress sparks interest
+</dataframe>
+<dataframe>
+dfs[2]:5x5
+Strategy,Period,Gross (Inception 12/18/08),Net,Primary Benchmark
+High Yield Bonds,3 years,6.04,3.95,4.56
+High Yield Bonds,1 year,4.47,5.12,7.28
+High Yield Bonds,5 years,8.22,7.62,10.08
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ 
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+2024-07-19 15:27:52 [INFO] Executing Step 3: CodeGenerator
+2024-07-19 15:27:53 [INFO] Question: 
+2024-07-19 15:27:53 [INFO] Running PandasAI with langchain_groq-chat LLM...
+2024-07-19 15:27:53 [INFO] Prompt ID: 5b30eb9b-56e7-40b0-93eb-47c0a3d9ff94
+2024-07-19 15:27:53 [INFO] Executing Pipeline: GenerateChatPipeline
+2024-07-19 15:27:53 [INFO] Executing Step 0: ValidatePipelineInput
+2024-07-19 15:27:53 [INFO] Executing Step 1: CacheLookup
+2024-07-19 15:27:53 [INFO] Executing Step 2: PromptGeneration
+2024-07-19 15:27:53 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Hari Seldon,50,150000,"Married, 1 kid",Professor,Email exchange on 2024-07-10 about market outlook
+</dataframe>
+<dataframe>
+dfs[1]:10x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+44681," GS 4.35 03/15/30 Corp,  Goldman Sachs Group Inc.",High Yield Bonds,Hari Seldon,Long,21393,98,2277602,Buy, Biotech R&D leads to breakthrough
+45004," MSFT 4.2 05/15/50 Corp,  Microsoft Corp.",High Yield Bonds,Hari Seldon,Long,16552,91,978824,Buy, Consistent dividend yield attracts investors
+44883," MCD 5.0 03/31/50 Corp,  McDonald's Corp.",High Yield Bonds,Hari Seldon,Long,20902,88,1902082,Buy, Sustainable products drive market gain
+</dataframe>
+<dataframe>
+dfs[2]:5x5
+Strategy,Period,Gross (Inception 12/18/08),Net,Primary Benchmark
+High Yield Bonds,10 years,8.22,8.78,7.28
+High Yield Bonds,1 year,6.04,5.12,10.08
+High Yield Bonds,3 years,7.95,3.95,9.05
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ 
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+2024-07-19 15:27:53 [INFO] Executing Step 3: CodeGenerator
+2024-07-19 15:27:54 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 15:27:54 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Hari Seldon,50,150000,"Married, 1 kid",Professor,Email exchange on 2024-07-10 about market outlook
+</dataframe>
+<dataframe>
+dfs[1]:10x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+44604," GE 4.5 12/01/40 Corp,  General Electric Co.",High Yield Bonds,Hari Seldon,Long,21286,102,1309336,Buy, Innovations in hybrid vehicles enhance market position
+45105," WFC 4.1 09/30/35 Corp,  Wells Fargo & Co.",High Yield Bonds,Hari Seldon,Long,12712,107,2523397,Buy, Strong Q2 earnings with high consumer demand
+45004," AAPL 3.85 02/09/40 Corp,  Apple Inc.",High Yield Bonds,Hari Seldon,Long,21393,103,978824,Buy, Drug pipeline progress sparks interest
+</dataframe>
+<dataframe>
+dfs[2]:5x5
+Strategy,Period,Gross (Inception 12/18/08),Net,Primary Benchmark
+High Yield Bonds,3 years,6.04,3.95,4.56
+High Yield Bonds,1 year,4.47,5.12,7.28
+High Yield Bonds,5 years,8.22,7.62,10.08
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ 
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+            
+2024-07-19 15:27:54 [INFO] Code generated:
+            ```
+            import pandas as pd
+import matplotlib.pyplot as plt
+
+# Write code here
+
+# Find the client with the highest income
+highest_income_client = dfs[0].loc[dfs[0]['Income'].idxmax()]['Selected_Client']
+
+# Find the highest transaction value made by the highest income client
+highest_transaction_value = dfs[1].loc[dfs[1]['Selected_Client'] == highest_income_client]['Total Value ($)'].max()
+
+# Filter the strategy dataframe for the selected client's strategy
+strategy = dfs[0].loc[dfs[0]['Selected_Client'] == highest_income_client, 'Occupation'].values[0]
+strategy_df = dfs[2].loc[dfs[2]['Strategy'] == strategy]
+
+# Plot the gross returns for each period in the strategy dataframe
+plt.figure(figsize=(10,6))
+plt.plot(strategy_df['Period'], strategy_df['Gross (Inception 12/18/08)'])
+plt.xlabel('Period')
+plt.ylabel('Gross Returns')
+plt.title('Gross Returns for {} Strategy'.format(strategy))
+plt.savefig('gross_returns.png')
+
+# Declare result var:
+result = {
+    "type": "dataframe",
+    "value": dfs[0].head(1)
+}
+
+print(result)
+            ```
+            
+2024-07-19 15:27:54 [INFO] Executing Step 4: CachePopulation
+2024-07-19 15:27:54 [INFO] Executing Step 5: CodeCleaning
+2024-07-19 15:27:54 [INFO] Saving charts to /mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png
+2024-07-19 15:27:54 [INFO] 
+Code running:
+```
+highest_income_client = dfs[0].loc[dfs[0]['Income'].idxmax()]['Selected_Client']
+highest_transaction_value = dfs[1].loc[dfs[1]['Selected_Client'] == highest_income_client]['Total Value ($)'].max()
+strategy = dfs[0].loc[dfs[0]['Selected_Client'] == highest_income_client, 'Occupation'].values[0]
+strategy_df = dfs[2].loc[dfs[2]['Strategy'] == strategy]
+plt.figure(figsize=(10, 6))
+plt.plot(strategy_df['Period'], strategy_df['Gross (Inception 12/18/08)'])
+plt.xlabel('Period')
+plt.ylabel('Gross Returns')
+plt.title('Gross Returns for {} Strategy'.format(strategy))
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'dataframe', 'value': dfs[0].head(1)}
+print(result)
+        ```
+2024-07-19 15:27:54 [INFO] Executing Step 6: CodeExecution
+2024-07-19 15:27:54 [INFO] Executing Step 7: ResultValidation
+2024-07-19 15:27:54 [INFO] Answer: {'type': 'dataframe', 'value':   Selected_Client  Age  Income          Family Occupation                                Recent Interactions
+2     Hari Seldon   50  150000  Married, 1 kid  Professor  Email exchange on 2024-07-10 about market outlook}
+2024-07-19 15:27:54 [INFO] Executing Step 8: ResultParsing
+2024-07-19 15:27:57 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 15:27:57 [ERROR] Pipeline failed on step 3: No code found in the response
+2024-07-19 16:09:30 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"

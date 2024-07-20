@@ -132,7 +132,7 @@ def render_main_content(client, selected_client, selected_strategy, selected_ris
 
     # Initialize ChatGroq and SmartDatalake with filtered data
     llm = ChatGroq(model_name='llama3-70b-8192', api_key=os.environ['GROQ_API_KEY'])
-    lake = SmartDatalake([filtered_client_demographics_df, filtered_transactions_df, filtered_top_holdings_df], config={"llm": llm})
+    lake = SmartDatalake([filtered_transactions_df, filtered_top_holdings_df], config={"llm": llm})
     
     # if "response" not in st.session_state:
     #     st.session_state.response = ""

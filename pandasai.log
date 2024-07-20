@@ -7697,3 +7697,687 @@ result = {'type': 'string', 'value': f'The risk profile of this portfolio is mod
 2024-07-19 16:49:47 [INFO] Answer: {'type': 'string', 'value': 'The risk profile of this portfolio is moderate, with 1.00% invested in Government Bonds.'}
 2024-07-19 16:49:47 [INFO] Executing Step 8: ResultParsing
 2024-07-19 16:51:17 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 16:56:16 [INFO] Question: Plot for me the monthly returns the last two months
+2024-07-19 16:56:16 [INFO] Running PandasAI with langchain_groq-chat LLM...
+2024-07-19 16:56:16 [INFO] Prompt ID: d79ef225-2e24-4bf0-b788-105cd0efba9b
+2024-07-19 16:56:16 [INFO] Executing Pipeline: GenerateChatPipeline
+2024-07-19 16:56:16 [INFO] Executing Step 0: ValidatePipelineInput
+2024-07-19 16:56:16 [INFO] Executing Step 1: CacheLookup
+2024-07-19 16:56:16 [INFO] Executing Step 2: PromptGeneration
+2024-07-19 16:56:16 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ Plot for me the monthly returns the last two months
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+2024-07-19 16:56:16 [INFO] Executing Step 3: CodeGenerator
+2024-07-19 16:56:17 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 16:56:17 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+
+
+Update this initial code:
+```python
+# TODO: import the required dependencies
+import pandas as pd
+
+# Write code here
+
+# Declare result var: 
+type (possible values "string", "number", "dataframe", "plot"). Examples: { "type": "string", "value": f"The highest salary is {highest_salary}." } or { "type": "number", "value": 125 } or { "type": "dataframe", "value": pd.DataFrame({...}) } or { "type": "plot", "value": "temp_chart.png" }
+
+```
+
+
+
+### QUERY
+ Plot for me the monthly returns the last two months
+
+Variable `dfs: list[pd.DataFrame]` is already declared.
+
+At the end, declare "result" variable as a dictionary of type and value.
+
+If you are asked to plot a chart, use "matplotlib" for charts, save as png.
+
+
+Generate python code and return full updated code:
+            
+2024-07-19 16:56:17 [INFO] Code generated:
+            ```
+            import pandas as pd
+import matplotlib.pyplot as plt
+
+# Extract the transaction dataframe
+transactions_df = dfs[1]
+
+# Convert the Date column to datetime format
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+
+# Set the Date column as the index
+transactions_df.set_index('Date', inplace=True)
+
+# Resample the data to monthly frequency and calculate the returns
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+
+# Plot the monthly returns for the last two months
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+plt.savefig('monthly_returns.png')
+
+# Declare the result variable
+result = {"type": "plot", "value": "monthly_returns.png"}
+            ```
+            
+2024-07-19 16:56:17 [INFO] Executing Step 4: CachePopulation
+2024-07-19 16:56:17 [INFO] Executing Step 5: CodeCleaning
+2024-07-19 16:56:17 [INFO] Saving charts to /mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png
+2024-07-19 16:56:17 [INFO] 
+Code running:
+```
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+        ```
+2024-07-19 16:56:17 [INFO] Executing Step 6: CodeExecution
+2024-07-19 16:56:18 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+2024-07-19 16:56:18 [WARNING] Failed to execute code retrying with a correction framework [retry number: 1]
+2024-07-19 16:56:18 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-19 16:56:18 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-19 16:56:18 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ Plot for me the monthly returns the last two months
+
+You generated this python code:
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+
+Fix the python code above and return the new python code:
+2024-07-19 16:56:18 [INFO] Executing Step 1: CodeGenerator
+2024-07-19 16:56:18 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 16:56:18 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ Plot for me the monthly returns the last two months
+
+You generated this python code:
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+plt.savefig('/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png')
+result = {'type': 'plot', 'value': '/mnt/c/Users/Scott Morgan/Documents/GitHub/groq-streamlit/exports/charts/temp_chart.png'}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 97, in execute
+    raise InvalidOutputValueMismatch(
+pandasai.exceptions.InvalidOutputValueMismatch: Value type <class 'str'> must match with type plot
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-19 16:56:18 [INFO] Code generated:
+            ```
+            import matplotlib.pyplot as plt
+import pandas as pd
+
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+
+result = {'type': 'plot', 'value': plt.gcf()}
+            ```
+            
+2024-07-19 16:56:18 [INFO] Executing Step 2: CodeCleaning
+2024-07-19 16:56:18 [INFO] 
+Code running:
+```
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+        ```
+2024-07-19 16:56:18 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Date'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 2, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Date'
+
+2024-07-19 16:56:18 [WARNING] Failed to execute code retrying with a correction framework [retry number: 2]
+2024-07-19 16:56:18 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-19 16:56:18 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-19 16:56:18 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ Plot for me the monthly returns the last two months
+
+You generated this python code:
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Date'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 2, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Date'
+
+
+Fix the python code above and return the new python code:
+2024-07-19 16:56:18 [INFO] Executing Step 1: CodeGenerator
+2024-07-19 16:56:19 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 16:56:19 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ Plot for me the monthly returns the last two months
+
+You generated this python code:
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+transactions_df.set_index('Date', inplace=True)
+monthly_returns = transactions_df.resample('M')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Date'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 2, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Date'
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-19 16:56:19 [INFO] Code generated:
+            ```
+            transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+monthly_returns = transactions_df.resample('M', on='Date')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+            ```
+            
+2024-07-19 16:56:19 [INFO] Executing Step 2: CodeCleaning
+2024-07-19 16:56:19 [INFO] 
+Code running:
+```
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+monthly_returns = transactions_df.resample('M', on='Date')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+        ```
+2024-07-19 16:56:19 [ERROR] Failed with error: Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Date'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 2, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Date'
+
+2024-07-19 16:56:19 [WARNING] Failed to execute code retrying with a correction framework [retry number: 3]
+2024-07-19 16:56:19 [INFO] Executing Pipeline: ErrorCorrectionPipeline
+2024-07-19 16:56:19 [INFO] Executing Step 0: ErrorPromptGeneration
+2024-07-19 16:56:19 [INFO] Using prompt: <dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ Plot for me the monthly returns the last two months
+
+You generated this python code:
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+monthly_returns = transactions_df.resample('M', on='Date')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Date'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 2, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Date'
+
+
+Fix the python code above and return the new python code:
+2024-07-19 16:56:19 [INFO] Executing Step 1: CodeGenerator
+2024-07-19 16:56:20 [INFO] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2024-07-19 16:56:20 [INFO] Prompt used:
+            
+<dataframe>
+dfs[0]:1x6
+Selected_Client,Age,Income,Family,Occupation,Recent Interactions
+Sandor Clegane,38,95000,Single,Security Consultant,Phone call on 2024-06-25 to review investment strategy
+</dataframe>
+<dataframe>
+dfs[1]:20x10
+Date,Name,Selected_Strategy,Selected_Client,Direction,Quantity,Price per Share ($),Total Value ($),Transaction Type,Commentary
+43616," SPA 4 1/4 06/30/50 Govt,  Spanish Government Bond",Government Bonds,Sandor Clegane,Long,24486,146,2012566,Buy, City development bonds
+45326," AGS 2 3/4 01/15/28 Govt,  Australian Government Bond",Government Bonds,Sandor Clegane,Long,12693,135,4021440,Buy, French bond market stability
+45120," CAN 3 1/2 12/01/50 Govt,  Canadian Government Bond",Government Bonds,Sandor Clegane,Long,21030,105,2815890,Buy, Long-term stability from Canadian bonds
+</dataframe>
+<dataframe>
+dfs[2]:5x6
+Strategy,Holding,Industry,Country,% of Net Assets,Client
+Government Bonds,US Treasury Bond 3.00% 2049,Government Bonds,United States,10.0,Sandor Clegane
+Government Bonds,US Treasury Bond 1.75% 2024,Government Bonds,United States,12.0,Sandor Clegane
+Government Bonds,US Treasury Bond 2.25% 2027,Government Bonds,United States,8.0,Sandor Clegane
+</dataframe>
+
+
+The user asked the following question:
+### QUERY
+ Plot for me the monthly returns the last two months
+
+You generated this python code:
+transactions_df = dfs[1]
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+monthly_returns = transactions_df.resample('M', on='Date')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+
+It fails with the following error:
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3802, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "pandas/_libs/index.pyx", line 138, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 165, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'Date'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 2, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/frame.py", line 3807, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/indexes/base.py", line 3804, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Date'
+
+
+Fix the python code above and return the new python code:
+            
+2024-07-19 16:56:20 [INFO] Code generated:
+            ```
+            transactions_df = dfs[1]
+transactions_df.rename(columns={transactions_df.columns[0]: 'Date'}, inplace=True)
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+monthly_returns = transactions_df.resample('M', on='Date')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+            ```
+            
+2024-07-19 16:56:20 [INFO] Executing Step 2: CodeCleaning
+2024-07-19 16:56:20 [INFO] 
+Code running:
+```
+transactions_df = dfs[1]
+transactions_df.rename(columns={transactions_df.columns[0]: 'Date'}, inplace=True)
+transactions_df['Date'] = pd.to_datetime(transactions_df['Date'], unit='D')
+monthly_returns = transactions_df.resample('M', on='Date')['Total Value ($)'].sum().pct_change()
+plt.figure(figsize=(8, 6))
+monthly_returns.tail(2).plot(kind='bar')
+plt.title('Monthly Returns for the Last Two Months')
+plt.xlabel('Month')
+plt.ylabel('Return (%)')
+result = {'type': 'plot', 'value': plt.gcf()}
+        ```
+2024-07-19 16:56:20 [ERROR] Failed with error: Traceback (most recent call last):
+  File "pandas/_libs/tslib.pyx", line 361, in pandas._libs.tslib.array_with_unit_to_datetime
+ValueError: could not convert string to float: ' T 0 2.5 03/31/30 Govt,  United States Treasury Bond'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 85, in execute
+    result = self.execute_code(code_to_run, code_context)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandasai/pipelines/chat/code_execution.py", line 171, in execute_code
+    exec(code, environment)
+  File "<string>", line 3, in <module>
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/tools/datetimes.py", line 1068, in to_datetime
+    values = convert_listlike(arg._values, format)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/tools/datetimes.py", line 393, in _convert_listlike_datetimes
+    return _to_datetime_with_unit(arg, unit, name, tz, errors)
+  File "/home/smorgan/miniconda3/envs/groq_fund_commentary/lib/python3.9/site-packages/pandas/core/tools/datetimes.py", line 557, in _to_datetime_with_unit
+    arr, tz_parsed = tslib.array_with_unit_to_datetime(arg, unit, errors=errors)
+  File "pandas/_libs/tslib.pyx", line 364, in pandas._libs.tslib.array_with_unit_to_datetime
+ValueError: non convertible value  T 0 2.5 03/31/30 Govt,  United States Treasury Bond with the unit 'D'
+
+2024-07-19 16:56:20 [ERROR] Pipeline failed on step 6: non convertible value  T 0 2.5 03/31/30 Govt,  United States Treasury Bond with the unit 'D'

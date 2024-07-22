@@ -5,42 +5,14 @@ import random
 # from src.data import *
 # from src.ui import *
 
-
-def load_sidebar_dropdown_stocks(port_tab: st.sidebar.tabs) -> None:
+def load_sidebar_dropdown_clients():
     # add dropdown menu for portfolio
-    st.session_state["no_client"] = port_tab.selectbox("Select Client", list(tools.client_strategy_risk_mapping.keys()),
+    st.session_state["no_client"] = st.sidebar.selectbox("Select Client",list(tools.client_strategy_risk_mapping.keys()),
                                                            key="client")
 
-
-def load_sidebar_stocks(port_tab: st.sidebar.tabs, no_client: int) -> None:
-
-    selected_client = tools.get_stock_demo_data(no_investment)
-    selected_strategy, selected_risk = tools.client_strategy_risk_mapping[selected_client]
-
-    # # split into three columns
-    # stock_col, share_col, date_col = port_tab.columns(3)
-
-    # # create text boxes for each stocks in demo_stock_list
-    # for stock in demo_stock_list:
-    #     with stock_col:
-    #         tools.create_stock_text_input(state_variable=f"stock_{demo_stock_list.index(stock) + 1}_name",
-    #                                       default_value=stock,
-    #                                       present_text=f"Investment {demo_stock_list.index(stock) + 1}",
-    #                                       key=f"side_bar_stock_{demo_stock_list.index(stock) + 1}_name")
-
-    #     with share_col:
-    #         no_shares = random.randrange(10, 100, 10)
-    #         tools.create_stock_text_input(state_variable=f"stock_{demo_stock_list.index(stock) + 1}_share",
-    #                                       default_value=str(no_shares),
-    #                                       present_text="No. of Shares",
-    #                                       key=f"side_bar_stock_{demo_stock_list.index(stock) + 1}_share")
-
-    #     with date_col:
-    #         time_delta = dt.timedelta(days=random.randrange(3, 120, 1))
-    #         tools.create_date_input(state_variable=f"stock_{demo_stock_list.index(stock) + 1}_purchase_date",
-    #                                 present_text="Purchase Date",
-    #                                 default_value=dt.datetime.now() - time_delta,
-    #                                 key=f"side_bar_stock_{demo_stock_list.index(stock) + 1}_purchase_date")
+def load_sidebar_dropdown_dates():
+    # add dropdown menu for portfolio
+    st.session_state["no_date"] = st.sidebar.selectbox("Select Quarter", ["Q1 2023", "Q2 2023", "Q3 2023", "Q4 2023"], key="date")
 
 
 def load_sidebar_commentary(commentary_tab: st.sidebar.tabs) -> None:
@@ -52,10 +24,13 @@ def load_sidebar_commentary(commentary_tab: st.sidebar.tabs) -> None:
         key="model"
     )
 
-    selected_quarter = st.sidebar.selectbox("Select Quarter", ["Q1 2023", "Q2 2023", "Q3 2023", "Q4 2023"], key="quarter")
+    st.session_state["run_simulation"] = commentary_tab.button("Generate Commentary",
+                                                         key="main_page_run_simulation",
+                                                         on_click=tools.click_button_sim)
 
 
-def generate_investment_commentary(client,model_option, selected_client, selected_strategy, selected_quarter, trailing_returns_df,transactions_df,top_transactions_df):
+
+def generate_investment_commentary(client,model_option, selected_client, selected_strategy,  trailing_returns_df,transactions_df,top_transactions_df):
     
     index = commentary_structure[selected_strategy]['index']
     headings = commentary_structure[selected_strategy]['headings']

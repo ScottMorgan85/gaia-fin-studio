@@ -2,22 +2,19 @@ import streamlit as st
 import stTools as tools
 import datetime as dt
 import random
-from src.data import *
-from src.ui import *
+# from src.data import *
+# from src.ui import *
 
 
-def load_sidebar_dropdown_stocks(port_tab: st.sidebar.tabs) -> None:
+def load_sidebar_dropdown_stocks() -> None:
     # add dropdown menu for portfolio
-    st.session_state["no_client"] = port_tab.selectbox("Select Client",
-                                                           list(client_strategy_risk_mapping.keys()),
-                                                           key="client")
+    st.session_state["no_client"] = port_tab.selectbox("Select Client", list(tools.client_strategy_risk_mapping.keys()),key="client")
 
 
 def load_sidebar_stocks(port_tab: st.sidebar.tabs, no_client: int) -> None:
-
     selected_client = tools.get_stock_demo_data(no_investment)
     selected_strategy, selected_risk = tools.client_strategy_risk_mapping[selected_client]
-    selected_quarter = st.sidebar.selectbox("Select Quarter", ["Q1 2023", "Q2 2023", "Q3 2023", "Q4 2023"], key="quarter")
+
     # # split into three columns
     # stock_col, share_col, date_col = port_tab.columns(3)
 
@@ -54,8 +51,7 @@ def load_sidebar_commentary(commentary_tab: st.sidebar.tabs) -> None:
     )
 
 
-
-def generate_investment_commentary(client,model_option, selected_client, selected_strategy, selected_quarter, trailing_returns_df,transactions_df,top_transactions_df):
+def generate_investment_commentary(client,model_option, selected_client, selected_strategy,  trailing_returns_df,transactions_df,top_transactions_df):
     
     index = commentary_structure[selected_strategy]['index']
     headings = commentary_structure[selected_strategy]['headings']
@@ -176,6 +172,33 @@ def get_top_transactions(selected_strategy):
     top_transactions = pd.concat([top_buys, top_sells])
     top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
     return top_transactions_df
+
+
+
+# strategy_risk_mapping = {
+#     "": "",
+#     "Equity": "High",
+#     "Government Bonds": "Low",
+#     "High Yield Bonds": "High",
+#     "Leveraged Loans": "High",
+#     "Commodities": "Medium",
+#     "Private Equity": "High",
+#     "Long Short Equity Hedge Fund": "Medium",
+#     "Long Short High Yield Bond": "Medium"
+# }
+
+
+# client_strategy_risk_mapping = {
+#     " ": (" ", " "),
+#     "Warren Miller": ("Equity", "High"),
+#     "Sandor Clegane": ("Government Bonds", "Low"),
+#     "Hari Seldon": ("High Yield Bonds", "High"),
+#     "James Holden": ("Leveraged Loans", "High"),
+#     "Alice Johnson": ("Commodities", "Medium"),
+#     "Bob Smith": ("Private Equity", "High"),
+#     "Carol White": ("Long Short Equity Hedge Fund", "High"),
+#     "David Brown": ("Long Short High Yield Bond", "High")
+# }
     # col_monte1, col_monte2 = risk_tab.columns(2)
 
     # with col_monte1:

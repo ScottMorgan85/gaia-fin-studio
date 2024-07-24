@@ -1,0 +1,38 @@
+/* assets/styles.css */
+body {
+    background-color: #121212;
+    color: #E0E0E0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #FFFFFF;
+}
+
+.sidebar .sidebar-content {
+    background-color: #333333;
+}
+
+.stButton>button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 5px 12px; /* Smaller padding for a smaller button */
+    text-align: center;
+    display: inline-block;
+    font-size: 14px; /* Smaller font size */
+    margin: 4px 2px;
+    transition-duration: 0.4s;
+    cursor: pointer;
+}
+
+.stButton>button:hover {
+    background-color: white;
+    color: black;
+    border: 2px solid #4CAF50;
+}
+
+/* Reduce padding at the top of the main page */
+.main .block-container {
+    padding-top: 1rem; /* Adjust this value to increase or decrease padding */
+    padding-bottom: 1rem; /* Optional: adjust bottom padding if needed */
+}

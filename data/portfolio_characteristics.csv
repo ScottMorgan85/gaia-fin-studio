@@ -1,8 +1,0 @@
-Strategy,Tech,Healthcare,Finance,Consumer,Energy,Duration,Yield,Industrial,3-YR Discount Margin,Gold,Oil,Agriculture,Net Exposure,Gross Exposure
-Equity,30.0,20.0,25.0,15.0,10.0,,,,,,,,,
-Government Bonds,,,,,,7.0,0.02,,,,,,,
-High Yield Bonds,,,,,,5.0,0.06,,,,,,,
-Leveraged Loans,20.0,30.0,10.0,,,,,40.0,0.04,,,,,
-Commodities,,,,,,,,,,50.0,30.0,20.0,,
-Long Short Equity Hedge Fund,,,,,,,,,,,,,0.5,1.5
-Long Short High Yield Bond,,,,,,,,,,,,,0.4,1.4

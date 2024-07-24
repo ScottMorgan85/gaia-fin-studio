@@ -306,3 +306,33 @@ def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
     
     return fig
 
+def plot_cumulative_returns(client_returns, benchmark_returns, client_strategy, benchmark):
+    fig = go.Figure()
+
+    # Add client strategy trace
+    fig.add_trace(go.Scatter(
+        x=client_returns['as_of_date'],
+        y=client_returns[client_strategy],
+        mode='lines',
+        name=client_strategy,
+        line=dict(color='blue', width=2)
+    ))
+
+    # Add benchmark trace
+    fig.add_trace(go.Scatter(
+        x=benchmark_returns['as_of_date'],
+        y=benchmark_returns[benchmark],
+        mode='lines',
+        name=benchmark,
+        line=dict(color='orange', width=2)
+    ))
+
+    # Update layout
+    fig.update_layout(
+        title=f'{client_strategy} vs {benchmark} Returns Over Time',
+        xaxis_title='Date',
+        yaxis_title='Returns',
+        hovermode='x unified'
+    )
+
+    st.plotly_chart(fig)

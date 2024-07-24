@@ -33,7 +33,7 @@ def create_date_input(
         default_value: str,
         key: str
 ) -> None:
-    create_state_variable(state_variable, default_value)
+    create_state_variable(state_variable, default_value)a
 
     st.session_state[state_variable] = st.date_input(present_text,
                                                      value=st.session_state[state_variable],

@@ -1,13 +1,23 @@
+import pandas as pd
+
 client_strategy_risk_mapping = {
-    "Warren Miller": ("Equity", "High"),
-    "Sandor Clegane": ("Government Bonds", "Low"),
-    "Hari Seldon": ("High Yield Bonds", "High"),
-    "James Holden": ("Leveraged Loans", "High"),
-    "Alice Johnson": ("Commodities", "Medium"),
-    "Bob Smith": ("Private Equity", "High"),
-    "Carol White": ("Long Short Equity Hedge Fund", "High"),
-    "David Brown": ("Long Short High Yield Bond", "High")
+    "Warren Miller": ("Equity", "S&P 500", "High"),
+    "Sandor Clegane": ("Government Bonds", "Bloomberg Barclays US Aggregate Bond Index", "Low"),
+    "Hari Seldon": ("High Yield Bonds", "ICE BofAML US High Yield Index", "High"),
+    "James Holden": ("Leveraged Loans", "S&P/LSTA Leveraged Loan Index", "High"),
+    "Alice Johnson": ("Commodities", "Bloomberg Commodity Index", "Medium"),
+    "Bob Smith": ("Private Equity", "Cambridge Associates Private Equity Index", "High"),
+    "Carol White": ("Long Short Equity Hedge Fund", "HFRI Equity Hedge Index", "High"),
+    "David Brown": ("Long Short High Yield Bond", "HFRI Fixed Income - Credit Index", "High")
 }
 
-def get_client_names():
-    return list(client_strategy_risk_mapping.keys())
+def convert_to_dataframe(mapping: dict) -> pd.DataFrame:
+    # Convert the dictionary to a DataFrame
+    df = pd.DataFrame.from_dict(mapping, orient='index', columns=['Strategy', 'Benchmark', 'Risk Profile'])
+    # Reset the index to make 'Client Name' a column
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'Client Name'}, inplace=True)
+    return df
+
+# Convert the mapping to a DataFrame and name it
+client_data_df = convert_to_dataframe(client_strategy_risk_mapping)

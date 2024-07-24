@@ -277,3 +277,32 @@ def create_line_chart(portfolio_df: pd.DataFrame) -> None:
                       xaxis_title="Day(s) since purchase",
                       yaxis_title="Portfolio Value ($)")
     st.plotly_chart(fig, use_container_width=True, use_container_height=True)
+
+
+def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=monthly_returns_df.index,
+        y=(monthly_returns_df[selected_strategy].cumsum() + 1) * 10000,
+        mode='lines',
+        name=f'{selected_strategy} Fund'
+    ))
+    
+    if benchmark != "N/A":
+        fig.add_trace(go.Scatter(
+            x=monthly_returns_df.index,
+            y=(monthly_returns_df[benchmark].cumsum() + 1) * 10000,
+            mode='lines',
+            name='Benchmark'
+        ))
+
+    fig.update_layout(
+        title=f"Growth of $10K - {selected_strategy} Fund",
+        xaxis_title="Date",
+        yaxis_title="Value ($)",
+        legend_title="Legend",
+        template="plotly_dark"
+    )
+    
+    return fig
+

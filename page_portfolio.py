@@ -1,5 +1,5 @@
 import streamlit as st
-from data_loader import load_client_data, load_asset_returns
+from data_loader import load_client_data, load_asset_returns 
 
 def display(client_id):
     # Adding a placeholder for a chat box at the top of the portfolio tab

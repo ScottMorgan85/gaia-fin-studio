@@ -15,9 +15,6 @@ import page_client
 import style
 
 # Apply styles and theme
-style.ms  # This initializes the theme in the session state
-
-# Render the theme toggle button with a unique key
 style.render_theme_toggle_button()
 
 # Render sidebar

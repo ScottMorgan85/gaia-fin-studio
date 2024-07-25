@@ -341,3 +341,22 @@ def plot_cumulative_returns(client_returns, benchmark_returns, client_strategy, 
     )
 
     st.plotly_chart(fig)
+
+def format_trailing_returns(df):
+    df = df.round(2).applymap(lambda x: f"{x}%" if pd.notnull(x) else x)
+
+    def apply_styles(value):
+        try:
+            value_float = float(value.replace('%', ''))
+            if value_float > 0:
+                color = 'green'
+            elif value_float < 0:
+                color = 'red'
+            else:
+                color = 'white'
+            return f'color: {color}'
+        except:
+            return ''
+
+    styled_df = df.style.applymap(apply_styles)
+    st.dataframe(styled_df)

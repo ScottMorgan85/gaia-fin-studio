@@ -9,6 +9,10 @@ import pandas as pd
 from assets import Portfolio
 from assets import Stock
 import plotly.express as px
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 
 def create_state_variable(key: str, default_value: any) -> None:
@@ -360,3 +364,73 @@ def format_trailing_returns(df):
 
     styled_df = df.style.applymap(apply_styles)
     st.dataframe(styled_df)
+
+def create_pdf(commentary):
+    margin = 25 
+    page_width, page_height = letter  
+
+    file_path = "/tmp/commentary.pdf"  
+    doc = SimpleDocTemplate(file_path, pagesize=letter, rightMargin=margin, leftMargin=margin, topMargin=margin, bottomMargin=margin)
+    styles = getSampleStyleSheet()
+    Story = []
+
+    # Placeholder paths for logo and signature
+    logo_path = "./images/logo.png"
+    signature_path = "./images/signature.png"
+
+    # Add the logo
+    logo = Image(logo_path, width=150, height=100)  # Adjust the logo size as needed
+    logo.hAlign = 'CENTER'
+    Story.append(logo)
+    Story.append(Spacer(1, 12))
+
+    # Add the title
+    Story.append(Paragraph("Quarterly Investment Commentary", styles['Title']))
+    Story.append(Spacer(1, 20))
+
+    # Add spacing between paragraphs
+    def add_paragraph_spacing(text):
+        return text.replace('\n', '\n\n')
+
+    spaced_commentary = add_paragraph_spacing(commentary)
+    paragraphs = spaced_commentary.split('\n\n')
+    for paragraph in paragraphs:
+        Story.append(Paragraph(paragraph, styles['BodyText']))
+        Story.append(Spacer(1, 5))
+
+    # Add the closing statement
+    Story.append(Paragraph("Together, we create financial solutions that lead the way to a prosperous future.", styles['Italic']))
+    Story.append(Spacer(1, 20))
+
+    # Add the signature
+    signature = Image(signature_path, width=75, height=25)  # Adjust the signature size as needed
+    signature.hAlign = 'LEFT'
+    Story.append(signature)
+    Story.append(Spacer(1, 12))
+    Story.append(Paragraph("Scott M. Morgan", styles['Normal']))
+    Story.append(Paragraph("President", styles['Normal']))
+    Story.append(Spacer(1, 24))
+
+    # Add the disclaimer
+    disclaimer_text = (
+        "Performance data quoted represents past performance, which does not guarantee future results. Current performance may be lower or higher than the figures shown. "
+        "Principal value and investment returns will fluctuate, and investors’ shares, when redeemed, may be worth more or less than the original cost. Performance would have "
+        "been lower if fees had not been waived in various periods. Total returns assume the reinvestment of all distributions and the deduction of all fund expenses. Returns "
+        "for periods of less than one year are not annualized. All classes of shares may not be available to all investors or through all distribution channels."
+    )
+    disclaimer_style = styles['BodyText']
+    disclaimer_style.fontSize = 6
+    Story.append(Paragraph(disclaimer_text, disclaimer_style))
+
+    # Build the PDF
+    doc.build(Story)
+    
+    # Read the PDF and return its content
+    with open(file_path, "rb") as f:
+        pdf_data = f.read()
+    
+    return pdf_data
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'

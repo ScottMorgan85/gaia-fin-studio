@@ -1,6 +1,13 @@
 import pandas as pd
 import data.client_central_fact as client_central_fact
 import data.client_mapping as client_mapping
+import os
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from groq import Groq
+
 
 def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
     df = pd.read_excel(file_path)
@@ -84,3 +91,71 @@ def load_trailing_returns(client_name):
     combined_df.set_index('Period', inplace=True)
 
     return combined_df
+
+def generate_investment_commentary(model_option, selected_client, groq_api_key):
+    commentary_structure = {
+        "Equity": {
+            "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "S&P 500"
+        },
+        # Add other strategies here
+    }
+
+    selected_strategy = "Equity"  # Example strategy
+    selected_quarter = "Q4 2023"  # Example quarter
+
+    structure = commentary_structure[selected_strategy]
+    headings = structure["headings"]
+    index = structure["index"]
+
+    trailing_returns_data = load_trailing_returns(selected_client).to_dict()
+    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
+
+    # Example portfolio characteristics
+    portfolio_characteristics = {"Example": "Data"}
+    top_transactions_df = pd.DataFrame({"Example": ["Transaction"]})
+
+    commentary_prompt = f"""
+    Dear {selected_client},
+
+    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be relatively detailed so this goes about 2 pages.
+    
+    Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
+    
+    Fabricate realistic narratives for the following sections given you are an expert investor with 65 years of experience. 
+
+
+    {headings[1]}:
+    - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
+
+    {headings[2]}:
+    - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark. Mention transactions during the period {top_transactions_df} and create a robust narrative. Never list out details from the actual transaction dataframe, keep it general.
+
+    {headings[3]}:
+    - Mention any strategic adjustments made in response to market conditions.
+
+    {headings[4]}:
+    - Provide an analysis of major sectors and stocks or bonds, explaining their impact on the portfolio.
+
+    {headings[5]}:
+    - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
+
+    Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
+    """.strip()
+    
+    client = Groq(api_key=groq_api_key)
+
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": commentary_prompt},
+                {"role": "user", "content": "Generate investment commentary based on the provided details."}
+            ],
+            model=model_option,
+            max_tokens=models[model_option]["tokens"]
+        )
+        commentary = chat_completion.choices[0].message.content
+    except Exception as e:
+        commentary = f"Failed to generate commentary: {str(e)}"
+
+    return commentary

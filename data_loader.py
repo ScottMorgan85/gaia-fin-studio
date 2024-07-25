@@ -7,6 +7,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from groq import Groq
+
 groq_api_key = os.environ['GROQ_API_KEY']
 
 def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
@@ -92,42 +93,13 @@ def load_trailing_returns(client_name):
 
     return combined_df
 
-def generate_investment_commentary(model_option, selected_client, groq_api_key,models):
-    
+def generate_investment_commentary(model_option, selected_client, groq_api_key):
     commentary_structure = {
-    
         "Equity": {
             "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
             "index": "S&P 500"
         },
-        "Government Bonds": {
-            "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
-            "index": "Bloomberg Barclays US Aggregate Bond Index"
-        },
-        "High Yield Bonds": {
-            "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
-            "index": "ICE BofAML US High Yield Index"
-        },
-        "Leveraged Loans": {
-            "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-            "index": "S&P/LSTA Leveraged Loan Index"
-        },
-        "Commodities": {
-            "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-            "index": "Bloomberg Commodity Index"
-        },
-        "Private Equity": {
-            "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
-            "index": "Cambridge Associates US Private Equity Index"
-        },
-        "Long Short Equity Hedge Fund": {
-            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-            "index": "HFRI Equity Hedge Index"
-        },
-        "Long Short High Yield Bond": {
-            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-            "index": "HFRI Fixed Income - Credit Index"
-        }
+        # Add other strategies here
     }
 
     selected_strategy = "Equity"  # Example strategy
@@ -171,9 +143,8 @@ def generate_investment_commentary(model_option, selected_client, groq_api_key,m
 
     Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
     """.strip()
-
+    
     client = Groq(api_key=groq_api_key)
-
 
     try:
         chat_completion = client.chat.completions.create(
@@ -189,3 +160,15 @@ def generate_investment_commentary(model_option, selected_client, groq_api_key,m
         commentary = f"Failed to generate commentary: {str(e)}"
 
     return commentary
+
+def load_client_data_csv(client_id):
+    client_data_path = './data/client_data.csv'
+    data = pd.read_csv(client_data_path)
+
+    # Clean column names by stripping whitespace
+    data.columns = data.columns.str.strip()
+
+    # Select specific columns for the KPIs
+    selected_data = data[data['client_id'] == client_id]
+    
+    return selected_data

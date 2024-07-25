@@ -306,8 +306,13 @@ def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
     
     return fig
 
+
 def plot_cumulative_returns(client_returns, benchmark_returns, client_strategy, benchmark):
     fig = go.Figure()
+
+    # Ensure 'as_of_date' is a datetime column
+    client_returns['as_of_date'] = pd.to_datetime(client_returns['as_of_date'])
+    benchmark_returns['as_of_date'] = pd.to_datetime(benchmark_returns['as_of_date'])
 
     # Add client strategy trace
     fig.add_trace(go.Scatter(

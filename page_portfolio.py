@@ -1,26 +1,32 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objs as go
-from data_loader import load_strategy_returns, load_benchmark_returns
-from data.client_mapping import get_client_info
+import data_loader as data_loader
 from utils import *
 
 
 def display(client_name):
-    st.title('Strategy vs Benchmark Returns')
-    st.markdown("### Strategy Description")
-    st.write("This section will provide a detailed description of the strategy.")
+    chat_input = st.text_input("Chat with your data:", placeholder="Type your question here...", key="client_chat_input")
+
+    st.title('Portfolio')
+    # st.markdown("### Strategy Description") 
+    strategy_details = data_loader.get_client_strategy_details(client_name)
+    if strategy_details:
+        st.write(f"**Strategy Name:** {strategy_details['strategy_name']}")
+        st.write(f"**Description:** {strategy_details['description']}")
+    else:
+        st.error("Client strategy details not found.")
 
     # Get client info
-    client_info = get_client_info(client_name)
+    client_info = data_loader.load_client_data(client_name)
     
     if client_info:
         strategy = client_info['strategy_name']
         benchmark = client_info['benchmark_name']
         
         # Load strategy and benchmark returns
-        strategy_returns_df = load_strategy_returns()
-        benchmark_returns_df = load_benchmark_returns()
+        strategy_returns_df = data_loader.load_strategy_returns()
+        benchmark_returns_df = data_loader.load_benchmark_returns()
         
         if strategy in strategy_returns_df.columns and benchmark in benchmark_returns_df.columns:
             client_returns = strategy_returns_df

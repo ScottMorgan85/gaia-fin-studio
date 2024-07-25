@@ -9,6 +9,6 @@ def sidebar():
     selected_client = st.sidebar.selectbox('Select Client', client_names)
 
     # Tabs in the sidebar
-    selected_tab = st.sidebar.radio("Navigation", ["Welcome", "Portfolio", "Commentary", "Client"])
+    selected_tab = st.sidebar.radio("Navigation", ["Market Overview", "Portfolio", "Commentary", "Client"])
 
     return selected_client, selected_tab

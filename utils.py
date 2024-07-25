@@ -375,8 +375,8 @@ def create_pdf(commentary):
     Story = []
 
     # Placeholder paths for logo and signature
-    logo_path = "./images/logo.png"
-    signature_path = "./images/signature.png"
+    logo_path = "./assets/logo.png"
+    signature_path = "./assets/signature.png"
 
     # Add the logo
     logo = Image(logo_path, width=150, height=100)  # Adjust the logo size as needed

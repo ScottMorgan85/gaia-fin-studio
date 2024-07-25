@@ -7,30 +7,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+import os
+import page_default
 import page_portfolio
 import page_commentary
 import page_client
-import page_default
-from layout import sidebar
-import style
 from data.client_mapping import get_client_names
 from data_loader import generate_investment_commentary
 
 
-style.render_theme_toggle_button()
-
-# # Load sidebar components
-# selected_client, selected_tab = sidebar()
-
-# # Main page content based on the selected tab
-# if selected_tab == "Portfolio":
-#     page_portfolio.display(selected_client)
-# elif selected_tab == "Commentary":
-#     page_commentary.display(commentary, selected_client)
-# elif selected_tab == "Client":
-#     page_client.display()
-# else:
-#     st.write("Select a tab to display content.")
 
 # Sidebar for selecting the client and model
 st.sidebar.title("Insight Central")
@@ -56,18 +41,12 @@ model_option = st.sidebar.selectbox(
 st.sidebar.markdown("### Navigation")
 selected_tab = st.sidebar.radio("Navigate", ["Market Overview", "Portfolio", "Commentary", "Client"])
 
-# Get the Groq API key from Streamlit secrets
-groq_api_key = st.secrets["groq"]["api_key"]
+# Get the Groq API key from environment variables
+groq_api_key = os.environ['GROQ_API_KEY']
 
 # Generate commentary for the selected client and model
 if selected_tab == "Commentary":
-    commentary = generate_investment_commentary(model_option, selected_client, groq_api_key)
-else:
-    commentary = None
-
-# Generate commentary for the selected client and model
-if selected_tab == "Commentary":
-    commentary = generate_investment_commentary(model_option, selected_client)
+    commentary = generate_investment_commentary(model_option, selected_client, groq_api_key,models)
 else:
     commentary = None
 

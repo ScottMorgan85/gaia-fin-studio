@@ -3,17 +3,23 @@ import utils as utils
 import data_loader
 import data.client_central_fact as fact_data
 import os
+from groq import Groq
+
+
+groq_api_key = os.environ.get('GROQ_API_KEY')
+client = Groq(api_key=groq_api_key)
 
 def display(commentary, selected_client, model_option):
     # Chat box
-    chat_input = st.text_input("Chat with your data:", placeholder="Type your question here...", key="commentary_chat_input")
-    if st.button("Submit Chat"):
-        response = data_loader.client.chat.completions.create(
-            messages=[{"role": "user", "content": chat_input}],
-            model=model_option,
-            max_tokens=250
-        )
-        st.write(response.choices[0].message.content)
+    st.subheader("Ask Questions")
+    user_input = st.text_area("Enter your question:", key="commentary_chat_box")
+    
+    response = client.chat.completions.create(
+        messages=[{"role": "user", "content": user_input}],
+        model=model_option,
+        max_tokens=250
+                )
+    st.write(response.choices[0].message.content)
 
     st.title("Commentary")
     selected_strategy = "Equity"  # Example strategy

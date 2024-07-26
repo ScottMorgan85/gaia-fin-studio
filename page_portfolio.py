@@ -5,8 +5,12 @@ import data_loader as data_loader
 from data.client_mapping import get_client_info, get_strategy_details
 import data.client_central_fact as fact_data
 import utils as utils
+from groq import Groq
+import os
 
-
+# Groq API configuration
+groq_api_key = os.environ['GROQ_API_KEY']
+client = Groq(api_key=groq_api_key)
 
 def display(selected_client):
     

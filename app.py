@@ -12,7 +12,8 @@ import page_default
 import page_portfolio
 import page_commentary
 import page_client
-from data.client_mapping import get_client_names
+import data.client_interactions_data as interactions
+import data.client_mapping as client_mapping    #import get_client_names, get_client_info
 from data_loader import generate_investment_commentary
 
 
@@ -20,8 +21,11 @@ from data_loader import generate_investment_commentary
 # Sidebar for selecting the client and model
 st.sidebar.title("Insight Central")
 st.sidebar.markdown("### Client Selection")
-client_names = get_client_names()
+
+client_names = client_mapping.get_client_names()
 selected_client = st.sidebar.selectbox("Select Client", client_names)
+selected_strategy = client_mapping.client_strategy_risk_mapping[selected_client]
+
 
 # Model selection
 models = {
@@ -32,11 +36,12 @@ models = {
 }
 
 model_option = st.sidebar.selectbox(
-    "Choose a model:",
-    options=list(models.keys()),
-    format_func=lambda x: models[x]["name"],
-    index=0
-)
+        "Choose a model:",
+        options=["llama3-70b-8192", "llama3-8b-8192", "gemma-7b-it", "mixtral-8x7b-instruct-v0.1"],
+        format_func=lambda x: x.replace('-', ' ').title(),
+        index=0,
+        key="model"
+    )
 
 st.sidebar.markdown("### Navigation")
 selected_tab = st.sidebar.radio("Navigate", ["Market Overview", "Portfolio", "Commentary", "Client"])
@@ -46,7 +51,7 @@ groq_api_key = os.environ['GROQ_API_KEY']
 
 # Generate commentary for the selected client and model
 if selected_tab == "Commentary":
-    commentary = generate_investment_commentary(model_option, selected_client, groq_api_key,models)
+    commentary = generate_investment_commentary(model_option, selected_client,selected_strategy,models)
 else:
     commentary = None
 
@@ -54,8 +59,8 @@ else:
 if selected_tab == "Portfolio":
     page_portfolio.display(selected_client)
 elif selected_tab == "Commentary":
-    page_commentary.display(commentary, selected_client)
+    page_commentary.display(commentary, selected_client, model_option)
 elif selected_tab == "Client":
-    page_client.display()
+    page_client.display(selected_client, model_option)
 else:
     page_default.display()

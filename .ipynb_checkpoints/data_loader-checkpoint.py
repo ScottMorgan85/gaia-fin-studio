@@ -8,7 +8,8 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from groq import Groq
 
-groq_api_key = os.environ['GROQ_API_KEY']
+groq_api_key = os.environ.get('GROQ_API_KEY')
+client = Groq(api_key=groq_api_key)
 
 def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
     df = pd.read_excel(file_path)
@@ -93,29 +94,62 @@ def load_trailing_returns(client_name):
 
     return combined_df
 
-def generate_investment_commentary(model_option, selected_client, groq_api_key, models):
-    commentary_structure = {
-        "Equity": {
-            "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-            "index": "S&P 500"
-        },
-        # Add other strategies here
+
+# Commentary structure for different strategies
+commentary_structure = {
+
+    "Equity": {
+        "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+        "index": "S&P 500"
+    },
+    "Government Bonds": {
+        "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
+        "index": "Bloomberg Barclays US Aggregate Bond Index"
+    },
+    "High Yield Bonds": {
+        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
+        "index": "ICE BofAML US High Yield Index"
+    },
+    "Leveraged Loans": {
+        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+        "index": "S&P/LSTA Leveraged Loan Index"
+    },
+    "Commodities": {
+        "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+        "index": "Bloomberg Commodity Index"
+    },
+    "Private Equity": {
+        "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
+        "index": "Cambridge Associates US Private Equity Index"
+    },
+    "Long Short Equity Hedge Fund": {
+        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+        "index": "HFRI Equity Hedge Index"
+    },
+    "Long Short High Yield Bond": {
+        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+        "index": "HFRI Fixed Income - Credit Index"
     }
+}
 
-    selected_strategy = "Equity"  # Example strategy
-    selected_quarter = "Q4 2023"  # Example quarter
-
+def generate_investment_commentary(model_option, selected_client, selected_strategy, selected_quarter, models):
+    if selected_strategy not in commentary_structure:
+        raise KeyError(f"Strategy {selected_strategy} is not defined in commentary_structure")
+    
     structure = commentary_structure[selected_strategy]
+  
+    trailing_returns_data = trailing_returns[selected_strategy]
+    selected_quarter = trailing_returns_data["Period"][0]
+    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
+
+    portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
     headings = structure["headings"]
     index = structure["index"]
 
-    trailing_returns_data = load_trailing_returns(selected_client).to_dict()
-    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
-
-    # Example portfolio characteristics
-    portfolio_characteristics = {"Example": "Data"}
-    top_transactions_df = pd.DataFrame({"Example": ["Transaction"]})
-
+    # Create the transactions narrative
+    transaction_narratives = []
+    top_transactions_df = get_top_transactions(selected_strategy)
+  
     commentary_prompt = f"""
     Dear {selected_client},
 
@@ -124,7 +158,6 @@ def generate_investment_commentary(model_option, selected_client, groq_api_key, 
     Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
     
     Fabricate realistic narratives for the following sections given you are an expert investor with 65 years of experience. 
-
 
     {headings[1]}:
     - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
@@ -144,8 +177,6 @@ def generate_investment_commentary(model_option, selected_client, groq_api_key, 
     Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
     """.strip()
     
-    client = Groq(api_key=groq_api_key)
-
     try:
         chat_completion = client.chat.completions.create(
             messages=[
@@ -160,7 +191,7 @@ def generate_investment_commentary(model_option, selected_client, groq_api_key, 
         commentary = f"Failed to generate commentary: {str(e)}"
 
     return commentary
-
+    
 def load_client_data_csv(client_id):
     client_data_path = './data/client_data.csv'
     data = pd.read_csv(client_data_path)

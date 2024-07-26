@@ -125,5 +125,14 @@ def get_strategy_details(client_name):
     return None
 
 
-
+select_client_strategy_risk_mapping = {
+    "Warren Miller": ("Equity", "High"),
+    "Sandor Clegane": ("Government Bonds", "Low"),
+    "Hari Seldon": ("High Yield Bonds", "High"),
+    "James Holden": ("Leveraged Loans", "High"),
+    "Alice Johnson": ("Commodities", "Medium"),
+    "Bob Smith": ("Private Equity", "High"),
+    "Carol White": ("Long Short Equity Hedge Fund", "High"),
+    "David Brown": ("Long Short High Yield Bond", "High")
+}
 

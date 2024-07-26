@@ -1,5 +1,3 @@
-# Combined utility functions
-
 import pandas as pd
 import data.client_mapping as client_mapping
 import data.client_central_fact as fact_data
@@ -15,13 +13,13 @@ from groq import Groq
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
-models = {
-    "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
-    "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
-    "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
-    "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
-}
-
+def get_model_configurations():
+    return {
+        "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
+        "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
+        "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
+        "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
+    }
 def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
     df = pd.read_excel(file_path)
     df['as_of_date'] = pd.to_datetime(df['as_of_date'])
@@ -112,41 +110,7 @@ def load_trailing_returns(client_name):
 
 
 # Commentary structure for different strategies
-commentary_structure = {
 
-    "Equity": {
-        "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-        "index": "S&P 500"
-    },
-    "Government Bonds": {
-        "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
-        "index": "Bloomberg Barclays US Aggregate Bond Index"
-    },
-    "High Yield Bonds": {
-        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
-        "index": "ICE BofAML US High Yield Index"
-    },
-    "Leveraged Loans": {
-        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-        "index": "S&P/LSTA Leveraged Loan Index"
-    },
-    "Commodities": {
-        "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-        "index": "Bloomberg Commodity Index"
-    },
-    "Private Equity": {
-        "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
-        "index": "Cambridge Associates US Private Equity Index"
-    },
-    "Long Short Equity Hedge Fund": {
-        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-        "index": "HFRI Equity Hedge Index"
-    },
-    "Long Short High Yield Bond": {
-        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-        "index": "HFRI Fixed Income - Credit Index"
-    }
-}
 
 # New function to get top transactions
 def get_top_transactions(file_path, strategy):
@@ -187,21 +151,60 @@ def get_top_transactions(file_path, strategy):
     return transactions
 
 
-def generate_investment_commentary(model_option,selected_client, selected_strategy,models):
 
-    selected_strategy = client_mapping.client_strategy_risk_mapping[selected_client]
-    structure = commentary_structure['Equity']
+commentary_structure = {
     
-    trailing_returns_data = load_trailing_returns(selected_client)
-    selected_quarter = trailing_returns_data.index[0]
-    # trailing_returns_str = trailing_returns_data.to_string()
-    # trailing_returns_data = trailing_returns[selected_strategy]
-    # selected_quarter = trailing_returns_data["Period"][0]
-    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
+    "Equity": {
+            "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "S&P 500"
+        },
+    "Government Bonds": {
+            "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
+            "index": "Bloomberg Barclays US Aggregate Bond Index"
+        },
+    "High Yield Bonds": {
+        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
+            "index": "ICE BofAML US High Yield Index"
+        },
+    "Leveraged Loans": {
+        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "S&P/LSTA Leveraged Loan Index"
+        },
+    "Commodities": {
+            "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "Bloomberg Commodity Index"
+        },
+    "Private Equity": {
+            "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
+            "index": "Cambridge Associates US Private Equity Index"
+        },
+    "Long Short Equity Hedge Fund": {
+            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+            "index": "HFRI Equity Hedge Index"
+        },
+        "Long Short High Yield Bond": {
+            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+            "index": "HFRI Fixed Income - Credit Index"
+        }
+    }
+
+def generate_investment_commentary(model_option,selected_client, selected_strategy,models):
+    selected_strategy='Equity'
+    selected_quarter='Q3 2023'
+    index = commentary_structure[selected_strategy]['index']
+    headings = commentary_structure[selected_strategy]['headings']
+    
+    models = get_model_configurations()
+
+    # Load the trailing returns data for the selected client
+    trailing_returns_df = load_trailing_returns(selected_client)
+    if trailing_returns_df is None:
+        return "No trailing returns data available for the selected client."
+
+    trailing_returns_str = ", ".join(f"{index}: {row['Return']}% (Benchmark: {row['Benchmark']}%, Active: {row['Active']}%)" for index, row in trailing_returns_df.iterrows())
+
 
     # portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
-    headings = structure["headings"]
-    index = structure["index"]
 
     # # Create the transactions narrative
     # Load top transactions
@@ -706,3 +709,28 @@ def create_pdf(commentary):
 def create_download_link(val, filename):
     b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
+
+
+def load_client_data_csv(client_name):
+    # Load client data for the given client name
+    client_data = pd.read_csv('./data/client_data.csv')
+    return client_data[client_data['client_name'] == client_name]
+
+def format_currency(value):
+    if isinstance(value, Decimal):
+        return f"${value:,.2f}"
+    return f"${float(value):,.2f}"
+
+def query_groq(query):
+    # Function to query Groq API and return response
+    response = groq_client.chat.completions.create(
+        messages=[{"role": "user", "content": query}],
+        model='llama3-70b-8192',
+        max_tokens=250
+    )
+    return response.choices[0].message.content
+
+def get_interactions_by_client(client_name):
+    # Retrieve interaction data based on client_name
+    interactions = pd.read_csv('./data/client_interactions.csv')
+    return interactions[interactions['client_name'] == client_name].to_dict('records')

@@ -59,7 +59,7 @@ def display_market_commentary_and_overview(selected_strategy):
         selected_strategy (str): The strategy for which to generate and display commentary.
     """
     # Display the DTD Performance Commentary section
-    st.subheader("DTD Performance Commentary")
+    st.subheader(f"{selected_strategy['strategy_name']} Daily Update")
     model_option = 'llama3-70b-8192'  # Example model used for generating commentary
     dtdcommentary = generate_dtd_commentary(selected_strategy)
     st.markdown(dtdcommentary)
@@ -70,33 +70,33 @@ def display_market_commentary_and_overview(selected_strategy):
     
     # Display candlestick plots for major indices
     with col_stock1:
-        utils.create_candle_stick_plot(stock_ticker_name="^DJI", stock_name="Dow Jones Industrial")
-    
-    with col_stock_2:
-        utils.create_candle_stick_plot(stock_ticker_name="^IXIC", stock_name="Nasdaq Composite")
-    
-    with col_stock_3:
         utils.create_candle_stick_plot(stock_ticker_name="^GSPC", stock_name="S&P 500")
-    
+    with col_stock_2:
+        utils.create_candle_stick_plot(stock_ticker_name="EFA", stock_name="MSCI EAFE")
+    with col_stock_3:
+        utils.create_candle_stick_plot(stock_ticker_name="AGG", stock_name="U.S. Aggregate Bond")
     with col_stock_4:
-        utils.create_candle_stick_plot(stock_ticker_name="^RUT", stock_name="Russell 2000")
-    
+        utils.create_candle_stick_plot(stock_ticker_name="^DJCI", stock_name="Dow Jones Commodity Index ")
+   
     # Tech Stocks Overview
     col_sector1, col_sector2 = st.columns(2)
     with col_sector1:
-        st.subheader("Tech Stocks")
-        stock_list = ["AAPL", "MSFT", "AMZN", "GOOG", "META", "TSLA", "NVDA", "AVGO"]
-        stock_name = ["Apple", "Microsoft", "Amazon", "Google", "Meta", "Tesla", "Nvidia", "Broadcom"]
-    
-        df_stocks = utils.create_stocks_dataframe(stock_list, stock_name)
+        st.subheader("Emerging Markets Equities")
+        stock_list = ["0700.HK",  # Tencent Holdings Ltd.
+              "005930.KS",  # Samsung Electronics Co., Ltd.
+              "7203.T",  # Toyota Motor Corporation
+              "HSBC",  # HSBC Holdings plc
+              "NSRGY",  # Nestle SA ADR
+              "SIEGY"]  # Siemens AG ADR
+        stock_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
+        df_stocks = utils.create_stocks_dataframe(stock_list, stock_list)  # Assuming names and tickers are the same for simplicity
         utils.create_dateframe_view(df_stocks)
-    
+        
     # Meme Stocks Overview
     with col_sector2:
-        st.subheader("Meme Stocks")
-        stock_list = ["GME", "AMC", "BB", "NOK", "RIVN", "SPCE", "F", "T"]
-        stock_name = ["GameStop", "AMC Entertainment", "BlackBerry", "Nokia", "Rivian", "Virgin Galactic", "Ford", "AT&T"]
-        
+        st.subheader("Fixed Income Overview")
+        stock_list = ["AGG", "HYG", "TLT", "MBB", "EMB","BKLN"]
+        stock_name = ["US Aggregate", "High Yield Corporate", "Long Treasury", "Mortgage-Backed", "Emerging Markets Bond","U.S. Leveraged Loan"]
         df_stocks = utils.create_stocks_dataframe(stock_list, stock_name)
         utils.create_dateframe_view(df_stocks)
 
@@ -119,12 +119,6 @@ def load_default_page(selected_client, selected_strategy):
 
 # --------------- Page: Portfolio ---------------
 def display_portfolio(selected_client):
-    """
-    Displays the portfolio page for a selected client, including interactive chat, strategy details,
-    trailing and cumulative returns, along with placeholders for portfolio charts and tables.
-    """
-    chat_input = st.text_input("Chat with your data:", placeholder="Type your question here...", key="client_chat_input")
-    st.title('Portfolio')
 
     # Get client strategy details
     strategy_details = get_strategy_details(selected_client)
@@ -180,18 +174,8 @@ def display_portfolio(selected_client):
 # --------------- Page: Commentary ---------------
 def display(commentary, selected_client, model_option):
     # Chat box
-    
-    st.subheader("Ask Questions")
-    user_input = st.text_area("Enter your question:", key="commentary_chat_box")
-    response = groq_client.chat.completions.create(
-        messages=[{"role": "user", "content": user_input}],
-        model=model_option,
-        max_tokens=250
-                )
-    st.write(response.choices[0].message.content)
-
     st.title("Commentary")
-    selected_strategy = "Equity"  # Example strategy
+    # selected_strategy = "Equity"  # Example strategy
 
     models = utils.get_model_configurations() 
     commentary = utils.generate_investment_commentary(model_option, selected_client, selected_strategy,models)
@@ -212,24 +196,21 @@ def display_client_page(selected_client):
     """
     client_data = utils.load_client_data_csv(selected_client)  # Assume this function is correctly defined in utils
 
-    # Chat box for client interactions
-    st.subheader("Ask Questions")
-    user_input = st.text_area("Enter your question:", key="chat_box")
-    if st.button("Submit", key="submit_button"):
-        response = utils.query_groq(user_input)  # Assuming a function in utils to handle Groq API interactions
-        st.write(response)
-
-    st.title(f"Client Overview: {client_data['client_name']}")
-    client_data=utils.load_client_data_csv(selected_client)
-    # Extract numerical values
-    aum = client_data['aum'].values[0]
-    annual_income = client_data.iloc[0, 7] 
-    age = int(client_data['age'].values[0])
+    st.title(f"Client Overview: {selected_client}")
+    if not client_data.empty:
+        # Directly accessing the first row's data, assuming only one match is found
+        aum = client_data['aum'].iloc[0]  # Scalar value access
+        annual_income = client_data['annual_income'].iloc[0]  # Scalar value access
+        age = int(client_data['age'].iloc[0])  # Scalar value access
+        risk_profile = client_data['risk_profile'].iloc[0]  # Scalar value access
+    else:
+        st.error("No client data found.")
+        return  # Exit the function if no data found
 
     # KPIs
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("AUM", format_currency(aum))
-    col2.metric("Annual Income", format_currency(annual_income))
+    col1.metric("AUM", utils.format_currency(aum))
+    col2.metric("Annual Income", utils.format_currency(annual_income))
     col3.metric("Age", age)
     col4.metric("Risk Profile", client_data['risk_profile'].values[0])
 

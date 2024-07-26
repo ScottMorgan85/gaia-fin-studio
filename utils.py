@@ -55,6 +55,7 @@ def get_client_strategy_details(client_name):
         print(f"Description: {details['description']}")
         print(f"Benchmark: {details['benchmark']}")
         print(f"Risk: {details['risk']}")
+        return details['strategy_name'] 
     else:
         print("Client not found or no details available.")
     return details
@@ -110,41 +111,7 @@ def load_trailing_returns(client_name):
 
 
 # Commentary structure for different strategies
-commentary_structure = {
 
-    "Equity": {
-        "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-        "index": "S&P 500"
-    },
-    "Government Bonds": {
-        "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
-        "index": "Bloomberg Barclays US Aggregate Bond Index"
-    },
-    "High Yield Bonds": {
-        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
-        "index": "ICE BofAML US High Yield Index"
-    },
-    "Leveraged Loans": {
-        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-        "index": "S&P/LSTA Leveraged Loan Index"
-    },
-    "Commodities": {
-        "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-        "index": "Bloomberg Commodity Index"
-    },
-    "Private Equity": {
-        "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
-        "index": "Cambridge Associates US Private Equity Index"
-    },
-    "Long Short Equity Hedge Fund": {
-        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-        "index": "HFRI Equity Hedge Index"
-    },
-    "Long Short High Yield Bond": {
-        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-        "index": "HFRI Fixed Income - Credit Index"
-    }
-}
 
 # New function to get top transactions
 def get_top_transactions(file_path, strategy):
@@ -185,31 +152,80 @@ def get_top_transactions(file_path, strategy):
     return transactions
 
 
-def generate_investment_commentary(model_option,selected_client, selected_strategy,models):
 
-    selected_strategy = client_mapping.client_strategy_risk_mapping[selected_client]
-    structure = commentary_structure['Equity']
+commentary_structure = {
     
-    trailing_returns_data = load_trailing_returns(selected_client)
-    selected_quarter = trailing_returns_data.index[0]
-    # trailing_returns_str = trailing_returns_data.to_string()
-    # trailing_returns_data = trailing_returns[selected_strategy]
-    # selected_quarter = trailing_returns_data["Period"][0]
-    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
+    "Equity": {
+            "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "S&P 500"
+        },
+    "Government Bonds": {
+            "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
+            "index": "Bloomberg Barclays US Aggregate Bond Index"
+        },
+    "High Yield Bonds": {
+        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
+            "index": "ICE BofAML US High Yield Index"
+        },
+    "Leveraged Loans": {
+        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "S&P/LSTA Leveraged Loan Index"
+        },
+    "Commodities": {
+            "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+            "index": "Bloomberg Commodity Index"
+        },
+    "Private Equity": {
+            "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
+            "index": "Cambridge Associates US Private Equity Index"
+        },
+    "Long Short Equity Hedge Fund": {
+            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+            "index": "HFRI Equity Hedge Index"
+        },
+        "Long Short High Yield Bond": {
+            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+            "index": "HFRI Fixed Income - Credit Index"
+        }
+    }
 
-    # portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
-    headings = structure["headings"]
-    index = structure["index"]
+def generate_investment_commentary(model_option, selected_client, selected_strategy, models):
+   """
+    Generate investment commentary based on the given model option, client, and strategy.
+
+    Parameters:
+        model_option (str): The model configuration used for generating commentary.
+        selected_client (str): The client for whom the commentary is being generated.
+        selected_strategy (str): The investment strategy of the selected client.
+        models (dict): Dictionary of model configurations.
+
+    Returns:
+        str: Generated investment commentary.
+    """   
+    # Fetch the structure for the given strategy
+    structure = commentary_structure[selected_strategy]
+    
+    selected_quarter = "Q3 2023"
+    selected_strategy = get_client_strategy_details(selected_client)
+    if selected_strategy is None:
+        return "Strategy details not available."
+
+    index = commentary_structure[selected_strategy]['index']  # This should work if selected_strategy is a string
+    headings = commentary_structure[selected_strategy]['headings']
+    models = get_model_configurations()
+
+    # Load the trailing returns data for the selected client
+    trailing_returns_df = load_trailing_returns(selected_client)
+    if trailing_returns_df is None:
+        return "No trailing returns data available for the selected client."
+
+    trailing_returns_str = ", ".join(f"{index}: {row['Return']}% (Benchmark: {row['Benchmark']}%, Active: {row['Active']}%)" for index, row in trailing_returns_df.iterrows())
 
     # # Create the transactions narrative
     # Load top transactions
     file_path = './data/client_data.csv'
     top_transactions_df = get_top_transactions(file_path, selected_strategy)
 
-    
-    # transaction_narratives = []
-    # top_transactions_df = get_top_transactions(selected_strategy)
-  
     commentary_prompt = f"""
     Dear {selected_client},
 
@@ -709,7 +725,7 @@ def create_download_link(val, filename):
 def load_client_data_csv(client_name):
     # Load client data for the given client name
     client_data = pd.read_csv('./data/client_data.csv')
-    return client_data[client_data['client_name'] == client_name].iloc[0]
+    return client_data[client_data['client_name'] == client_name]
 
 def format_currency(value):
     if isinstance(value, Decimal):

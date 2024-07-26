@@ -1,5 +1,7 @@
-
 import streamlit as st
+
+st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
+
 import os
 import pandas as pd
 from data.client_mapping import get_client_names, get_client_info, client_strategy_risk_mapping
@@ -8,11 +10,15 @@ from groq import Groq
 import pages
 
 # Page configurations
-st.set_page_config(page_title="Insight Central", layout="wide", initial_sidebar_state="expanded")
+# st.set_page_config(page_title="Insight Central", layout="wide", initial_sidebar_state="expanded")
+
+
 
 # Groq API configuration
 groq_api_key = os.environ['GROQ_API_KEY']
 groq_client = Groq(api_key=groq_api_key)
+
+models = utils.get_model_configurations()
 
 # Sidebar for client and model selection
 st.sidebar.title("Insight Central")
@@ -36,7 +42,7 @@ if selected_tab == "Default Overview":
 elif selected_tab == "Portfolio":
     pages.display_portfolio(selected_client)
 elif selected_tab == "Commentary":
-    commentary = utils.generate_investment_commentary(model_option, selected_client, selected_strategy, models)
+    commentary = utils.generate_investment_commentary(model_option, selected_client)
     pages.display(commentary, selected_client, model_option)
 elif selected_tab == "Client":
     interactions = utils.get_interactions_by_client(selected_client)

@@ -38,7 +38,7 @@ class InfoCollector:
             period="1d",
             interval=interval,
             start="2023-11-15",
-            end="2023-11-16")
+            end="2023-12-31")
 
     @staticmethod
     def get_prev_date(stock_info: pd.DataFrame):

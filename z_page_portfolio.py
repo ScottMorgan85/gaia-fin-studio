@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objs as go
-import data_loader as data_loader
 from data.client_mapping import get_client_info, get_strategy_details
 import data.client_central_fact as fact_data
 import utils as utils
@@ -38,15 +37,15 @@ def display(selected_client):
             return
         
         # Load strategy and benchmark returns
-        strategy_returns_df = data_loader.load_strategy_returns()
-        benchmark_returns_df = data_loader.load_benchmark_returns()
+        strategy_returns_df = utils.load_strategy_returns()
+        benchmark_returns_df = utils.load_benchmark_returns()
         
         if strategy in strategy_returns_df.columns and benchmark in benchmark_returns_df.columns:
             client_returns = strategy_returns_df[['as_of_date', strategy]]
             benchmark_returns = benchmark_returns_df[['as_of_date', benchmark]]
 
             # Create the trailing returns table
-            trailing_returns_df = data_loader.load_trailing_returns(selected_client)
+            trailing_returns_df = utils.load_trailing_returns(selected_client)
             if trailing_returns_df is not None:
                 st.markdown("### Trailing Returns")
                 col1, col2 = st.columns([1, 1])

@@ -1,6 +1,5 @@
 import streamlit as st
 import utils as utils
-import data_loader
 import data.client_central_fact as fact_data
 import os
 from groq import Groq
@@ -24,8 +23,8 @@ def display(commentary, selected_client, model_option):
     st.title("Commentary")
     selected_strategy = "Equity"  # Example strategy
     groq_api_key = os.environ['GROQ_API_KEY']
-    models = data_loader.models
-    commentary = data_loader.generate_investment_commentary(model_option, selected_client, selected_strategy,models)
+    models = utils.models
+    commentary = utils.generate_investment_commentary(model_option, selected_client, selected_strategy,models)
     st.markdown(commentary)
 
     # Download commentary as PDF

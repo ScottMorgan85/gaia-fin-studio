@@ -1,3 +1,275 @@
+# Combined utility functions
+
+import pandas as pd
+import data.client_mapping as client_mapping
+import data.client_central_fact as fact_data
+import data.client_interactions_data as interactions
+import os
+from decimal import Decimal
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from groq import Groq
+
+groq_api_key = os.environ.get('GROQ_API_KEY')
+client = Groq(api_key=groq_api_key)
+
+models = {
+    "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
+    "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
+    "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
+    "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
+}
+
+def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
+    df = pd.read_excel(file_path)
+    df['as_of_date'] = pd.to_datetime(df['as_of_date'])
+    return df
+
+def load_benchmark_returns(file_path='data/benchmark_returns.xlsx'):
+    df = pd.read_excel(file_path)
+    df['as_of_date'] = pd.to_datetime(df['as_of_date'])
+    return df
+
+
+def load_client_data(client_id):
+    data = fact_data.get_fact_by_client_id(client_id)
+    client_info_dict = get_client_info()  # Call the function to get the dictionary
+    matching_clients = [name for name, info in client_info_dict.items() if info['client_id'] == client_id]
+    if matching_clients:
+        client_name = matching_clients[0]
+        data['client_name'] = client_name
+    else:
+        data['client_name'] = "Unknown Client"
+    return data
+
+def load_client_data_csv(client_id):
+    client_data_path = './data/client_data.csv'
+    client_data = pd.read_csv(client_data_path)
+    return client_data[client_data['client_id'] == client_id]
+
+def get_client_strategy_details(client_name):
+    details = client_mapping.get_strategy_details(client_name)
+    if details:
+        print(f"Client Name: {details['client_name']}")
+        print(f"Strategy Name: {details['strategy_name']}")
+        print(f"Description: {details['description']}")
+        print(f"Benchmark: {details['benchmark']}")
+        print(f"Risk: {details['risk']}")
+    else:
+        print("Client not found or no details available.")
+    return details
+
+def load_trailing_returns(client_name):
+    client_info = client_mapping.get_client_info(client_name)
+    if not client_info:
+        return None
+
+    client_id = client_info['client_id']
+    trailing_columns = {
+        'port_selected_quarter_return': 'Quarter',
+        'bench_selected_quarter_return': 'Benchmark Quarter',
+        'port_1_year_return': '1 Year',
+        'bench_1_year_return': 'Benchmark 1 Year',
+        'port_3_years_return': '3 Years',
+        'bench_3_years_return': 'Benchmark 3 Years',
+        'port_5_years_return': '5 Years',
+        'bench_5_years_return': 'Benchmark 5 Years',
+        'port_10_years_return': '10 Years',
+        'bench_10_years_return': 'Benchmark 10 Years',
+        'port_since_inception_return': 'Since Inception',
+        'bench_since_inception_return': 'Benchmark Since Inception'
+    }
+    
+    trailing_returns = [entry for entry in fact_data.fact_table if entry['client_id'] == client_id]
+    if not trailing_returns:
+        return None
+
+    # Create DataFrame with portfolio returns and benchmark returns combined
+    combined_data = []
+    period_names = {
+        'port_selected_quarter_return': 'Quarter',
+        'port_1_year_return': '1 Year',
+        'port_3_years_return': '3 Years',
+        'port_5_years_return': '5 Years',
+        'port_10_years_return': '10 Years',
+        'port_since_inception_return': 'Since Inception'
+    }
+    
+    for port_col, period in period_names.items():
+        bench_col = port_col.replace('port', 'bench')
+        port_value = float(trailing_returns[0][port_col])
+        bench_value = float(trailing_returns[0][bench_col])
+        active_value = port_value - bench_value
+        combined_data.append([period, port_value, bench_value, active_value])
+
+    # Convert to DataFrame
+    combined_df = pd.DataFrame(combined_data, columns=['Period', 'Return', 'Benchmark', 'Active'])
+    combined_df.set_index('Period', inplace=True)
+
+    return combined_df
+
+
+# Commentary structure for different strategies
+commentary_structure = {
+
+    "Equity": {
+        "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+        "index": "S&P 500"
+    },
+    "Government Bonds": {
+        "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
+        "index": "Bloomberg Barclays US Aggregate Bond Index"
+    },
+    "High Yield Bonds": {
+        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
+        "index": "ICE BofAML US High Yield Index"
+    },
+    "Leveraged Loans": {
+        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+        "index": "S&P/LSTA Leveraged Loan Index"
+    },
+    "Commodities": {
+        "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+        "index": "Bloomberg Commodity Index"
+    },
+    "Private Equity": {
+        "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
+        "index": "Cambridge Associates US Private Equity Index"
+    },
+    "Long Short Equity Hedge Fund": {
+        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+        "index": "HFRI Equity Hedge Index"
+    },
+    "Long Short High Yield Bond": {
+        "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+        "index": "HFRI Fixed Income - Credit Index"
+    }
+}
+
+# New function to get top transactions
+def get_top_transactions(file_path, strategy):
+    # Load the data
+    data = pd.read_csv(file_path)
+
+    # Filter data for the selected strategy
+    strategy_data = data[data['client_strategy'] == strategy]
+
+    # Stack the buys and sells
+    buys = strategy_data[['top_buy_1_name', 'top_buy_1_direction', 'top_buy_1_type', 'top_buy_1_commentary']].rename(columns={
+        'top_buy_1_name': 'Name',
+        'top_buy_1_direction': 'Direction',
+        'top_buy_1_type': 'Type',
+        'top_buy_1_commentary': 'Commentary'
+    })
+    buys = buys.append(strategy_data[['top_buy_2_name', 'top_buy_2_direction', 'top_buy_2_type', 'top_buy_2_commentary']].rename(columns={
+        'top_buy_2_name': 'Name',
+        'top_buy_2_direction': 'Direction',
+        'top_buy_2_type': 'Type',
+        'top_buy_2_commentary': 'Commentary'
+    }))
+
+    sells = strategy_data[['top_sell_1_name', 'top_sell_1_direction', 'top_sell_1_type', 'top_sell_1_commentary']].rename(columns={
+        'top_sell_1_name': 'Name',
+        'top_sell_1_direction': 'Direction',
+        'top_sell_1_type': 'Type',
+        'top_sell_1_commentary': 'Commentary'
+    })
+    sells = sells.append(strategy_data[['top_sell_2_name', 'top_sell_2_direction', 'top_sell_2_type', 'top_sell_2_commentary']].rename(columns={
+        'top_sell_2_name': 'Name',
+        'top_sell_2_direction': 'Direction',
+        'top_sell_2_type': 'Type',
+        'top_sell_2_commentary': 'Commentary'
+    }))
+
+    transactions = buys.append(sells).reset_index(drop=True)
+    return transactions
+
+
+def generate_investment_commentary(model_option,selected_client, selected_strategy,models):
+
+    selected_strategy = client_mapping.client_strategy_risk_mapping[selected_client]
+    structure = commentary_structure['Equity']
+    
+    trailing_returns_data = load_trailing_returns(selected_client)
+    selected_quarter = trailing_returns_data.index[0]
+    # trailing_returns_str = trailing_returns_data.to_string()
+    # trailing_returns_data = trailing_returns[selected_strategy]
+    # selected_quarter = trailing_returns_data["Period"][0]
+    trailing_returns_str = ", ".join(f"{k}: {v}" for k, v in trailing_returns_data.items())
+
+    # portfolio_characteristics = portfolio_characteristics_df.loc[selected_strategy].to_dict()
+    headings = structure["headings"]
+    index = structure["index"]
+
+    # # Create the transactions narrative
+    # Load top transactions
+    file_path = './data/client_data.csv'
+    top_transactions_df = get_top_transactions(file_path, selected_strategy)
+
+    
+    # transaction_narratives = []
+    # top_transactions_df = get_top_transactions(selected_strategy)
+  
+    commentary_prompt = f"""
+    Dear {selected_client},
+
+    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be relatively detailed so this goes about 2 pages.
+    
+    Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
+    
+    Fabricate realistic narratives for the following sections given you are an expert investor with 65 years of experience. 
+
+    {headings[1]}:
+    - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
+
+    {headings[2]}:
+    - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark. Mention transactions during the period {top_transactions_df} and create a robust narrative. Never list out details from the actual transaction dataframe, keep it general.
+
+    {headings[3]}:
+    - Mention any strategic adjustments made in response to market conditions.
+
+    {headings[4]}:
+    - Provide an analysis of major sectors and stocks or bonds, explaining their impact on the portfolio.
+
+    {headings[5]}:
+    - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
+
+    Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
+    """.strip()
+    
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": commentary_prompt},
+                {"role": "user", "content": "Generate investment commentary based on the provided details."}
+            ],
+            model=model_option,
+            max_tokens=models[model_option]["tokens"]
+        )
+        commentary = chat_completion.choices[0].message.content
+    except Exception as e:
+        commentary = f"Failed to generate commentary: {str(e)}"
+
+    return commentary
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
+    
+def load_client_data_csv(client_id):
+    client_data_path = './data/client_data.csv'
+    data = pd.read_csv(client_data_path)
+
+    # Clean column names by stripping whitespace
+    data.columns = data.columns.str.strip()
+
+    # Select specific columns for the KPIs
+    selected_data = data[data['client_id'] == client_id]
+    
+    return selected_data
+
 import datetime
 import streamlit as st
 import yfinance
@@ -9,6 +281,10 @@ import pandas as pd
 from assets import Portfolio
 from assets import Stock
 import plotly.express as px
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 
 def create_state_variable(key: str, default_value: any) -> None:
@@ -154,8 +430,8 @@ def create_candle_stick_plot(stock_ticker_name: str, stock_name: str) -> None:
     candlestick_chart.update_layout(xaxis_rangeslider_visible=False,
                                     margin=dict(l=0, r=0, t=0, b=0))
 
-    # Display chart
-    st.plotly_chart(candlestick_chart, use_container_width=True, height=400)
+    # Display chart with reduced height
+    st.plotly_chart(candlestick_chart, use_container_width=True, height=300)
 
 def create_stocks_dataframe(stock_ticker_list: list, stock_name: list) -> pd.DataFrame:
     close_price = []
@@ -277,3 +553,156 @@ def create_line_chart(portfolio_df: pd.DataFrame) -> None:
                       xaxis_title="Day(s) since purchase",
                       yaxis_title="Portfolio Value ($)")
     st.plotly_chart(fig, use_container_width=True, use_container_height=True)
+
+
+def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=monthly_returns_df.index,
+        y=(monthly_returns_df[selected_strategy].cumsum() + 1) * 10000,
+        mode='lines',
+        name=f'{selected_strategy} Fund'
+    ))
+    
+    if benchmark != "N/A":
+        fig.add_trace(go.Scatter(
+            x=monthly_returns_df.index,
+            y=(monthly_returns_df[benchmark].cumsum() + 1) * 10000,
+            mode='lines',
+            name='Benchmark'
+        ))
+
+    fig.update_layout(
+        title=f"Growth of $10K - {selected_strategy} Fund",
+        xaxis_title="Date",
+        yaxis_title="Value ($)",
+        legend_title="Legend",
+        template="plotly_dark"
+    )
+    
+    return fig
+
+
+def plot_cumulative_returns(client_returns, benchmark_returns, client_strategy, benchmark):
+    fig = go.Figure()
+
+    # Ensure 'as_of_date' is a datetime column
+    client_returns['as_of_date'] = pd.to_datetime(client_returns['as_of_date'])
+    benchmark_returns['as_of_date'] = pd.to_datetime(benchmark_returns['as_of_date'])
+
+    # Add client strategy trace
+    fig.add_trace(go.Scatter(
+        x=client_returns['as_of_date'],
+        y=client_returns[client_strategy],
+        mode='lines',
+        name=client_strategy,
+        line=dict(color='blue', width=2)
+    ))
+
+    # Add benchmark trace
+    fig.add_trace(go.Scatter(
+        x=benchmark_returns['as_of_date'],
+        y=benchmark_returns[benchmark],
+        mode='lines',
+        name=benchmark,
+        line=dict(color='orange', width=2)
+    ))
+
+    # Update layout
+    fig.update_layout(
+        title=f'{client_strategy} vs {benchmark} Returns Over Time',
+        xaxis_title='Date',
+        yaxis_title='Returns',
+        hovermode='x unified'
+    )
+
+    st.plotly_chart(fig)
+
+def format_trailing_returns(df):
+    df = df.round(2).applymap(lambda x: f"{x}%" if pd.notnull(x) else x)
+
+    def apply_styles(value):
+        try:
+            value_float = float(value.replace('%', ''))
+            if value_float > 0:
+                color = 'green'
+            elif value_float < 0:
+                color = 'red'
+            else:
+                color = 'white'
+            return f'color: {color}'
+        except:
+            return ''
+
+    styled_df = df.style.applymap(apply_styles)
+    st.dataframe(styled_df)
+
+def create_pdf(commentary):
+    margin = 25 
+    page_width, page_height = letter  
+
+    file_path = "/tmp/commentary.pdf"  
+    doc = SimpleDocTemplate(file_path, pagesize=letter, rightMargin=margin, leftMargin=margin, topMargin=margin, bottomMargin=margin)
+    styles = getSampleStyleSheet()
+    Story = []
+
+    # Placeholder paths for logo and signature
+    logo_path = "./assets/logo.png"
+    signature_path = "./assets/signature.png"
+
+    # Add the logo
+    logo = Image(logo_path, width=150, height=100)  # Adjust the logo size as needed
+    logo.hAlign = 'CENTER'
+    Story.append(logo)
+    Story.append(Spacer(1, 12))
+
+    # Add the title
+    Story.append(Paragraph("Quarterly Investment Commentary", styles['Title']))
+    Story.append(Spacer(1, 20))
+
+    # Add spacing between paragraphs
+    def add_paragraph_spacing(text):
+        return text.replace('\n', '\n\n')
+
+    spaced_commentary = add_paragraph_spacing(commentary)
+    paragraphs = spaced_commentary.split('\n\n')
+    for paragraph in paragraphs:
+        Story.append(Paragraph(paragraph, styles['BodyText']))
+        Story.append(Spacer(1, 5))
+
+    # Add the closing statement
+    Story.append(Paragraph("Together, we create financial solutions that lead the way to a prosperous future.", styles['Italic']))
+    Story.append(Spacer(1, 20))
+
+    # Add the signature
+    signature = Image(signature_path, width=75, height=25)  # Adjust the signature size as needed
+    signature.hAlign = 'LEFT'
+    Story.append(signature)
+    Story.append(Spacer(1, 12))
+    Story.append(Paragraph("Scott M. Morgan", styles['Normal']))
+    Story.append(Paragraph("President", styles['Normal']))
+    Story.append(Spacer(1, 24))
+
+    # Add the disclaimer
+    disclaimer_text = (
+        "Performance data quoted represents past performance, which does not guarantee future results. Current performance may be lower or higher than the figures shown. "
+        "Principal value and investment returns will fluctuate, and investors’ shares, when redeemed, may be worth more or less than the original cost. Performance would have "
+        "been lower if fees had not been waived in various periods. Total returns assume the reinvestment of all distributions and the deduction of all fund expenses. Returns "
+        "for periods of less than one year are not annualized. All classes of shares may not be available to all investors or through all distribution channels."
+    )
+    disclaimer_style = styles['BodyText']
+    disclaimer_style.fontSize = 6
+    Story.append(Paragraph(disclaimer_text, disclaimer_style))
+
+    # Build the PDF
+    doc.build(Story)
+    
+    # Read the PDF and return its content
+    with open(file_path, "rb") as f:
+        pdf_data = f.read()
+    
+    return pdf_data
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'

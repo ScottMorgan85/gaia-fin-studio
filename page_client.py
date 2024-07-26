@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from decimal import Decimal
 import data_loader as data_loader
 import data.client_interactions_data as interactions
-from utils import format_currency
+import utils as utils
 from groq import Groq
 import os
 
@@ -72,9 +72,16 @@ def display_client_overview(client_data, interactions, model_option):
 def display(interactions, model_option):
     # Load data for the selected client
     client_id = st.sidebar.selectbox("Select Client", range(1, 10))
-    client_data = data_loader.load_client_data_csv(client_id)
+    client_data = utils.load_client_data_csv(client_id)
     interactions = get_interactions_by_client(client_id)
     
     # Display the client overview and chat box
     display_client_overview(client_data, interactions, model_option)
+
+def load_client_data_csv(client_name):
+    # Load client data for the given client name
+    client_data = pd.read_csv('./data/client_data.csv')
+    return client_data[client_data['client_name'] == client_name].iloc[0]
+
+
         

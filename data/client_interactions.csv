@@ -1,0 +1,33 @@
+﻿client_id,as_of_date,client_name,client_strategy,interaction_type,reporting_date,interaction_notes,emotion
+1,2023-01-02 00:00:00,Warren Miller,Equity,Report,Q1 2023,Client called to discuss changes in personal financial goals; feeling optimistic.,Worried
+1,2023-04-06 00:00:00,Warren Miller,Equity,Meeting,Q2 2023,Provided market insights; client appreciated the detailed analysis.,Worried
+1,2023-07-05 00:00:00,Warren Miller,Equity,Event,Q3 2023,Invited client to an exclusive investment event; client was enthusiastic and appreciative.,Relieved
+1,2023-10-10 00:00:00,Warren Miller,Equity,Meeting,Q4 2023,Addressed client concerns about economic downturn; reassured with risk mitigation plan.,Satisfied
+2,2023-01-27 00:00:00,Sandor Clegane,Government Bonds,Meeting,Q1 2023,Addressed client concerns about economic downturn; reassured with risk mitigation plan.,Worried
+2,2023-04-03 00:00:00,Sandor Clegane,Government Bonds,Meeting,Q2 2023,Client called to discuss changes in personal financial goals; feeling optimistic.,Appreciative
+2,2023-07-12 00:00:00,Sandor Clegane,Government Bonds,Email,Q3 2023,Updated risk profile after market volatility; client felt anxious but relieved with the new strategy.,Appreciative
+2,2023-10-02 00:00:00,Sandor Clegane,Government Bonds,Webinar,Q4 2023,Discussed economic factors affecting the portfolio; client was worried but reassured.,Satisfied
+3,2023-01-06 00:00:00,Hari Seldon,High Yield Bonds,Report,Q1 2023,Sent an email summarizing recent market developments; client thanked for proactive communication.,Excited
+3,2023-04-17 00:00:00,Hari Seldon,High Yield Bonds,Email,Q2 2023,Invited client to an exclusive investment event; client was enthusiastic and appreciative.,Optimistic
+3,2023-07-03 00:00:00,Hari Seldon,High Yield Bonds,Call,Q3 2023,Addressed client concerns about economic downturn; reassured with risk mitigation plan.,Appreciative
+3,2023-10-03 00:00:00,Hari Seldon,High Yield Bonds,Report,Q4 2023,Discussed portfolio performance and client expressed satisfaction with returns.,Relieved
+4,2023-01-04 00:00:00,James Holden,Leveraged Loans,Event,Q1 2023,Invited client to an exclusive investment event; client was enthusiastic and appreciative.,Satisfied
+4,2023-04-10 00:00:00,James Holden,Leveraged Loans,Meeting,Q2 2023,Invited client to an exclusive investment event; client was enthusiastic and appreciative.,Optimistic
+4,2023-07-03 00:00:00,James Holden,Leveraged Loans,Call,Q3 2023,Discussed new investment strategy focusing on sustainable assets; client showed strong interest.,Excited
+4,2023-10-31 00:00:00,James Holden,Leveraged Loans,Email,Q4 2023,Discussed economic factors affecting the portfolio; client was worried but reassured.,Excited
+5,2023-01-10 00:00:00,Alice Johnson,Commodities,Meeting,Q1 2023,Discussed economic factors affecting the portfolio; client was worried but reassured.,Optimistic
+5,2023-04-07 00:00:00,Alice Johnson,Commodities,Email,Q2 2023,Discussed new investment strategy focusing on sustainable assets; client showed strong interest.,Appreciative
+5,2023-07-14 00:00:00,Alice Johnson,Commodities,Report,Q3 2023,Held a webinar on future market trends; client found it very informative.,Satisfied
+5,2023-10-03 00:00:00,Alice Johnson,Commodities,Email,Q4 2023,Discussed new investment strategy focusing on sustainable assets; client showed strong interest.,Optimistic
+6,2023-01-04 00:00:00,Bob Smith,Private Equity,Webinar,Q1 2023,Provided personalized financial advice; client felt confident and supported.,Relieved
+6,2023-04-07 00:00:00,Bob Smith,Private Equity,Call,Q2 2023,Provided market insights; client appreciated the detailed analysis.,Excited
+6,2023-07-03 00:00:00,Bob Smith,Private Equity,Event,Q3 2023,Reviewed transaction history and addressed concerns about recent trades.,Confident
+6,2023-10-19 00:00:00,Bob Smith,Private Equity,Call,Q4 2023,Invited client to an exclusive investment event; client was enthusiastic and appreciative.,Excited
+7,2023-01-13 00:00:00,Carol White,Long Short Equity Hedge Fund,Call,Q1 2023,Invited client to an exclusive investment event; client was enthusiastic and appreciative.,Satisfied
+7,2023-04-05 00:00:00,Carol White,Long Short Equity Hedge Fund,Event,Q2 2023,Updated risk profile after market volatility; client felt anxious but relieved with the new strategy.,Excited
+7,2023-07-27 00:00:00,Carol White,Long Short Equity Hedge Fund,Webinar,Q3 2023,Discussed new investment strategy focusing on sustainable assets; client showed strong interest.,Excited
+7,2023-10-23 00:00:00,Carol White,Long Short Equity Hedge Fund,Call,Q4 2023,Held a webinar on future market trends; client found it very informative.,Appreciative
+8,2023-01-05 00:00:00,David Brown,Long Short High Yield Bond,Webinar,Q1 2023,Reviewed transaction history and addressed concerns about recent trades.,Optimistic
+8,2023-04-12 00:00:00,David Brown,Long Short High Yield Bond,Webinar,Q2 2023,Held a webinar on future market trends; client found it very informative.,Anxious
+8,2023-07-05 00:00:00,David Brown,Long Short High Yield Bond,Webinar,Q3 2023,Updated risk profile after market volatility; client felt anxious but relieved with the new strategy.,Optimistic
+8,2023-10-30 00:00:00,David Brown,Long Short High Yield Bond,Event,Q4 2023,Sent an email summarizing recent market developments; client thanked for proactive communication.,Anxious

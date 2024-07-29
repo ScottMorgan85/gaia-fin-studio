@@ -5,7 +5,7 @@ st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
 import os
 import pandas as pd
 from data.client_mapping import get_client_names, get_client_info, client_strategy_risk_mapping
-import utils
+import utils as utils 
 from groq import Groq
 import pages
 

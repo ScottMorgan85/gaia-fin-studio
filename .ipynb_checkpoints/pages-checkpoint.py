@@ -21,7 +21,7 @@ models = utils.get_model_configurations()
 # Function to generate fictional DTD performance commentary
 def generate_dtd_commentary(selected_strategy):
     """
-    Generates fictional day-to-day performance commentary for a given investment strategy.
+    Generates day-to-day performance commentary for a given investment strategy.
     The commentary is based on recent market movements, economic factors, and strategic adjustments.
 
     Parameters:
@@ -31,7 +31,8 @@ def generate_dtd_commentary(selected_strategy):
         str: A string containing the generated commentary.
     """
     commentary_prompt = f"""
-    Generate a few fictional bullet points on day-to-day (DTD) performance for the {selected_strategy} strategy based on recent events. 
+    Generate a few bullet points on day-to-day (DTD) performance for the {selected_strategy} strategy based on recent events. Be professional and just give the bullets, no need to qualify with this is fictional. 
+    
     Include relevant market movements, economic factors, and strategic adjustments.
     """
 
@@ -60,7 +61,7 @@ def display_market_commentary_and_overview(selected_strategy):
         selected_strategy (str): The strategy for which to generate and display commentary.
     """
     # Display the DTD Performance Commentary section
-    st.subheader(f"{selected_strategy['strategy_name']} Daily Update")
+    st.subheader(f"{selected_strategy} Daily Update")  # Use selected_strategy directly as it's a string
     model_option = 'llama3-70b-8192'  # Example model used for generating commentary
     dtdcommentary = generate_dtd_commentary(selected_strategy)
     st.markdown(dtdcommentary)
@@ -83,24 +84,24 @@ def display_market_commentary_and_overview(selected_strategy):
     col_sector1, col_sector2 = st.columns(2)
     with col_sector1:
         st.subheader("Emerging Markets Equities")
-        stock_list = ["0700.HK",  # Tencent Holdings Ltd.
-              "005930.KS",  # Samsung Electronics Co., Ltd.
-              "7203.T",  # Toyota Motor Corporation
-              "HSBC",  # HSBC Holdings plc
-              "NSRGY",  # Nestle SA ADR
-              "SIEGY"]  # Siemens AG ADR
-        stock_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
-        df_stocks = utils.create_stocks_dataframe(stock_list, stock_list)  # Assuming names and tickers are the same for simplicity
+        em_list = ["0700.HK",  # Tencent Holdings Ltd.
+                      "005930.KS",  # Samsung Electronics Co., Ltd.
+                      "7203.T",  # Toyota Motor Corporation
+                      "HSBC",  # HSBC Holdings plc
+                      "NSRGY",  # Nestle SA ADR
+                      "SIEGY"]  # Siemens AG ADR
+        em_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
+        df_stocks = utils.create_stocks_dataframe(em_list, em_name)  # Assuming names and tickers are the same for simplicity
         utils.create_dateframe_view(df_stocks)
         
-    # Meme Stocks Overview
+    # Fixed Income Overview
     with col_sector2:
         st.subheader("Fixed Income Overview")
         stock_list = ["AGG", "HYG", "TLT", "MBB", "EMB","BKLN"]
         stock_name = ["US Aggregate", "High Yield Corporate", "Long Treasury", "Mortgage-Backed", "Emerging Markets Bond","U.S. Leveraged Loan"]
         df_stocks = utils.create_stocks_dataframe(stock_list, stock_name)
         utils.create_dateframe_view(df_stocks)
-
+        
 # Function to load the default page and display the market commentary and overview
 def load_default_page(selected_client, selected_strategy):
     """
@@ -173,18 +174,20 @@ def display_portfolio(selected_client):
     st.table(pd.DataFrame())  # Replace with actual table logic
 
 # --------------- Page: Commentary ---------------
-def display(commentary, selected_client, model_option):
+def display(commentary_text, selected_client, model_option, selected_strategy):  # Added selected_strategy here
     # Chat box
     st.title("Commentary")
-    # selected_strategy = "Equity"  # Example strategy
 
-    models = utils.get_model_configurations() 
-    commentary = commentary.generate_investment_commentary(model_option, selected_client, selected_strategy,models)
-    st.markdown(commentary)
+    models = utils.get_model_configurations()
+    
+    # Generate the commentary text using the commentary module
+    commentary_text = commentary.generate_investment_commentary(model_option, selected_client, selected_strategy, models)
+
+    st.markdown(commentary_text)
 
     # Download commentary as PDF
-    if commentary:
-        pdf_data = utils.create_pdf(commentary)
+    if commentary_text:
+        pdf_data = utils.create_pdf(commentary_text)
         st.markdown(utils.create_download_link(pdf_data, f"{selected_client}_Q4_2023_Commentary"), unsafe_allow_html=True)
 
 # --------------- Page: Client ---------------

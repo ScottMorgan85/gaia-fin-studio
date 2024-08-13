@@ -8,11 +8,7 @@ from data.client_mapping import get_client_names, get_client_info, client_strate
 import utils as utils 
 from groq import Groq
 import pages
-
-# Page configurations
-# st.set_page_config(page_title="Insight Central", layout="wide", initial_sidebar_state="expanded")
-
-
+import commentary as commentary
 
 # Groq API configuration
 groq_api_key = os.environ['GROQ_API_KEY']
@@ -26,7 +22,11 @@ st.sidebar.markdown("### Client Selection")
 
 client_names = get_client_names()
 selected_client = st.sidebar.selectbox("Select Client", client_names)
+
+# Ensure that selected_strategy is a string
 selected_strategy = client_strategy_risk_mapping[selected_client]
+if isinstance(selected_strategy, dict):
+    selected_strategy = selected_strategy.get("strategy_name")  # Adjust this line based on the actual structure of your dictionary
 
 # Model selection from utils (assuming utils has a function to get models)
 models = utils.get_model_configurations()
@@ -42,8 +42,9 @@ if selected_tab == "Default Overview":
 elif selected_tab == "Portfolio":
     pages.display_portfolio(selected_client)
 elif selected_tab == "Commentary":
-    commentary = utils.generate_investment_commentary(model_option, selected_client)
-    pages.display(commentary, selected_client, model_option)
+    # Pass selected_strategy and models to generate_investment_commentary and display
+    commentary_text = commentary.generate_investment_commentary(model_option, selected_client, selected_strategy, models)
+    pages.display(commentary_text, selected_client, model_option, selected_strategy)
 elif selected_tab == "Client":
     interactions = utils.get_interactions_by_client(selected_client)
     pages.display_client_page(selected_client)

@@ -1,14 +1,53 @@
-import pandas as pd
-import data.client_mapping as client_mapping
-import data.client_central_fact as fact_data
-import data.client_interactions_data as interactions
 import os
-from decimal import Decimal
 import base64
+import datetime
+import pandas as pd
+import yfinance
+import streamlit as st
+import plotly.graph_objects as go
+import plotly.express as px
+from decimal import Decimal
+from datetime import datetime as dt
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from streamlit_extras.metric_cards import style_metric_cards
+from assets.Collector import InfoCollector
+from assets import Portfolio, Stock
+import data.client_mapping as client_mapping
+import data.client_central_fact as fact_data
+import data.client_interactions_data as interactions
 from groq import Groq
+
+
+# import pandas as pd
+# import data.client_mapping as client_mapping
+# import data.client_central_fact as fact_data
+# import data.client_interactions_data as interactions
+# import os
+# from decimal import Decimal
+# import base64
+# from reportlab.lib.pagesizes import letter
+# from reportlab.lib.styles import getSampleStyleSheet
+# from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+# from groq import Groq
+
+
+# import datetime
+# import streamlit as st
+# import yfinance
+# import datetime as dt
+# from assets.Collector import InfoCollector
+# import plotly.graph_objects as go
+# from streamlit_extras.metric_cards import style_metric_cards
+# import pandas as pd
+# from assets import Portfolio
+# from assets import Stock
+# import plotly.express as px
+# import base64
+# from reportlab.lib.pagesizes import letter
+# from reportlab.lib.styles import getSampleStyleSheet
+# from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
@@ -153,120 +192,119 @@ def get_top_transactions(file_path, strategy):
 
 
 
-commentary_structure = {
+# commentary_structure = {
     
-    "Equity": {
-            "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-            "index": "S&P 500"
-        },
-    "Government Bonds": {
-            "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
-            "index": "Bloomberg Barclays US Aggregate Bond Index"
-        },
-    "High Yield Bonds": {
-        "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
-            "index": "ICE BofAML US High Yield Index"
-        },
-    "Leveraged Loans": {
-        "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-            "index": "S&P/LSTA Leveraged Loan Index"
-        },
-    "Commodities": {
-            "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
-            "index": "Bloomberg Commodity Index"
-        },
-    "Private Equity": {
-            "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
-            "index": "Cambridge Associates US Private Equity Index"
-        },
-    "Long Short Equity Hedge Fund": {
-            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-            "index": "HFRI Equity Hedge Index"
-        },
-        "Long Short High Yield Bond": {
-            "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
-            "index": "HFRI Fixed Income - Credit Index"
-        }
-    }
+#     "Equity": {
+#             "headings": ["Introduction", "Market Overview", "Key Drivers", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+#             "index": "S&P 500"
+#         },
+#     "Government Bonds": {
+#             "headings": ["Introduction", "Market Overview", "Economic Developments", "Interest Rate Changes", "Bond Performance", "Outlook", "Disclaimer"],
+#             "index": "Bloomberg Barclays US Aggregate Bond Index"
+#         },
+#     "High Yield Bonds": {
+#         "headings": ["Introduction", "Market Overview", "Credit Spreads", "Sector Performance", "Specific Holdings", "Outlook", "Disclaimer"],
+#             "index": "ICE BofAML US High Yield Index"
+#         },
+#     "Leveraged Loans": {
+#         "headings": ["Introduction", "Market Overview", "Credit Conditions", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+#             "index": "S&P/LSTA Leveraged Loan Index"
+#         },
+#     "Commodities": {
+#             "headings": ["Introduction", "Market Overview", "Commodity Prices", "Sector Performance", "Strategic Adjustments", "Outlook", "Disclaimer"],
+#             "index": "Bloomberg Commodity Index"
+#         },
+#     "Private Equity": {
+#             "headings": ["Introduction", "Market Overview", "Exits", "Failures", "Successes", "Outlook", "Disclaimer"],
+#             "index": "Cambridge Associates US Private Equity Index"
+#         },
+#     "Long Short Equity Hedge Fund": {
+#             "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+#             "index": "HFRI Equity Hedge Index"
+#         },
+#         "Long Short High Yield Bond": {
+#             "headings": ["Introduction", "Market Overview", "Long Positions", "Short Positions", "Net and Gross Exposures", "Outlook", "Disclaimer"],
+#             "index": "HFRI Fixed Income - Credit Index"
+#         }
+#     }
 
-def generate_investment_commentary(model_option, selected_client, selected_strategy, models):
-   """
-    Generate investment commentary based on the given model option, client, and strategy.
+# def generate_investment_commentary(model_option, selected_client, selected_strategy, models):
+#    """
+#     Generate investment commentary based on the given model option, client, and strategy.
 
-    Parameters:
-        model_option (str): The model configuration used for generating commentary.
-        selected_client (str): The client for whom the commentary is being generated.
-        selected_strategy (str): The investment strategy of the selected client.
-        models (dict): Dictionary of model configurations.
+#     Parameters:
+#         model_option (str): The model configuration used for generating commentary.
+#         selected_client (str): The client for whom the commentary is being generated.
+#         selected_strategy (str): The investment strategy of the selected client.
+#         models (dict): Dictionary of model configurations.
 
-    Returns:
-        str: Generated investment commentary.
-    """   
-    # Fetch the structure for the given strategy
-    structure = commentary_structure[selected_strategy]
+#     Returns:
+#         str: Generated investment commentary.
+#     """   
+#     structure = commentary_structure[selected_strategy]
+        
+#     selected_quarter = "Q3 2023"
+#     selected_strategy = get_client_strategy_details(selected_client)
+#     if selected_strategy is None:
+#         return "Strategy details not available."
+
+#     index = commentary_structure[selected_strategy]['index']  # This should work if selected_strategy is a string
+#     headings = commentary_structure[selected_strategy]['headings']
+#     models = get_model_configurations()
     
-    selected_quarter = "Q3 2023"
-    selected_strategy = get_client_strategy_details(selected_client)
-    if selected_strategy is None:
-        return "Strategy details not available."
-
-    index = commentary_structure[selected_strategy]['index']  # This should work if selected_strategy is a string
-    headings = commentary_structure[selected_strategy]['headings']
-    models = get_model_configurations()
-
-    # Load the trailing returns data for the selected client
-    trailing_returns_df = load_trailing_returns(selected_client)
-    if trailing_returns_df is None:
-        return "No trailing returns data available for the selected client."
-
-    trailing_returns_str = ", ".join(f"{index}: {row['Return']}% (Benchmark: {row['Benchmark']}%, Active: {row['Active']}%)" for index, row in trailing_returns_df.iterrows())
-
-    # # Create the transactions narrative
-    # Load top transactions
-    file_path = './data/client_data.csv'
-    top_transactions_df = get_top_transactions(file_path, selected_strategy)
-
-    commentary_prompt = f"""
-    Dear {selected_client},
-
-    This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be relatively detailed so this goes about 2 pages.
+#         # Load the trailing returns data for the selected client
+#     trailing_returns_df = load_trailing_returns(selected_client)
+#     if trailing_returns_df is None:
+#         return "No trailing returns data available for the selected client."
     
-    Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
+#     trailing_returns_str = ", ".join(f"{index}: {row['Return']}% (Benchmark: {row['Benchmark']}%, Active: {row['Active']}%)" for index, row in trailing_returns_df.iterrows())
     
-    Fabricate realistic narratives for the following sections given you are an expert investor with 65 years of experience. 
-
-    {headings[1]}:
-    - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
-
-    {headings[2]}:
-    - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark. Mention transactions during the period {top_transactions_df} and create a robust narrative. Never list out details from the actual transaction dataframe, keep it general.
-
-    {headings[3]}:
-    - Mention any strategic adjustments made in response to market conditions.
-
-    {headings[4]}:
-    - Provide an analysis of major sectors and stocks or bonds, explaining their impact on the portfolio.
-
-    {headings[5]}:
-    - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
-
-    Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
-    """.strip()
+#         # # Create the transactions narrative
+#         # Load top transactions
+#     file_path = './data/client_data.csv'
+#     top_transactions_df = get_top_transactions(file_path, selected_strategy)
     
-    try:
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": commentary_prompt},
-                {"role": "user", "content": "Generate investment commentary based on the provided details."}
-            ],
-            model=model_option,
-            max_tokens=models[model_option]["tokens"]
-        )
-        commentary = chat_completion.choices[0].message.content
-    except Exception as e:
-        commentary = f"Failed to generate commentary: {str(e)}"
-
-    return commentary
+#     commentary_prompt = f"""
+#         Dear {selected_client},
+    
+#         This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be relatively detailed so this goes about 2 pages.
+        
+#         Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
+        
+#         Fabricate realistic narratives for the following sections given you are an expert investor with 65 years of experience. 
+    
+#         {headings[1]}:
+#         - Begin with an overview of market performance, highlighting key drivers like economic developments, interest rate changes, and sector performance.
+    
+#         {headings[2]}:
+#         - Discuss specific holdings that have impacted the portfolio's performance relative to the benchmark. Mention transactions during the period {top_transactions_df} and create a robust narrative. Never list out details from the actual transaction dataframe, keep it general.
+    
+#         {headings[3]}:
+#         - Mention any strategic adjustments made in response to market conditions.
+    
+#         {headings[4]}:
+#         - Provide an analysis of major sectors and stocks or bonds, explaining their impact on the portfolio.
+    
+#         {headings[5]}:
+#         - Conclude with a forward-looking statement that discusses expectations for market conditions, potential risks, and strategic focus areas for the next quarter.
+    
+#         Never end with a closing, especially using {selected_client} in the signature. This message is to them, not from them.
+#         """.strip()
+    
+#     try:
+#         chat_completion = client.chat.completions.create(
+#             messages=[
+#                 {"role": "system", "content": commentary_prompt},
+#                 {"role": "user", "content": "Generate investment commentary based on the provided details."}
+#             ],
+#             model=model_option,
+#             max_tokens=models[model_option]["tokens"]
+#         )
+#         commentary = chat_completion.choices[0].message.content
+#     except Exception as e:
+#         commentary = f"Failed to generate commentary: {str(e)}"
+    
+#     return commentary
 
 def create_download_link(val, filename):
     b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
@@ -284,21 +322,6 @@ def load_client_data_csv(client_id):
     
     return selected_data
 
-import datetime
-import streamlit as st
-import yfinance
-import datetime as dt
-from assets.Collector import InfoCollector
-import plotly.graph_objects as go
-from streamlit_extras.metric_cards import style_metric_cards
-import pandas as pd
-from assets import Portfolio
-from assets import Stock
-import plotly.express as px
-import base64
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 
 
 def create_state_variable(key: str, default_value: any) -> None:

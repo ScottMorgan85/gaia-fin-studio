@@ -4,6 +4,7 @@ import plotly.graph_objs as go
 from data.client_mapping import get_client_info, get_strategy_details
 import data.client_central_fact as fact_data
 import utils
+import commentary
 from groq import Groq
 import os
 
@@ -172,18 +173,20 @@ def display_portfolio(selected_client):
     st.table(pd.DataFrame())  # Replace with actual table logic
 
 # --------------- Page: Commentary ---------------
-def display(commentary, selected_client, model_option):
+def display(commentary_text, selected_client, model_option, selected_strategy):  # Added selected_strategy here
     # Chat box
     st.title("Commentary")
-    # selected_strategy = "Equity"  # Example strategy
 
-    models = utils.get_model_configurations() 
-    commentary = utils.generate_investment_commentary(model_option, selected_client, selected_strategy,models)
-    st.markdown(commentary)
+    models = utils.get_model_configurations()
+    
+    # Generate the commentary text using the commentary module
+    commentary_text = commentary.generate_investment_commentary(model_option, selected_client, selected_strategy, models)
+
+    st.markdown(commentary_text)
 
     # Download commentary as PDF
-    if commentary:
-        pdf_data = utils.create_pdf(commentary)
+    if commentary_text:
+        pdf_data = utils.create_pdf(commentary_text)
         st.markdown(utils.create_download_link(pdf_data, f"{selected_client}_Q4_2023_Commentary"), unsafe_allow_html=True)
 
 # --------------- Page: Client ---------------

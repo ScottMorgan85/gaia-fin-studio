@@ -120,7 +120,7 @@ def load_default_page(selected_client, selected_strategy):
     display_market_commentary_and_overview(selected_strategy)
 
 # --------------- Page: Portfolio ---------------
-def display_portfolio(selected_client):
+def display_portfolio(selected_client, selected_strategy):
 
     # Get client strategy details
     strategy_details = get_strategy_details(selected_client)
@@ -166,12 +166,58 @@ def display_portfolio(selected_client):
     else:
         st.error("Client information is missing.")
 
-    # Display charts and tables (placeholders)
-    st.markdown("### Portfolio Charts")
-    st.line_chart(pd.DataFrame())  # Replace with actual charting logic
+    # Add Fund Facts, Geographic Breakdown, Sector Weightings, and Top 10 Holdings
+    st.subheader(f"{selected_strategy} - Characteristics & Exposures")
 
-    st.markdown("### Portfolio Table")
-    st.table(pd.DataFrame())  # Replace with actual table logic
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("<div class='subsection-title'>Allocations</div>", unsafe_allow_html=True)
+
+        if selected_strategy in sector_allocations:
+            sector_data = sector_allocations[selected_strategy]
+            sector_df = pd.DataFrame(sector_data)
+            for column in sector_df.columns:
+                sector_df[column] = sector_df[column].astype(str)
+            st.dataframe(sector_df.style.set_properties(**{'width': '120%', 'height': '100%'}), hide_index=True)
+
+        else:
+            st.write(f"No sector allocations data for {selected_strategy}")
+        
+    with col2:
+        st.markdown("<div class='subsection-title'>Portfolio Characteristics</div>", unsafe_allow_html=True)
+
+        if selected_strategy in portfolio_characteristics:
+            characteristics_data = portfolio_characteristics[selected_strategy]
+            characteristics_df = pd.DataFrame(characteristics_data)
+            for column in characteristics_df.columns:
+                characteristics_df[column] = characteristics_df[column].astype(str)
+            st.dataframe(characteristics_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+        else:
+            st.write(f"No portfolio characteristics data for {selected_strategy}")
+
+    if selected_strategy.strip() != "":
+        st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
+
+        filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
+        top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
+        top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
+        top_transactions = pd.concat([top_buys, top_sells])
+        top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
+        st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+
+    if selected_strategy.strip() != "":
+        st.markdown("<div class='subsection-title'>Top Holdings</div>", unsafe_allow_html=True)
+        if selected_strategy in top_holdings:
+            holdings_data = top_holdings[selected_strategy]
+            holdings_df = pd.DataFrame(holdings_data)
+            for column in holdings_df.columns:
+                holdings_df[column] = holdings_df[column].astype(str)
+            st.dataframe(holdings_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+
+        else:
+            st.write(f"No top holdings data for {selected_strategy}")
+
 
 # --------------- Page: Commentary ---------------
 def display(commentary_text, selected_client, model_option, selected_strategy):  # Added selected_strategy here

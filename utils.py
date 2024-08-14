@@ -622,3 +622,283 @@ def get_interactions_by_client(client_name):
     # Retrieve interaction data based on client_name
     interactions = pd.read_csv('./data/client_interactions.csv')
     return interactions[interactions['client_name'] == client_name].to_dict('records')
+
+
+sector_allocations = {
+    "Equity": {
+        "Sector": [
+            "Information Technology", "Industrials", "Consumer Discretionary", "Health Care",
+            "Communication Services", "Financials", "Energy", "Consumer Staples",
+            "Materials", "Real Estate", "Utilities", "Other"
+        ],
+        "Fund %": [34.5, 16.6, 13.1, 11.2, 6.9, 5.4, 3.5, 2.3, 2.1, 1.3, 0.0, 0.0],
+        "Benchmark %": [26.0, 10.7, 10.2, 14.8, 7.8, 14.3, 6.3, 4.3, 2.8, 2.4, 2.0, 0.0]
+    },
+    "Government Bonds": {
+        "Sector": [
+            "Treasuries", "Agency Bonds", "Municipal Bonds", "Inflation-Protected", "Foreign Government"
+        ],
+        "Fund %": [45.0, 15.0, 10.0, 20.0, 10.0],
+        "Benchmark %": [50.0, 20.0, 5.0, 15.0, 10.0]
+    },
+    "High Yield Bonds": {
+        "Credit Rating": ["BB", "B", "CCC", "Below CCC", "Unrated"],
+        "Fund %": [40.0, 35.0, 15.0, 5.0, 5.0],
+        "Benchmark %": [45.0, 40.0, 10.0, 3.0, 2.0]
+    },
+    "Leveraged Loans": {
+        "Sector": [
+            "Technology", "Healthcare", "Industrials", "Consumer Discretionary", "Financials",
+            "Energy", "Telecommunications", "Utilities", "Real Estate"
+        ],
+        "Fund %": [20.0, 15.0, 14.0, 12.0, 10.0, 9.0, 8.0, 7.0, 5.0],
+        "Benchmark %": [18.0, 17.0, 12.0, 10.0, 15.0, 10.0, 8.0, 6.0, 4.0]
+    },
+    "Commodities": {
+        "Commodity": ["Energy", "Precious Metals", "Industrial Metals", "Agriculture", "Livestock"],
+        "Fund %": [40.0, 25.0, 15.0, 10.0, 10.0],
+        "Benchmark %": [35.0, 30.0, 15.0, 12.0, 8.0]
+    },
+    "Long Short Equity Hedge Fund": {
+        "Sector": [
+            "Information Technology", "Healthcare", "Consumer Discretionary", "Industrials", "Financials",
+            "Energy", "Communication Services", "Real Estate", "Utilities"
+        ],
+        "Long %": [40.0, 30.0, 20.0, 15.0, 15.0, 7.0, 6.0, 4.0, 3.0],
+        "Short %": [10.0, 10.0, 5.0, 5.0, 5.0, 2.0, 1.0, 1.0, 1.0],
+        "Benchmark %": [25.0, 15.0, 12.0, 10.0, 15.0, 8.0, 7.0, 4.0, 4.0]
+    },
+    "Long Short High Yield Bond": {
+        "Credit Rating": ["BB", "B", "CCC", "Below CCC", "Unrated"],
+        "Long %": [45.0, 40.0, 25.0, 15.0, 10.0],
+        "Short %": [10.0, 10.0, 5.0, 5.0, 5.0],
+        "Benchmark %": [40.0, 35.0, 15.0, 5.0, 5.0]
+    },
+    "Private Equity": {
+        "Type": ["Buyouts", "Growth Capital", "Venture Capital", "Distressed/Turnaround", "Secondaries", "Mezzanine", "Real Assets"],
+        "Fund %": [40.0, 25.0, 15.0, 10.0, 5.0, 3.0, 2.0],
+        Benchmark %": [45.0, 20.0, 10.0, 15.0, 5.0, 3.0, 2.0]    
+    }
+}
+
+portfolio_characteristics = {
+    "Equity": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "PEG Ratio", 
+            "Debt to Capital", "ROIC", "Median Market Capitalization (mil)", 
+            "Weighted Average Market Capitalization (mil)"
+        ],
+        "Fund": [
+            55, "$138.4 M", "76.6%", 2.0, "38.6%", "28.0%", "$87,445", "$949,838"
+        ],
+        "Benchmark": [
+            500, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
+        ]
+    },
+    "Government Bonds": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Duration", 
+            "Average Credit Quality", "Yield to Maturity", "Current Yield", 
+            "Effective Duration"
+        ],
+        "Fund": [
+            200, "$500 M", "12.0%", "5.5 years", "AA", "1.75%", "1.5%", "5.2 years"
+        ],
+        "Benchmark": [
+            3000, "N/A", "N/A", "6.0 years", "AA+", "1.80%", "1.6%", "5.8 years"
+        ]
+    },
+    "High Yield Bonds": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Duration", 
+            "Average Credit Quality", "Yield to Maturity", "Current Yield", 
+            "Effective Duration"
+        ],
+        "Fund": [
+            150, "$250 M", "45.0%", "4.0 years", "BB-", "5.25%", "5.0%", "3.8 years"
+        ],
+        "Benchmark": [
+            2350, "N/A", "N/A", "4.5 years", "BB", "5.50%", "5.3%", "4.2 years"
+        ]
+    },
+    "Leveraged Loans": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "DM-3YR", 
+            "Average Credit Quality", "Yield-3 YR", "Current Yield", 
+            "Effective Duration"
+        ],
+        "Fund": [
+            100, "$300 M", "60.0%", "450bps", "B+", "6.75%", "6.5%", "0.2 years"
+        ],
+        "Benchmark": [
+            1000, "N/A", "N/A", "421 bps", "BB-", "7.00%", "6.8%", "0.3 years"
+        ]
+    },
+    "Commodities": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Standard Deviation", 
+            "Sharpe Ratio", "Beta", "Correlation to Equities", 
+            "Correlation to Bonds"
+        ],
+        "Fund": [
+            30, "$200 M", "80.0%", "15.0%", "0.75", "0.5", "0.3", "0.1"
+        ],
+        "Benchmark": [
+            50, "N/A", "N/A", "14.0%", "0.8", "0.4", "0.35", "0.15"
+        ]
+    },
+    "Long Short Equity Hedge Fund": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Long Exposure", 
+            "Short Exposure", "Gross Exposure", "Net Exposure", 
+            "Alpha"
+        ],
+        "Fund": [
+            75, "$1.2 B", "150.0%", "130%", "70%", "200%", "60%", "2.5%"
+        ],
+        "Benchmark": [
+            "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+        ]
+    },
+    "Long Short High Yield Bond": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Long Exposure", 
+            "Short Exposure", "Gross Exposure", "Net Exposure", 
+            "Alpha"
+        ],
+        "Fund": [
+            60, "$400 M", "130.0%", "110%", "40%", "150%", "70%", "1.8%"
+        ],
+        "Benchmark": [
+            "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+        ]
+    },
+    "Private Equity": {
+        "Metric": [
+            "Number of Holdings", "Net Assets", "Portfolio Turnover (12 months)", "Internal Rate of Return (IRR)", 
+            "Investment Multiple", "Average Investment Duration", "Median Fund Size", 
+            "Standard Deviation"
+        ],
+        "Fund": [
+            25, "$2.5 B", "10.0%", "18.0%", "1.5x", "7 years", "$500 M", "12.0%"
+        ],
+        "Benchmark": [
+            "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+        ]
+    }
+}
+
+top_holdings = {
+    "Equity": {
+        "Holding": [
+            "NVIDIA Corp.", "Microsoft Corp.", "Eli Lily & Company", "Novo Nordisk A/S (ADR)", "Apple, Inc."
+        ],
+        "Industry": [
+            "Semiconductors", "Systems Software", "Pharmaceuticals", "Pharmaceuticals", "Technology Hardware"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "Denmark", "United States"
+        ],
+        "% of Net Assets": [11.1, 5.7, 4.6, 4.2, 3.9]
+    },
+    "Government Bonds": {
+        "Holding": [
+            "US Treasury Bond 2.375% 2029", "US Treasury Bond 1.75% 2024", "US Treasury Bond 2.25% 2027", 
+            "US Treasury Bond 3.00% 2049", "US Treasury Bond 2.625% 2025"
+        ],
+        "Industry": [
+            "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds", "Government Bonds"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [15.0, 12.0, 10.0, 8.0, 7.0]
+    },
+    "High Yield Bonds": {
+        "Holding": [
+            "Sprint Capital Corp 6.875% 2028", "Tenet Healthcare Corp 6.75% 2023", "CenturyLink Inc 7.5% 2024", 
+            "T-Mobile USA Inc 6.375% 2025", "Dish Network Corp 5.875% 2027"
+        ],
+        "Industry": [
+            "Telecommunications", "Healthcare Services", "Telecommunications", "Telecommunications", "Media"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [4.5, 4.0, 3.5, 3.0, 2.5]
+    },
+    "Leveraged Loans": {
+        "Holding": [
+            "Dell International LLC Term Loan B", "Charter Communications Term Loan", "Intelsat Jackson Holdings Term Loan B", 
+            "American Airlines Inc Term Loan B", "Bausch Health Companies Term Loan"
+        ],
+        "Industry": [
+            "Technology", "Media", "Telecommunications", "Airlines", "Healthcare"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "Canada"
+        ],
+        "% of Net Assets": [5.0, 4.5, 4.0, 3.5, 3.0]
+    },
+    "Commodities": {
+        "Holding": [
+            "SPDR Gold Trust", "iShares Silver Trust", "United States Oil Fund", 
+            "Invesco DB Agriculture Fund", "Aberdeen Standard Physical Platinum Shares ETF"
+        ],
+        "Industry": [
+            "Precious Metals", "Precious Metals", "Energy", "Agriculture", "Precious Metals"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [10.0, 8.0, 6.0, 5.0, 4.0]
+    },
+    "Long Short Equity Hedge Fund": {
+        "Holding": [
+            "Amazon.com Inc", "Alphabet Inc", "Johnson & Johnson", 
+            "Mastercard Inc", "Visa Inc"
+        ],
+        "Industry": [
+            "E-Commerce", "Internet Services", "Pharmaceuticals", "Financial Services", "Financial Services"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [9.0, 7.0, 6.5, 6.0, 5.5]
+    },
+    "Long Short High Yield Bond": {
+        "Holding": [
+            "HCA Inc 7.5% 2026", "First Data Corp 7.0% 2024", "TransDigm Inc 6.5% 2025", 
+            "Community Health Systems 6.25% 2023", "CSC Holdings LLC 5.5% 2026"
+        ],
+        "Industry": [
+            "Healthcare", "Financial Services", "Aerospace", "Healthcare", "Telecommunications"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [5.5, 5.0, 4.5, 4.0, 3.5]
+    },
+    "Private Equity": {
+        "Holding": [
+            "Blackstone Group", "Kohlberg Kravis Roberts", "The Carlyle Group", 
+            "Apollo Global Management", "TPG Capital"
+        ],
+        "Industry": [
+            "Private Equity", "Private Equity", "Private Equity", "Private Equity", "Private Equity"
+        ],
+        "Country": [
+            "United States", "United States", "United States", "United States", "United States"
+        ],
+        "% of Net Assets": [12.0, 10.0, 8.0, 7.0, 6.0]
+    }
+}
+
+def get_sector_allocations(selected_strategy):
+    return sector_allocations.get(selected_strategy, None)
+
+def get_portfolio_characteristics(selected_strategy):
+    return portfolio_characteristics.get(selected_strategy, None)
+
+def get_top_holdings(selected_strategy):
+    return top_holdings.get(selected_strategy, None)

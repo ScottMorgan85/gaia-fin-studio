@@ -677,7 +677,7 @@ sector_allocations = {
     "Private Equity": {
         "Type": ["Buyouts", "Growth Capital", "Venture Capital", "Distressed/Turnaround", "Secondaries", "Mezzanine", "Real Assets"],
         "Fund %": [40.0, 25.0, 15.0, 10.0, 5.0, 3.0, 2.0],
-        Benchmark %": [45.0, 20.0, 10.0, 15.0, 5.0, 3.0, 2.0]    
+        "Benchmark %": [45.0, 20.0, 10.0, 15.0, 5.0, 3.0, 2.0]    
     }
 }
 

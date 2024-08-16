@@ -6,18 +6,6 @@ groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
 def generate_investment_commentary(model_option, selected_client, selected_strategy, models):
-    """
-    Generate investment commentary based on the given model option, client, and strategy.
-
-    Parameters:
-        model_option (str): The model configuration used for generating commentary.
-        selected_client (str): The client for whom the commentary is being generated.
-        selected_strategy (str): The investment strategy of the selected client.
-        models (dict): Dictionary of model configurations.
-
-    Returns:
-        str: Generated investment commentary.
-    """
 
     # Commentary structure
     commentary_structure = {
@@ -77,14 +65,18 @@ def generate_investment_commentary(model_option, selected_client, selected_strat
     
     # Create the transactions narrative
     file_path = './data/client_data.csv'
-    top_transactions_df = utils.get_top_transactions(selected_strategy_details)  # Using utils to get top transactions
+    top_transactions_df = utils.get_top_transactions(selected_strategy_details) 
+    top_transactions_str = ", ".join(f"{k}: {v}" for k, v in top_transactions_df.items())
+
     
     commentary_prompt = f"""
         Start every letter with "Dear {selected_client},"
 
         Stop saying things like "Here is the commentary....." at the start. Just the client deliverable. Assume this is going directly to a client.
     
-        This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be detailed so this goes about 2 full pages given a standard 8inch by 11inch printer paper with standard margins.
+        This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be detailed so this goes 2 full pages given a standard 8inch by 11inch printer paper with standard margins.
+
+        Make up some narratives around {top_transactions_str} during the period and sound intelligent why the portfolio was positioned the way it was.
         
         Never just list trailing returns. Discuss trailing returns for the {selected_strategy} strategy during the most recent period {trailing_returns_str} versus the benchmark. No other periods.
         

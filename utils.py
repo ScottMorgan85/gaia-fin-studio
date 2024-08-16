@@ -890,7 +890,6 @@ top_holdings = {
         "% of Net Assets": [12.0, 10.0, 8.0, 7.0, 6.0]
     }
 }
-
 def get_sector_allocations(selected_strategy):
     return sector_allocations.get(selected_strategy, None)
 

@@ -20,20 +20,10 @@ models = utils.get_model_configurations()
 
 # Function to generate fictional DTD performance commentary
 def generate_dtd_commentary(selected_strategy):
-    """
-    Generates day-to-day performance commentary for a given investment strategy.
-    The commentary is based on recent market movements, economic factors, and strategic adjustments.
-
-    Parameters:
-        selected_strategy (str): The name of the investment strategy for which commentary is generated.
-
-    Returns:
-        str: A string containing the generated commentary.
-    """
     commentary_prompt = f"""
     Generate a few bullet points on day-to-day (DTD) performance for the {selected_strategy} strategy based on recent events. Be professional and just give the bullets, no need to qualify with this is fictional. Stop saying things like "Here are some bullet points on day-to-day (DTD) performance for the Equity strategy:". Just the data.
     
-    Include relevant market movements, economic factors, and strategic adjustments. Discuss performance attribution. No more than 4 bullet points. Have a space between each bullet point
+    Include relevant market movements, economic factors, and strategic adjustments. Discuss performance attribution. No more than 3 bullet points. Have a space between each bullet point
     and have them start on their own line.
     """
 
@@ -54,13 +44,6 @@ def generate_dtd_commentary(selected_strategy):
 
 # Function to generate and display the DTD performance commentary and market overview
 def display_market_commentary_and_overview(selected_strategy):
-    """
-    Generates and displays the DTD performance commentary for the specified strategy,
-    and shows an overview of major market indices and specific sectors.
-
-    Parameters:
-        selected_strategy (str): The strategy for which to generate and display commentary.
-    """
 
     # Get the current date
     current_date = datetime.datetime.now()
@@ -121,14 +104,6 @@ def display_market_commentary_and_overview(selected_strategy):
         
 # Function to load the default page and display the market commentary and overview
 def load_default_page(selected_client, selected_strategy):
-    """
-    Loads the default page including a welcome message, and then initializes the market
-    commentary and overview based on the selected strategy.
-
-    Parameters:
-        selected_client (str): Identifier for the client, used for personalization.
-        selected_strategy (str): The strategy used for generating market commentary.
-    """
     st.markdown(
         """
         Welcome to :green_heart: [GAIA (Generative AI Analytics and Insight)]. GAIA is your comprehensive solution for transforming investment management through cutting-edge generative AI technology. With GAIA, you can effortlessly generate personalized investment commentaries, derive deep insights from your data, and enhance client interactions. Dive in to explore how GAIA can revolutionize your investment approach.
@@ -140,13 +115,7 @@ def load_default_page(selected_client, selected_strategy):
 def display_portfolio(selected_client, selected_strategy):
     st.header(f"{selected_strategy} - Portfolio Overview")
     
-    # Get client strategy details
-    strategy_details = get_strategy_details(selected_client)
-    if strategy_details:
-        # st.write(f"**Strategy Name:** {strategy_details['strategy_name']}")
-        st.write(f"**Description:** {strategy_details['description']}")
-    else:
-        st.error("Client strategy details not found.")
+
 
     # Get client info
     client_info = get_client_info(selected_client)
@@ -167,7 +136,7 @@ def display_portfolio(selected_client, selected_strategy):
             benchmark_returns = benchmark_returns_df[['as_of_date', benchmark]]
 
             # Plot Cumulative Returns
-            st.markdown("### Cumulative Returns")
+            # st.markdown("### Cumulative Returns")
             utils.plot_cumulative_returns(client_returns, benchmark_returns, strategy, benchmark)
 
             # Display Trailing Returns, Portfolio Characteristics, and Allocations in three columns
@@ -218,6 +187,10 @@ def display_portfolio(selected_client, selected_strategy):
             st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
         else:
             st.write(f"No top buys and sells data for {selected_strategy}")
+
+
+
+
 
 # --------------- Page: Commentary ---------------
 def display(commentary_text, selected_client, model_option, selected_strategy):  # Added selected_strategy here

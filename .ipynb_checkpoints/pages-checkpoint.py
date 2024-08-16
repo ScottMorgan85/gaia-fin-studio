@@ -4,10 +4,10 @@ import plotly.graph_objs as go
 from data.client_mapping import get_client_info, get_strategy_details
 import data.client_central_fact as fact_data
 import utils
+import datetime
 import commentary
 from groq import Groq
 import os
-
 
 # Groq API configuration
 groq_api_key = os.environ['GROQ_API_KEY']
@@ -31,9 +31,10 @@ def generate_dtd_commentary(selected_strategy):
         str: A string containing the generated commentary.
     """
     commentary_prompt = f"""
-    Generate a few bullet points on day-to-day (DTD) performance for the {selected_strategy} strategy based on recent events. Be professional and just give the bullets, no need to qualify with this is fictional. 
+    Generate a few bullet points on day-to-day (DTD) performance for the {selected_strategy} strategy based on recent events. Be professional and just give the bullets, no need to qualify with this is fictional. Stop saying things like "Here are some bullet points on day-to-day (DTD) performance for the Equity strategy:". Just the data.
     
-    Include relevant market movements, economic factors, and strategic adjustments.
+    Include relevant market movements, economic factors, and strategic adjustments. Discuss performance attribution. No more than 4 bullet points. Have a space between each bullet point
+    and have them start on their own line.
     """
 
     try:
@@ -43,8 +44,8 @@ def generate_dtd_commentary(selected_strategy):
                 {"role": "user", "content": "Generate DTD performance commentary."}
             ],
             model='llama3-70b-8192',
-            max_tokens=150
-        )
+            max_tokens=8192
+        )             
         dtdcommentary = chat_completion.choices[0].message.content
     except Exception as e:
         dtdcommentary = f"Failed to generate DTD commentary: {str(e)}"
@@ -60,8 +61,24 @@ def display_market_commentary_and_overview(selected_strategy):
     Parameters:
         selected_strategy (str): The strategy for which to generate and display commentary.
     """
-    # Display the DTD Performance Commentary section
-    st.subheader(f"{selected_strategy} Daily Update")  # Use selected_strategy directly as it's a string
+
+    # Get the current date
+    current_date = datetime.datetime.now()
+    
+    # Format the date as 'Day of week, Month day(th/st/nd/rd), Year'
+    date_str = current_date.strftime("%A, %B %d, %Y")
+    
+    # Adjust the day suffix properly
+    day = current_date.day
+    if 4 <= day <= 20 or 24 <= day <= 30:
+        suffix = "th"
+    else:
+        suffix = ["st", "nd", "rd"][day % 10 - 1]
+    formatted_date = f"{current_date.strftime('%A, %B %d')}{suffix}, {current_date.year}"
+    
+    # Use the formatted date in the title
+    st.header(f"{selected_strategy} Daily Update - {formatted_date}")
+    
     model_option = 'llama3-70b-8192'  # Example model used for generating commentary
     dtdcommentary = generate_dtd_commentary(selected_strategy)
     st.markdown(dtdcommentary)
@@ -121,11 +138,12 @@ def load_default_page(selected_client, selected_strategy):
 
 # --------------- Page: Portfolio ---------------
 def display_portfolio(selected_client, selected_strategy):
-
+    st.header(f"{selected_strategy} - Portfolio Overview")
+    
     # Get client strategy details
     strategy_details = get_strategy_details(selected_client)
     if strategy_details:
-        st.write(f"**Strategy Name:** {strategy_details['strategy_name']}")
+        # st.write(f"**Strategy Name:** {strategy_details['strategy_name']}")
         st.write(f"**Description:** {strategy_details['description']}")
     else:
         st.error("Client strategy details not found.")
@@ -148,136 +166,64 @@ def display_portfolio(selected_client, selected_strategy):
             client_returns = strategy_returns_df[['as_of_date', strategy]]
             benchmark_returns = benchmark_returns_df[['as_of_date', benchmark]]
 
-            # Create the trailing returns table
-            trailing_returns_df = utils.load_trailing_returns(selected_client)
-            if trailing_returns_df is not None:
-                st.markdown("### Trailing Returns")
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    utils.format_trailing_returns(trailing_returns_df)
-            else:
-                st.error("Trailing returns data not found.")
-
             # Plot Cumulative Returns
             st.markdown("### Cumulative Returns")
             utils.plot_cumulative_returns(client_returns, benchmark_returns, strategy, benchmark)
+
+            # Display Trailing Returns, Portfolio Characteristics, and Allocations in three columns
+            st.markdown("### Portfolio Details")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("#### Trailing Returns")
+                trailing_returns_df = utils.load_trailing_returns(selected_client)
+                if trailing_returns_df is not None:
+                    utils.format_trailing_returns(trailing_returns_df)
+                else:
+                    st.error("Trailing returns data not found.")
+
+            with col2:
+                st.markdown("#### Portfolio Characteristics")
+                characteristics_data = utils.get_portfolio_characteristics(selected_strategy)
+                if characteristics_data:
+                    characteristics_df = pd.DataFrame(characteristics_data)
+                    for column in characteristics_df.columns:
+                        characteristics_df[column] = characteristics_df[column].astype(str)
+                    st.dataframe(characteristics_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+                else:
+                    st.write(f"No portfolio characteristics data for {selected_strategy}")
+
+            with col3:
+                st.markdown("#### Allocations")
+                sector_data = utils.get_sector_allocations(selected_strategy)
+                if sector_data:
+                    sector_df = pd.DataFrame(sector_data)
+                    for column in sector_df.columns:
+                        sector_df[column] = sector_df[column].astype(str)
+                    st.dataframe(sector_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+                else:
+                    st.write(f"No sector allocations data for {selected_strategy}")
         else:
             st.error("Returns data not found for the selected strategy or benchmark.")
     else:
         st.error("Client information is missing.")
 
-
-# Add Fund Facts, Geographic Breakdown, Sector Weightings, and Top 10 Holdings
-    st.subheader(f"{selected_strategy} - Characteristics & Exposures")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("<div class='subsection-title'>Allocations</div>", unsafe_allow_html=True)
-
-        if selected_strategy in sector_allocations:
-            sector_data = sector_allocations[selected_strategy]
-            sector_df = pd.DataFrame(sector_data)
-            for column in sector_df.columns:
-                sector_df[column] = sector_df[column].astype(str)
-            st.dataframe(sector_df.style.set_properties(**{'width': '120%', 'height': '100%'}), hide_index=True)
-
-    else:
-        st.write(f"No sector allocations data for {selected_strategy}")
+    # Single column section for top buys and sells
+    if selected_strategy.strip():
+        st.markdown(f"### {selected_strategy} - Top Buys and Sells")
         
-with col2:
-    st.markdown("<div class='subsection-title'>Portfolio Characteristics</div>", unsafe_allow_html=True)
-
-    if selected_strategy in portfolio_characteristics:
-        characteristics_data = portfolio_characteristics[selected_strategy]
-        characteristics_df = pd.DataFrame(characteristics_data)
-        for column in characteristics_df.columns:
-            characteristics_df[column] = set_properties(characteristics_df[column].astype(str))
-        st.dataframe(characteristics_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
-    else:
-        st.write(f"No portfolio characteristics data for {selected_strategy}")
-
-if selected_strategy.strip() != "":
-    st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
-    
-    filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
-    top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
-    top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
-    top_transactions = pd.concat([top_buys, top_sells])
-    top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
-    st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
-
-if selected_strategy.strip() != "":
-    st.markdown("<div class='subsection-title'>Top Holdings</div>", unsafe_allow_html=True)
-    if selected_strategy in top_holdings:
-        holdings_data = top_holdings[selected_strategy]
-        holdings_df = pd.DataFrame(holdings_data)
-        for column in holdings_df.columns:
-            holdings_df[column] = holdings_df[column].astype(str)
-        st.dataframe(holdings_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
-
-    else:
-        st.write(f"No top holdings data for {selected_strategy}")
-
-# Add Fund Facts, Geographic Breakdown, Sector Weightings, and Top 10 Holdings
-st.subheader(f"{selected_strategy} - Characteristics & Exposures")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("<div class='subsection-title'>Allocations</div>", unsafe_allow_html=True)
-
-    if selected_strategy in sector_allocations:
-        sector_data = sector_allocations[selected_strategy]
-        sector_df = pd.DataFrame(sector_data)
-        for column in sector_df.columns:
-            sector_df[column] = sector_df[column].astype(str)
-        st.dataframe(sector_df.style.set_properties(**{'width': '120%', 'height': '100%'}), hide_index=True)
-
-    else:
-        st.write(f"No sector allocations data for {selected_strategy}")
+        top_transactions_df = utils.get_top_transactions(selected_strategy)
         
-with col2:
-    st.markdown("<div class='subsection-title'>Portfolio Characteristics</div>", unsafe_allow_html=True)
-
-    if selected_strategy in portfolio_characteristics:
-        characteristics_data = portfolio_characteristics[selected_strategy]
-        characteristics_df = pd.DataFrame(characteristics_data)
-        for column in characteristics_df.columns:
-            characteristics_df[column] = characteristics_df[column].astype(str)
-        st.dataframe(characteristics_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
-    else:
-        st.write(f"No portfolio characteristics data for {selected_strategy}")
-
-if selected_strategy.strip() != "":
-    st.markdown("<div class='subsection-title'>Top Buys and Sells</div>", unsafe_allow_html=True)
-    
-    filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
-    top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
-    top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nlargest(2, 'Total Value ($)')
-    top_transactions = pd.concat([top_buys, top_sells])
-    top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type', 'Commentary']]
-    st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
-
-if selected_strategy.strip() != "":
-    st.markdown("<div class='subsection-title'>Top Holdings</div>", unsafe_allow_html=True)
-    if selected_strategy in top_holdings:
-        holdings_data = top_holdings[selected_strategy]
-        holdings_df = pd.DataFrame(holdings_data)
-        for column in holdings_df.columns:
-            holdings_df[column] = holdings_df[column].astype(str)
-        st.dataframe(holdings_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
-
-    else:
-        st.write(f"No top holdings data for {selected_strategy}")
-
-
+        # Check if the DataFrame is not empty before displaying it
+        if not top_transactions_df.empty:
+            st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
+        else:
+            st.write(f"No top buys and sells data for {selected_strategy}")
 
 # --------------- Page: Commentary ---------------
 def display(commentary_text, selected_client, model_option, selected_strategy):  # Added selected_strategy here
     # Chat box
-    st.title("Commentary")
-
+    st.header(f"{selected_strategy} - Client Commentary")
     models = utils.get_model_configurations()
     
     # Generate the commentary text using the commentary module
@@ -299,8 +245,8 @@ def display_client_page(selected_client):
         selected_client (str): Client name selected from the dropdown.
     """
     client_data = utils.load_client_data_csv(selected_client)  # Assume this function is correctly defined in utils
-
-    st.title(f"Client Overview: {selected_client}")
+    
+    st.header(f"Client Overview: {selected_client}")
     if not client_data.empty:
         # Directly accessing the first row's data, assuming only one match is found
         aum = client_data['aum'].iloc[0]  # Scalar value access

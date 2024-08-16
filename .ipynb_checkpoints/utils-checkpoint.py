@@ -119,9 +119,6 @@ def load_trailing_returns(client_name):
     return combined_df
 
 
-# Commentary structure for different strategies
-
-
 # New function to get top transactions
 def get_top_transactions(file_path, strategy):
     # Load the data
@@ -902,3 +899,24 @@ def get_portfolio_characteristics(selected_strategy):
 
 def get_top_holdings(selected_strategy):
     return top_holdings.get(selected_strategy, None)
+
+def get_top_transactions(selected_strategy,file_path):
+    # Load the transactions data from CSV
+    transactions_df = pd.read_csv('data/client_transactions.csv')
+    
+    # Filter transactions based on the selected strategy
+    filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
+    
+    # Get the top buys and sells by 'Total Value ($)'
+    top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
+    top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nsmallest(2, 'Total Value ($)')
+    # Combine buys and sells into a single DataFrame
+    top_transactions = pd.concat([top_buys, top_sells])
+    
+    # Select only relevant columns
+    top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type','Total Value ($)', 'Commentary']]
+
+    top_transactions_df['Total Value ($)'] = top_transactions_df['Total Value ($)'].apply(lambda x: f"${x:,.0f}")
+    
+    # Return the DataFrame
+    return top_transactions_df

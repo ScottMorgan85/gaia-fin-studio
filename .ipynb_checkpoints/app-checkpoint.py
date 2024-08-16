@@ -9,6 +9,7 @@ import utils as utils
 from groq import Groq
 import pages
 import commentary as commentary
+import pages
 
 # Groq API configuration
 groq_api_key = os.environ['GROQ_API_KEY']
@@ -40,9 +41,8 @@ selected_tab = st.sidebar.radio("Navigate", ["Default Overview", "Portfolio", "C
 if selected_tab == "Default Overview":
     pages.display_market_commentary_and_overview(selected_strategy)
 elif selected_tab == "Portfolio":
-    pages.display_portfolio(selected_client)
+    pages.display_portfolio(selected_client,selected_strategy)
 elif selected_tab == "Commentary":
-    # Pass selected_strategy and models to generate_investment_commentary and display
     commentary_text = commentary.generate_investment_commentary(model_option, selected_client, selected_strategy, models)
     pages.display(commentary_text, selected_client, model_option, selected_strategy)
 elif selected_tab == "Client":

@@ -77,10 +77,12 @@ def generate_investment_commentary(model_option, selected_client, selected_strat
     
     # Create the transactions narrative
     file_path = './data/client_data.csv'
-    top_transactions_df = utils.get_top_transactions(file_path, selected_strategy_details)  # Using utils to get top transactions
+    top_transactions_df = utils.get_top_transactions(selected_strategy_details)  # Using utils to get top transactions
     
     commentary_prompt = f"""
-        Dear {selected_client},
+        Start every letter with "Dear {selected_client},"
+
+        Stop saying things like "Here is the commentary....." at the start. Just the client deliverable. Assume this is going directly to a client.
     
         This commentary will focus on {selected_strategy} as of the quarter ending {selected_quarter}. We will reference the {index} for comparative purposes. Be detailed so this goes about 2 full pages given a standard 8inch by 11inch printer paper with standard margins.
         

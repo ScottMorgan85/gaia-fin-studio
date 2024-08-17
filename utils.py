@@ -370,14 +370,18 @@ def win_highlight(val: str) -> str:
     return f'background-color: {color}'
 
 
-def create_dateframe_view(df: pd.DataFrame) -> None:
-    df['close_price'] = df['close_price'].apply(lambda x: f'{x:,.2f}')
-    df['daily_change'] = df['daily_change'].apply(lambda x: f'{x:,.2f}')
-    df['pct_change'] = df['pct_change'].apply(lambda x: f'{x:,.2f}')
+def create_dateframe_view(df: pd.DataFrame, display: bool = True) -> None:
+    if not display:
+        return  # Do nothing if display is False
+
+    # Ensure that formatting only applies to numeric values
+    df['close_price'] = df['close_price'].apply(lambda x: f'{float(x):,.2f}' if pd.api.types.is_numeric_dtype(x) else x)
+    df['daily_change'] = df['daily_change'].apply(lambda x: f'{float(x):,.2f}' if pd.api.types.is_numeric_dtype(x) else x)
+    df['pct_change'] = df['pct_change'].apply(lambda x: f'{float(x):,.2f}' if pd.api.types.is_numeric_dtype(x) else x)
 
     st.dataframe(
         df.style.applymap(win_highlight,
-                     subset=['daily_change', 'pct_change']),
+                          subset=['daily_change', 'pct_change']),
         column_config={
             "stock_tickers": "Tickers",
             "stock_name": "Stock",
@@ -390,6 +394,27 @@ def create_dateframe_view(df: pd.DataFrame) -> None:
         hide_index=True,
         width=620,
     )
+
+# def create_dateframe_view(df: pd.DataFrame) -> None:
+#     df['close_price'] = df['close_price'].apply(lambda x: f'{x:,.2f}')
+#     df['daily_change'] = df['daily_change'].apply(lambda x: f'{x:,.2f}')
+#     df['pct_change'] = df['pct_change'].apply(lambda x: f'{x:,.2f}')
+
+#     st.dataframe(
+#         df.style.applymap(win_highlight,
+#                      subset=['daily_change', 'pct_change']),
+#         column_config={
+#             "stock_tickers": "Tickers",
+#             "stock_name": "Stock",
+#             "close_price": "Price ($)",
+#             "daily_change": "Price Change ($)",  # if positive, green, if negative, red
+#             "pct_change": "% Change",  # if positive, green, if negative, red
+#             "views_history": st.column_config.LineChartColumn(
+#                 "daily trend"),
+#         },
+#         hide_index=True,
+#         width=620,
+#     )
 
 
 def build_portfolio(no_stocks: int) -> Portfolio.Portfolio:

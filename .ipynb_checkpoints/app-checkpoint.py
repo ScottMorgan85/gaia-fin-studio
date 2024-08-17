@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
 
@@ -71,7 +72,7 @@ def handle_chat_input(input_text):
 # Process the user input
 if user_input:
     groq_response = handle_chat_input(user_input)
-    
+     
     # Collapsible section
     with st.expander("Show Response", expanded=True):
         st.write(groq_response)

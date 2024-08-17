@@ -43,14 +43,7 @@ def generate_dtd_commentary(selected_strategy):
     return dtdcommentary
 
 # Function to generate and display the DTD performance commentary and market overview
-def display_market_commentary_and_overview(selected_strategy):
-    """
-    Generates and displays the DTD performance commentary for the specified strategy,
-    and shows an overview of major market indices and specific sectors.
-
-    Parameters:
-        selected_strategy (str): The strategy for which to generate and display commentary.
-    """
+def display_market_commentary_and_overview(selected_strategy, display_df=True):
 
     # Get the current date
     current_date = datetime.datetime.now()
@@ -98,16 +91,22 @@ def display_market_commentary_and_overview(selected_strategy):
                       "NSRGY",  # Nestle SA ADR
                       "SIEGY"]  # Siemens AG ADR
         em_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
-        df_stocks = utils.create_stocks_dataframe(em_list, em_name)  # Assuming names and tickers are the same for simplicity
-        utils.create_dateframe_view(df_stocks)
+        df_em_stocks = utils.create_stocks_dataframe(em_list, em_name)  # Assuming names and tickers are the same for simplicity
+        utils.create_dateframe_view(df_em_stocks)
+        if display_df:
+            utils.create_dateframe_view(df_em_stocks)
         
     # Fixed Income Overview
     with col_sector2:
         st.subheader("Fixed Income Overview")
-        stock_list = ["AGG", "HYG", "TLT", "MBB", "EMB","BKLN"]
-        stock_name = ["US Aggregate", "High Yield Corporate", "Long Treasury", "Mortgage-Backed", "Emerging Markets Bond","U.S. Leveraged Loan"]
-        df_stocks = utils.create_stocks_dataframe(stock_list, stock_name)
-        utils.create_dateframe_view(df_stocks)
+        fi_list = ["AGG", "HYG", "TLT", "MBB", "EMB","BKLN"]
+        fi_name = ["US Aggregate", "High Yield Corporate", "Long Treasury", "Mortgage-Backed", "Emerging Markets Bond","U.S. Leveraged Loan"]
+        df_fi = utils.create_stocks_dataframe(fi_list, fi_name)
+        if display_df:
+            utils.create_dateframe_view(df_fi)
+
+    return df_em_stocks, df_fi
+
         
 # Function to load the default page and display the market commentary and overview
 def load_default_page(selected_client, selected_strategy):
@@ -194,6 +193,10 @@ def display_portfolio(selected_client, selected_strategy):
             st.dataframe(top_transactions_df.style.set_properties(**{'width': '100%', 'height': 'auto'}), hide_index=True)
         else:
             st.write(f"No top buys and sells data for {selected_strategy}")
+
+
+
+
 
 # --------------- Page: Commentary ---------------
 def display(commentary_text, selected_client, model_option, selected_strategy):  # Added selected_strategy here

@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
 

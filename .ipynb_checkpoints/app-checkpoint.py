@@ -9,7 +9,56 @@ from data.client_mapping import get_client_names, get_client_info, client_strate
 import utils as utils 
 from groq import Groq
 import pages
-import commentary as commentary
+import commentary 
+import style
+
+# Function to initialize themes and handle toggling
+def initialize_theme():
+    if "themes" not in st.session_state:
+        st.session_state.themes = {
+            "current_theme": "light",
+            "refreshed": True,
+            "light": {
+                "theme.base": "dark",
+                "theme.backgroundColor": "black",
+                "theme.primaryColor": "#FF9900",  # Orange for text and highlights
+                "theme.secondaryBackgroundColor": "#333333",  # Dark sidebar
+                "theme.textColor": "#E0E0E0",  # Light gray text
+                "theme.primaryButtonColor": "#FFCC00",  # Yellow buttons
+                "theme.secondaryButtonColor": "#FF4500",  # Red buttons for danger/warnings
+                "button_face": "🌐"
+            },
+            "dark": {
+                "theme.base": "light",
+                "theme.backgroundColor": "black",  # Black background
+                "theme.primaryColor": "#FF9900",  # Orange for text and highlights
+                "theme.secondaryBackgroundColor": "#333333",  # Dark sidebar
+                "theme.textColor": "#E0E0E0",  # Light gray text
+                "theme.primaryButtonColor": "#FFCC00",  # Yellow buttons
+                "theme.secondaryButtonColor": "#FF4500",  # Red buttons for danger/warnings
+                "button_face": "🌕"
+            }
+        }
+
+def change_theme():
+    previous_theme = st.session_state.themes["current_theme"]
+    tdict = st.session_state.themes["light"] if st.session_state.themes["current_theme"] == "light" else st.session_state.themes["dark"]
+    for vkey, vval in tdict.items():
+        if vkey.startswith("theme"):
+            st._config.set_option(vkey, vval)
+
+    st.session_state.themes["refreshed"] = False
+    st.session_state.themes["current_theme"] = "dark" if previous_theme == "light" else "light"
+
+def render_theme_toggle_button():
+    btn_face = st.session_state.themes["light"]["button_face"] if st.session_state.themes["current_theme"] == "light" else st.session_state.themes["dark"]["button_face"]
+    if st.button(btn_face, on_click=change_theme, key="unique_theme_toggle_button"):
+        if st.session_state.themes["refreshed"] == False:
+            st.session_state.themes["refreshed"] = True
+            st.experimental_rerun()
+
+# Initialize the theme when this module is imported
+initialize_theme()
 
 # Groq API configuration
 groq_api_key = os.environ['GROQ_API_KEY']

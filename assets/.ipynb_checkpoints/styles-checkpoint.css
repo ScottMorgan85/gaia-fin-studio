@@ -1,38 +1,39 @@
 /* assets/styles.css */
 body {
-    background-color: #121212;
+    background-color: black;
     color: #E0E0E0;
 }
 
 h1, h2, h3, h4, h5, h6 {
-    color: #FFFFFF;
+    color: #FF9900; /* Orange for headings */
 }
 
 .sidebar .sidebar-content {
-    background-color: #333333;
+    background-color: #333333; /* Dark sidebar */
+    color: #FF9900; /* Orange sidebar text */
 }
 
 .stButton>button {
-    background-color: #4CAF50;
-    color: white;
+    background-color: #FFCC00; /* Yellow buttons */
+    color: black;
     border: none;
-    padding: 5px 12px; /* Smaller padding for a smaller button */
+    padding: 10px 15px;
     text-align: center;
     display: inline-block;
-    font-size: 14px; /* Smaller font size */
+    font-size: 14px;
     margin: 4px 2px;
     transition-duration: 0.4s;
     cursor: pointer;
 }
 
 .stButton>button:hover {
-    background-color: white;
-    color: black;
-    border: 2px solid #4CAF50;
+    background-color: black;
+    color: #FF9900; /* Orange hover text */
+    border: 2px solid #FFCC00; /* Yellow border */
 }
 
 /* Reduce padding at the top of the main page */
 .main .block-container {
-    padding-top: 1rem; /* Adjust this value to increase or decrease padding */
-    padding-bottom: 1rem; /* Optional: adjust bottom padding if needed */
+    padding-top: 1rem;
+    padding-bottom: 1rem;
 }

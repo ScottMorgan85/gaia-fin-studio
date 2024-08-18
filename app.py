@@ -1,3 +1,6 @@
+
+## -----------------------------------------------------------------
+
 import streamlit as st
 import os
 import pandas as pd
@@ -7,66 +10,73 @@ from groq import Groq
 import pages
 import commentary as commentary
 
+def reset_session_state():
+    for key in st.session_state.keys():
+        del st.session_state[key]
+
+reset_session_state()
+
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
+
+# Include the custom CSS file
+with open('assets/styles.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 # Function to initialize themes and handle toggling
 def initialize_theme():
     if "themes" not in st.session_state:
         st.session_state.themes = {
-            "current_theme": "light",
+            "current_theme": "light",  # Start with light mode
             "refreshed": True,
             "light": {
-                "theme.base": "dark",
-                "theme.backgroundColor": "black",
-                "theme.primaryColor": "#FF9900",  # Orange for text and highlights
-                "theme.secondaryBackgroundColor": "#333333",  # Dark sidebar
-                "theme.textColor": "#E0E0E0",  # Light gray text
-                "theme.primaryButtonColor": "#FFCC00",  # Yellow buttons
-                "theme.secondaryButtonColor": "#FF4500",  # Red buttons for danger/warnings
-                "button_face": "🌐"
+                "theme.base": "light",
+                "theme.backgroundColor": "#FFFFFF",  # White background for light mode
+                "theme.primaryColor": "#005A9C",  # Blue for text and highlights
+                "theme.secondaryBackgroundColor": "#2C3E50",  # Blue-gray sidebar for light mode
+                "theme.textColor": "#000000",  # Black text
+                "button_face": "🌑"  # Dark mode icon
             },
             "dark": {
-                "theme.base": "light",
-                "theme.backgroundColor": "black",  # Black background
+                "theme.base": "dark",
+                "theme.backgroundColor": "#000000",  # Black background for dark mode
                 "theme.primaryColor": "#FF9900",  # Orange for text and highlights
-                "theme.secondaryBackgroundColor": "#333333",  # Dark sidebar
+                "theme.secondaryBackgroundColor": "#2C3E50",  # Darker blue-gray sidebar for dark mode
                 "theme.textColor": "#E0E0E0",  # Light gray text
-                "theme.primaryButtonColor": "#FFCC00",  # Yellow buttons
-                "theme.secondaryButtonColor": "#FF4500",  # Red buttons for danger/warnings
-                "button_face": "🌕"
+                "button_face": "🌕"  # Light mode icon
             }
         }
 
 def change_theme():
     previous_theme = st.session_state.themes["current_theme"]
-    tdict = st.session_state.themes["light"] if st.session_state.themes["current_theme"] == "light" else st.session_state.themes["dark"]
+    tdict = st.session_state.themes["dark"] if st.session_state.themes["current_theme"] == "light" else st.session_state.themes["light"]
     for vkey, vval in tdict.items():
         if vkey.startswith("theme"):
             st._config.set_option(vkey, vval)
 
     st.session_state.themes["refreshed"] = False
     st.session_state.themes["current_theme"] = "dark" if previous_theme == "light" else "light"
+    # Apply dark mode classes
+    st.markdown(f"<body class='{'dark-mode' if st.session_state.themes['current_theme'] == 'dark' else ''}'></body>", unsafe_allow_html=True)
 
 def render_theme_toggle_button():
-    btn_face = st.session_state.themes["light"]["button_face"] if st.session_state.themes["current_theme"] == "light" else st.session_state.themes["dark"]["button_face"]
-    return st.button(btn_face, on_click=change_theme, key="unique_theme_toggle_button")
+    theme_key = st.session_state.themes["current_theme"]
+    btn_face = st.session_state.themes["light"]["button_face"] if theme_key == "light" else st.session_state.themes["dark"]["button_face"]
+    button_key = f"theme_toggle_button_{theme_key}"
+    if st.sidebar.button(btn_face, on_click=change_theme, key=button_key):
+        if not st.session_state.themes["refreshed"]:
+            st.session_state.themes["refreshed"] = True
+            st.experimental_rerun()
 
 # Initialize the theme when this module is imported
 initialize_theme()
 
-# Render theme toggle at the top of the main page
-col1, col2 = st.columns([0.1, 0.9])
-with col1:
-    render_theme_toggle_button()
-
-# Groq API configuration
-groq_api_key = os.environ['GROQ_API_KEY']
-groq_client = Groq(api_key=groq_api_key)
-
-models = utils.get_model_configurations()
 
 # Sidebar for client and model selection
 st.sidebar.title("Insight Central")
+
+# Render theme toggle button in the sidebar under the title
+render_theme_toggle_button()
+
 st.sidebar.markdown("### Client Selection")
 
 client_names = get_client_names()
@@ -148,7 +158,6 @@ if strategy_details:
 else:
     st.sidebar.error("Client strategy details not found.")
 
-
 # Main page content based on the selected tab
 if selected_tab == "Default Overview":
     pages.display_market_commentary_and_overview(selected_strategy)
@@ -163,6 +172,7 @@ elif selected_tab == "Client":
 else:
     st.error("Page not found")
 
+## -----------------------------------------------------------------
 
 # import streamlit as st
 # import time

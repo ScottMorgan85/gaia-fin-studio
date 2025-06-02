@@ -95,3 +95,11 @@ def test_format_currency_float():
 
 def test_format_currency_decimal():
     assert utils.format_currency(Decimal('1234.56')) == "$1,234.56"
+
+
+def test_format_currency_zero():
+    assert utils.format_currency(0) == "$0.00"
+
+
+def test_format_currency_negative():
+    assert utils.format_currency(-1234.56) == "-$1,234.56"

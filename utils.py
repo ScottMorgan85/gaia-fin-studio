@@ -633,7 +633,7 @@ def format_currency(value):
 
 def query_groq(query):
     # Function to query Groq API and return response
-    response = groq_client.chat.completions.create(
+    response = client.chat.completions.create(
         messages=[{"role": "user", "content": query}],
         model='llama3-70b-8192',
         max_tokens=250

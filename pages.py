@@ -217,7 +217,7 @@ def display(commentary_text, selected_client, model_option, selected_strategy): 
 # --------------- Page: Client ---------------
 def display_client_page(selected_client):
     """
-    Displays the client page for a selected client, including interaction data and a chat feature for questions.
+    Display key information and recent interactions for the selected client.
 
     Parameters:
         selected_client (str): Client name selected from the dropdown.

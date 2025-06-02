@@ -65,8 +65,10 @@ def generate_investment_commentary(model_option, selected_client, selected_strat
     
     # Create the transactions narrative
     file_path = './data/client_data.csv'
-    top_transactions_df = utils.get_top_transactions(selected_strategy_details) 
-    top_transactions_str = ", ".join(f"{k}: {v}" for k, v in top_transactions_df.items())
+    top_transactions_df = utils.get_top_transactions(selected_strategy_details)
+    top_transactions_str = ", ".join(
+        f"{row['Name']}: {row['Commentary']}" for _, row in top_transactions_df.iterrows()
+    )
 
     
     commentary_prompt = f"""

@@ -228,9 +228,11 @@ def preview_stock(
         session_state_name: str,
         start_date: datetime.datetime
 ) -> None:
-    stock_data = yfinance.download(st.session_state[session_state_name],
-                                   start=start_date,
-                                   end=dt.datetime.now())
+    stock_data = yfinance.download(
+        st.session_state[session_state_name],
+        start=start_date,
+        end=dt.now()
+    )
     stock_data = stock_data[['Close']]
 
     color = None

@@ -51,10 +51,6 @@ def load_client_data(client_id):
         data['client_name'] = "Unknown Client"
     return data
 
-def load_client_data_csv(client_id):
-    client_data_path = './data/client_data.csv'
-    client_data = pd.read_csv(client_data_path)
-    return client_data[client_data['client_id'] == client_id]
 
 def get_client_strategy_details(client_name):
     details = client_mapping.get_strategy_details(client_name)
@@ -119,59 +115,6 @@ def load_trailing_returns(client_name):
     return combined_df
 
 
-# New function to get top transactions
-def get_top_transactions(file_path, strategy):
-    # Load the data
-    data = pd.read_csv(file_path)
-
-    # Filter data for the selected strategy
-    strategy_data = data[data['client_strategy'] == strategy]
-
-    # Stack the buys and sells
-    buys = strategy_data[['top_buy_1_name', 'top_buy_1_direction', 'top_buy_1_type', 'top_buy_1_commentary']].rename(columns={
-        'top_buy_1_name': 'Name',
-        'top_buy_1_direction': 'Direction',
-        'top_buy_1_type': 'Type',
-        'top_buy_1_commentary': 'Commentary'
-    })
-    buys = buys.append(strategy_data[['top_buy_2_name', 'top_buy_2_direction', 'top_buy_2_type', 'top_buy_2_commentary']].rename(columns={
-        'top_buy_2_name': 'Name',
-        'top_buy_2_direction': 'Direction',
-        'top_buy_2_type': 'Type',
-        'top_buy_2_commentary': 'Commentary'
-    }))
-
-    sells = strategy_data[['top_sell_1_name', 'top_sell_1_direction', 'top_sell_1_type', 'top_sell_1_commentary']].rename(columns={
-        'top_sell_1_name': 'Name',
-        'top_sell_1_direction': 'Direction',
-        'top_sell_1_type': 'Type',
-        'top_sell_1_commentary': 'Commentary'
-    })
-    sells = sells.append(strategy_data[['top_sell_2_name', 'top_sell_2_direction', 'top_sell_2_type', 'top_sell_2_commentary']].rename(columns={
-        'top_sell_2_name': 'Name',
-        'top_sell_2_direction': 'Direction',
-        'top_sell_2_type': 'Type',
-        'top_sell_2_commentary': 'Commentary'
-    }))
-
-    transactions = buys.append(sells).reset_index(drop=True)
-    return transactions
-
-def create_download_link(val, filename):
-    b64 = base64.b64encode(val).decode()  # Encode to base64 and decode to string
-    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
-    
-def load_client_data_csv(client_id):
-    client_data_path = './data/client_data.csv'
-    data = pd.read_csv(client_data_path)
-
-    # Clean column names by stripping whitespace
-    data.columns = data.columns.str.strip()
-
-    # Select specific columns for the KPIs
-    selected_data = data[data['client_id'] == client_id]
-    
-    return selected_data
 
 
 

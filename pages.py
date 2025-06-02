@@ -91,7 +91,8 @@ def display_market_commentary_and_overview(selected_strategy, display_df=True):
                       "NSRGY",  # Nestle SA ADR
                       "SIEGY"]  # Siemens AG ADR
         em_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
-        df_em_stocks = utils.create_stocks_dataframe(em_list, em_name)  # Assuming names and tickers are the same for simplicity
+        # Tickers and human-readable names are provided separately
+        df_em_stocks = utils.create_stocks_dataframe(em_list, em_name)
         utils.create_dateframe_view(df_em_stocks)
         if display_df:
             utils.create_dateframe_view(df_em_stocks)

@@ -254,7 +254,10 @@ def preview_stock(
 
 
 def format_currency(number: float) -> str:
-    formatted_number = "${:,.2f}".format(number)
+    """Return a currency formatted string with the sign preceding the "$"."""
+    sign = "-" if number < 0 else ""
+    number = abs(number)
+    formatted_number = f"{sign}${number:,.2f}"
     return formatted_number
 
 
@@ -627,9 +630,14 @@ def load_client_data_csv(client_name):
     return client_data[client_data['client_name'] == client_name]
 
 def format_currency(value):
+    """Return a currency formatted string with the sign preceding the "$"."""
     if isinstance(value, Decimal):
-        return f"${value:,.2f}"
-    return f"${float(value):,.2f}"
+        val = value
+    else:
+        val = float(value)
+    sign = "-" if val < 0 else ""
+    val = abs(val)
+    return f"{sign}${val:,.2f}"
 
 def query_groq(query):
     # Function to query Groq API and return response

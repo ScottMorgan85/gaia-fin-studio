@@ -4,7 +4,6 @@ import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
 
-
 def _publish_to_sns(topic_arn: str, payload: dict) -> bool:
     """Send the payload to an SNS topic. Return True if published."""
     try:
@@ -39,6 +38,9 @@ def render_form() -> None:
             return
 
         ok = _publish_to_sns(topic_arn, {"name": name, "email": email})
-        if ok:
-            st.success("Thanks! We will email you an access link once approved.")
-            st.balloons()
+    if ok:
+        import utils
+        utils.log_visitor({"name": name, "email": email})
+        st.success("Thanks! We will email you an access link once approved.")
+        st.balloons()
+

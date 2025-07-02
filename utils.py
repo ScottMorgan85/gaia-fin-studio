@@ -1,3 +1,4 @@
+import csv
 import os
 import base64
 import datetime
@@ -21,6 +22,21 @@ from groq import Groq
 
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
+
+LOG_PATH = "data/visitor_log.csv"
+
+def log_visitor(payload):
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    row = {
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "name": payload["name"],
+        "email": payload["email"],
+    }
+    with open(LOG_PATH, mode="a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=row.keys())
+        if f.tell() == 0:
+            writer.writeheader()
+        writer.writerow(row)
 
 def get_model_configurations():
     return {
@@ -898,3 +914,5 @@ def get_top_transactions(selected_strategy):
     
     # Return the DataFrame
     return top_transactions_df
+
+

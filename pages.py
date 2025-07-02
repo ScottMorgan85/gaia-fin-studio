@@ -18,6 +18,47 @@ from groq import Groq
 import commentary
 import yfinance as yf
 import altair as alt
+import boto3
+
+LOG_PATH = "data/visitor_log.csv"
+
+def _send_access_email(email: str, app_url: str):
+    """Send a simple approval email with the App Runner link."""
+    client = boto3.client("sns", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    message = f"""
+    ✅ Your access is approved!
+
+    You can now visit the GAIA Dashboard here:
+    {app_url}
+
+    If you have any questions, reply to this email.
+    """
+    client.publish(
+        TopicArn=os.environ.get("SNS_TOPIC_ARN"),
+        Message=message,
+        Subject="Your GAIA Access Link"
+    )
+
+def display_approvals(app_url: str):
+    st.title("✅ Pending Approvals")
+
+    if not os.path.isfile(LOG_PATH):
+        st.info("No requests yet.")
+        return
+
+    df = pd.read_csv(LOG_PATH)
+    st.dataframe(df)
+
+    for idx, row in df.iterrows():
+        name = row.get("name")
+        email = row.get("email")
+        timestamp = row.get("timestamp")
+        st.write(f"**Name:** {name} | **Email:** {email} | **Time:** {timestamp}")
+
+        if st.button(f"✅ Approve {email}", key=f"A_{idx}"):
+            _send_access_email(email, app_url)
+            st.success(f"Sent approval email to {email}")
+
 
 import utils
 from data.client_mapping import (

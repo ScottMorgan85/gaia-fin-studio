@@ -61,7 +61,7 @@ groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 tabs = [
     "Default Overview", "Portfolio",
     "Commentary", "Client",
-    "Forecast Lab", "Recommendations", "Log"
+    "Forecast Lab", "Recommendations", "Log","Approvals"
 ]
 selected_tab = st.sidebar.radio("Navigate", tabs)
 
@@ -82,9 +82,11 @@ elif selected_tab == "Forecast Lab":
     pages.display_forecast_lab(selected_client, selected_strategy)
 elif selected_tab == "Recommendations":
     pages.display_recommendations(selected_client, selected_strategy, full_page=True)
-
 elif selected_tab == "Log":
     pages.display_recommendation_log()
+elif selected_tab == "Approvals":
+    pages.display_approvals("https://YOUR-APP-RUNNER-URL")
+
 else:
     st.error("Page not found")
 

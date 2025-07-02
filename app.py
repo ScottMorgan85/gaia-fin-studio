@@ -1,174 +1,84 @@
-
-## -----------------------------------------------------------------
-
 import streamlit as st
 import os
 import pandas as pd
-from data.client_mapping import get_client_names, get_client_info, client_strategy_risk_mapping, get_strategy_details
-import utils as utils
+from data.client_mapping import (
+    get_client_names, get_client_info,
+    client_strategy_risk_mapping, get_strategy_details
+)
+import utils
 from groq import Groq
 import pages
-import commentary as commentary
+import commentary
 
+# — Reset session state on start
 def reset_session_state():
-    for key in st.session_state.keys():
-        del st.session_state[key]
-
-reset_session_state()
+    for k in st.session_state.keys():
+        del st.session_state[k]
+if "reset_done" not in st.session_state:
+    reset_session_state()
+    st.session_state["reset_done"] = True
 
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
 
-# Include the custom CSS file
+# Load CSS
 with open('assets/styles.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-# Function to initialize themes and handle toggling
-def initialize_theme():
-    if "themes" not in st.session_state:
-        st.session_state.themes = {
-            "current_theme": "light",  # Start with light mode
-            "refreshed": True,
-            "light": {
-                "theme.base": "light",
-                "theme.backgroundColor": "#FFFFFF",  # White background for light mode
-                "theme.primaryColor": "#005A9C",  # Blue for text and highlights
-                "theme.secondaryBackgroundColor": "#2C3E50",  # Blue-gray sidebar for light mode
-                "theme.textColor": "#000000",  # Black text
-                "button_face": "🌑"  # Dark mode icon
-            },
-            "dark": {
-                "theme.base": "dark",
-                "theme.backgroundColor": "#000000",  # Black background for dark mode
-                "theme.primaryColor": "#FF9900",  # Orange for text and highlights
-                "theme.secondaryBackgroundColor": "#2C3E50",  # Darker blue-gray sidebar for dark mode
-                "theme.textColor": "#E0E0E0",  # Light gray text
-                "button_face": "🌕"  # Light mode icon
-            }
-        }
+# Sidebar: theme toggle (assume render_theme_toggle_button defined elsewhere)
+import pages
 
-def change_theme():
-    previous_theme = st.session_state.themes["current_theme"]
-    tdict = st.session_state.themes["dark"] if st.session_state.themes["current_theme"] == "light" else st.session_state.themes["light"]
-    for vkey, vval in tdict.items():
-        if vkey.startswith("theme"):
-            st._config.set_option(vkey, vval)
+# 1️⃣  ensure themes exist
+pages.initialize_theme()
 
-    st.session_state.themes["refreshed"] = False
-    st.session_state.themes["current_theme"] = "dark" if previous_theme == "light" else "light"
-    # Apply dark mode classes
-    st.markdown(f"<body class='{'dark-mode' if st.session_state.themes['current_theme'] == 'dark' else ''}'></body>", unsafe_allow_html=True)
-
-def render_theme_toggle_button():
-    theme_key = st.session_state.themes["current_theme"]
-    btn_face = st.session_state.themes["light"]["button_face"] if theme_key == "light" else st.session_state.themes["dark"]["button_face"]
-    button_key = f"theme_toggle_button_{theme_key}"
-    if st.sidebar.button(btn_face, on_click=change_theme, key=button_key):
-        if not st.session_state.themes["refreshed"]:
-            st.session_state.themes["refreshed"] = True
-            st.experimental_rerun()
-
-# Initialize the theme when this module is imported
-initialize_theme()
+# 2️⃣  then render the toggle button
+pages.render_theme_toggle_button()
 
 
-# Sidebar for client and model selection
+# Sidebar: client + model
 st.sidebar.title("Insight Central")
-
-# Render theme toggle button in the sidebar under the title
-render_theme_toggle_button()
-
-st.sidebar.markdown("### Client Selection")
-
-client_names = get_client_names()
-selected_client = st.sidebar.selectbox("Select Client", client_names)
-
-# Ensure that selected_strategy is a string
+client_names     = get_client_names()
+selected_client  = st.sidebar.selectbox("Select Client", client_names)
 selected_strategy = client_strategy_risk_mapping[selected_client]
 if isinstance(selected_strategy, dict):
-    selected_strategy = selected_strategy.get("strategy_name")  # Adjust this line based on the actual structure of your dictionary
+    selected_strategy = selected_strategy.get("strategy_name")
 
-# Model selection from utils (assuming utils has a function to get models)
-models = utils.get_model_configurations()
-model_option = st.sidebar.selectbox("Choose a model:", options=list(models.keys()), format_func=lambda x: models[x]["name"], index=0, key="model")
+models       = utils.get_model_configurations()
+model_option = st.sidebar.selectbox(
+    "Choose a model:", options=list(models.keys()),
+    format_func=lambda x: models[x]["name"], index=0
+)
 
-# Function to query Groq API
-def query_groq(query):
-    response = groq_client.chat.completions.create(
-        messages=[{"role": "user", "content": query}],
-        model='llama3-70b-8192',
-        max_tokens=8192
-    )
-    return response.choices[0].message.content
-
-# Load your data
-user_input = st.text_input("Ask me anything about your data or strategies")
-
-# Function to handle the chat input
-def handle_chat_input(input_text):
-    if "transactions" in input_text.lower():
-        strategy = "Equity"  # Example strategy, replace with dynamic input if necessary
-        result = utils.get_top_transactions(selected_strategy)
-        # Format the result as a string to send to Groq
-        data_str = result.to_string()
-        full_query = f"{input_text}\nHere is the relevant transaction data:\n{data_str}"
-        groq_response = query_groq(full_query)
-        st.write(groq_response)
-
-    elif "sector allocation" in input_text.lower():
-        strategy = "Equity"  # Example strategy
-        result = get_sector_allocations(sector_allocations, strategy)
-        data_str = f"Sector Allocation for {strategy}: {result}"
-        full_query = f"{input_text}\nHere is the relevant sector allocation data:\n{data_str}"
-        groq_response = query_groq(full_query)
-        return groq_response
-
-    else:
-        # Default behavior: route query to Groq without additional data
-        groq_response = query_groq(input_text)
-        return groq_response
-
-# Process the user input
-if user_input:
-    groq_response = handle_chat_input(user_input)
-     
-    # Collapsible section
-    with st.expander("Show Response", expanded=True):
-        st.write(groq_response)
-        
-        # Button to copy the results
-        if st.button("Copy Results"):
-            st.write("Results copied to clipboard!")  # This is a placeholder; Streamlit does not support clipboard functionality directly
-
-        # Button to clear the results
-        if st.button("Clear Answer"):
-            st.empty()  # This clears the output inside the expander
+# Groq client (if you need it globally)
+groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 # Navigation
-st.sidebar.markdown("### Navigation")
-selected_tab = st.sidebar.radio("Navigate", ["Default Overview", "Portfolio", "Commentary", "Client"])
+tabs = [
+    "Default Overview", "Portfolio",
+    "Commentary", "Client",
+    "Forecast Lab", "Recommendations", "Log"
+]
+selected_tab = st.sidebar.radio("Navigate", tabs)
 
-# Get client strategy details
-strategy_details = get_strategy_details(selected_client)
-if strategy_details:
-    # Display strategy description in smaller text at the bottom of the sidebar
-    st.sidebar.markdown("<br>", unsafe_allow_html=True)  # Adds space before the description
-    st.sidebar.markdown(f"<small>**Strategy Name:** {strategy_details['strategy_name']}</small>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"<small>**Benchmark:** {strategy_details['benchmark']}</small>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"<small>**Strategy Description:** {strategy_details['description']}</small>", unsafe_allow_html=True)
-else:
-    st.sidebar.error("Client strategy details not found.")
-
-# Main page content based on the selected tab
+# Route
 if selected_tab == "Default Overview":
+    pages.display_recommendations(selected_client, selected_strategy, full_page=False)
     pages.display_market_commentary_and_overview(selected_strategy)
 elif selected_tab == "Portfolio":
     pages.display_portfolio(selected_client, selected_strategy)
 elif selected_tab == "Commentary":
-    commentary_text = commentary.generate_investment_commentary(model_option, selected_client, selected_strategy, models)
-    pages.display(commentary_text, selected_client, model_option, selected_strategy)
+    text = commentary.generate_investment_commentary(
+        model_option, selected_client, selected_strategy, models
+    )
+    pages.display(text, selected_client, model_option, selected_strategy)
 elif selected_tab == "Client":
-    interactions = utils.get_interactions_by_client(selected_client)
     pages.display_client_page(selected_client)
+elif selected_tab == "Forecast Lab":
+    pages.display_forecast_lab(selected_client, selected_strategy)
+elif selected_tab == "Recommendations":
+    pages.display_recommendations(selected_client, selected_strategy, full_page=True)
+
+elif selected_tab == "Log":
+    pages.display_recommendation_log()
 else:
     st.error("Page not found")
 

@@ -1,5 +1,11 @@
 import streamlit as st
 import os
+
+if os.environ.get("GAIA_GATE_ON") == "true":
+    import landing
+    landing.render_form()        # function inside landing.py
+    st.stop()
+
 import pandas as pd
 from data.client_mapping import (
     get_client_names, get_client_info,

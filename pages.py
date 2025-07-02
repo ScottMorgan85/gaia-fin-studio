@@ -236,7 +236,7 @@ def _styled_price_df(df: pd.DataFrame):
     )
 
 
-def display_market_commentary_and_overview(selected_strategy):
+def display_market_commentary_and_overview(selected_strategy, display_df: bool = True):
     import datetime
 
     # ---------- header + DTD commentary ----------
@@ -255,60 +255,47 @@ def display_market_commentary_and_overview(selected_strategy):
         st.markdown(dtd)
 
     # ───────────────────────────────────────────────────────── Market Overview
-    st.title("Market Overview")
-    col1, col2, col3, col4 = st.columns(4)
 
-    for col, tkr, nm in zip(
-        (col1, col2, col3, col4),
-        ["^GSPC", "EFA", "AGG", "^DJCI"],
-        ["S&P 500", "MSCI EAFE", "U.S. Aggregate", "DJ Commodity"],
-    ):
-        with col:
-            _plot_price_bar(tkr, nm)
-
-    # -------------------- Two core tables ----------------------------------
-    col1, col2, col3, col4 = st.columns(4)
-    for col, tkr, nm in zip(
-        (col1, col2, col3, col4),
-        ["^GSPC", "EFA", "AGG", "^DJCI"],
-        ["S&P 500", "MSCI EAFE", "U.S. Aggregate", "DJ Commodity"],
-    ):
-        with col:
-            _asset_panel(tkr, nm)
-
+   # Market Overview Section
+    st.title('Market Overview')
+    col_stock1, col_stock_2, col_stock_3, col_stock_4 = st.columns(4)
+    
+    # Display candlestick plots for major indices
+    with col_stock1:
+        utils.create_candle_stick_plot(stock_ticker_name="^GSPC", stock_name="S&P 500")
+    with col_stock_2:
+        utils.create_candle_stick_plot(stock_ticker_name="EFA", stock_name="MSCI EAFE")
+    with col_stock_3:
+        utils.create_candle_stick_plot(stock_ticker_name="AGG", stock_name="U.S. Aggregate Bond")
+    with col_stock_4:
+        utils.create_candle_stick_plot(stock_ticker_name="^DJCI", stock_name="Dow Jones Commodity Index ")
+   
+    # Tech Stocks Overview
+    col_sector1, col_sector2 = st.columns(2)
     with col_sector1:
         st.subheader("Emerging Markets Equities")
-        em_list = ["0700.HK", "005930.KS", "7203.T", "HSBC", "NSRGY", "SIEGY"]
+        em_list = ["0700.HK",  # Tencent Holdings Ltd.
+                      "005930.KS",  # Samsung Electronics Co., Ltd.
+                      "7203.T",  # Toyota Motor Corporation
+                      "HSBC",  # HSBC Holdings plc
+                      "NSRGY",  # Nestle SA ADR
+                      "SIEGY"]  # Siemens AG ADR
         em_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
-        df_em = _safe_stock_df(em_list, em_name)
-        st.dataframe(_styled_price_df(df_em), use_container_width=True)
-
+        df_em_stocks = utils.create_stocks_dataframe(em_list, em_name)
+        # utils.create_dateframe_view(df_em_stocks)
+        if display_df:
+            utils.create_dateframe_view(df_em_stocks)
+        
+    # Fixed Income Overview
     with col_sector2:
         st.subheader("Fixed Income Overview")
-        fi_list = ["AGG", "HYG", "TLT", "MBB", "EMB", "BKLN"]
-        fi_name = [
-            "US Aggregate", "High Yield Corp", "Long Treasury",
-            "Mortgage-Backed", "EM Bond", "Leveraged Loan"
-        ]
-        df_fi = _safe_stock_df(fi_list, fi_name)
-        st.dataframe(_styled_price_df(df_fi), use_container_width=True)
+        fi_list = ["AGG", "HYG", "TLT", "MBB", "EMB","BKLN"]
+        fi_name = ["US Aggregate", "High Yield Corporate", "Long Treasury", "Mortgage-Backed", "Emerging Markets Bond","U.S. Leveraged Loan"]
+        df_fi = utils.create_stocks_dataframe(fi_list, fi_name)
+        if display_df:
+            utils.create_dateframe_view(df_fi)
 
-    # -------------------- Extra tables for broader insight -----------------
-    # Europe sector ETFs – useful diversification outside the US
-    st.subheader("Europe Sector ETFs")
-    eu_list = ["EZU", "FEZ", "IEUR", "VGK"]          # broad & euro-area trackers
-    eu_name = ["Eurozone", "Euro STOXX-50", "Core Europe", "Vanguard Europe"]
-    df_eu   = _safe_stock_df(eu_list, eu_name)
-    st.dataframe(_styled_price_df(df_eu), use_container_width=True)
-
-    # Commodities – inflation hedge & real-asset exposure
-    st.subheader("Commodities Watch")
-    cmd_list = ["GLD", "SLV", "DBC", "USO"]          # gold, silver, broad, crude
-    cmd_name = ["Gold", "Silver", "Broad Cmdty", "WTI Crude"]
-    df_cmd   = _safe_stock_df(cmd_list, cmd_name)
-    st.dataframe(_styled_price_df(df_cmd), use_container_width=True)
-
-    return df_em, df_fi
+    return df_em_stocks, df_fi
 
 #─────────────────────────────────────────────────────────────────────────────
 # Portfolio Page

@@ -1,4 +1,4 @@
-timestamp,client,strategy,category,card_id,title,decision
-2025-06-30T06:09:06,Warren Miller,Equity,client,client_generic,Client Review Note,Reject
-2025-06-30T06:09:29,Warren Miller,Equity,market,market_generic,Market Update,Accept
+timestamp,client,strategy,category,card_id,title,decision,ml_score
+2025-06-30T06:09:06,Warren Miller,Equity,client,client_generic,Client Review Note,Reject,
+2025-06-30T06:09:29,Warren Miller,Equity,market,market_generic,Market Update,Accept,
 2025-06-30T06:35:34,David Brown,Long Short High Yield Bond,idea,idea_7,Add 30% into IG Corp credit,Accept,0.779

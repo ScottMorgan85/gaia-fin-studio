@@ -3,6 +3,8 @@ streamlit==1.36.0
 pandas>=2.2,<3.0
 numpy>=1.26,<2.0
 python-dateutil>=2.9
+reportlab
+
 
 # charts / viz
 plotly>=5.22

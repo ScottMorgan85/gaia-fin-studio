@@ -14,13 +14,15 @@ def _publish_to_sns(topic_arn: str, payload: dict) -> bool:
         st.error(f"Could not notify admin: {e.response['Error']['Message']}")
         return False
 
-
 def render_form() -> None:
     """Render the access‑request form. Call this at top of app.py when GAIA_GATE_ON=true."""
-    st.title("GAIA Dashboard — Request Access")
+    st.title("GAIA Dashboard — Request Access")
     st.markdown("""
     Please leave your details. We’ll review and send you an access link.
     """)
+
+    # ✅ Always initialize ok so it's defined
+    ok = False
 
     with st.form("request_form", clear_on_submit=True):
         name  = st.text_input("Your name", max_chars=50)
@@ -38,9 +40,10 @@ def render_form() -> None:
             return
 
         ok = _publish_to_sns(topic_arn, {"name": name, "email": email})
+
     if ok:
         import utils
         utils.log_visitor({"name": name, "email": email})
-        st.success("Thanks! We will email you an access link once approved.")
+        st.success("✅ Thanks! We will email you an access link once approved.")
         st.balloons()
 

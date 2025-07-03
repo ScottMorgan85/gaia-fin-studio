@@ -1,0 +1,42 @@
+name: GAIA App Runner Deploy
+
+on:
+  push:
+    branches:
+      - main  # ⚡️ Triggers this workflow when you push to main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      ECR_REPOSITORY: gaia-fin-studio
+      APP_RUNNER_SERVICE_ARN: arn:aws:apprunner:us-east-1:567384985952:service/gaia-groq-dashboard/4dcbc22c4a4340e48c8c98fbd0a3fab1
+
+    steps:
+      - name: ✅ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ✅ Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ✅ Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: ✅ Build, tag, and push image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t gaia-local .
+          docker tag gaia-local:latest $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: ✅ Trigger App Runner deployment
+        run: |
+          aws apprunner start-deployment --service-arn ${{ env.APP_RUNNER_SERVICE_ARN }}

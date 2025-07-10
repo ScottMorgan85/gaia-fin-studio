@@ -5,6 +5,7 @@ pandas>=2.2,<3.0
 numpy>=1.26,<2.0
 python-dateutil>=2.9
 reportlab>=4.0,<5.0
+pandas-datareader>=0.10
 
 # ── viz ──────────────────────────────
 plotly>=5.22
@@ -14,8 +15,7 @@ yfinance>=0.2
 # ── RL / data ────────────────────────
 gymnasium>=1.1,<2.0
 stable-baselines3>=2.6,<3.0
-torch==2.2.0+cpu
-pandas-datareader>=0.10
+torch==2.3.0+cpu
 
 --extra-index-url https://download.pytorch.org/whl/cpu
 

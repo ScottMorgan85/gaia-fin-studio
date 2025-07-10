@@ -1,22 +1,22 @@
-name: GAIA App Runner Deploy
+# name: GAIA App Runner Deploy
 
-on:
-  push:
-    branches:
-      - main  # ⚡️ Triggers this workflow when you push to main
+# on:
+#   push:
+#     branches:
+#       - main  # ⚡️ Triggers this workflow when you push to main
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
 
-    env:
-      AWS_REGION: us-east-1
-      ECR_REPOSITORY: gaia-fin-studio
-      APP_RUNNER_SERVICE_ARN: arn:aws:apprunner:us-east-1:567384985952:service/gaia-groq-dashboard/4dcbc22c4a4340e48c8c98fbd0a3fab1
+#     env:
+#       AWS_REGION: us-east-1
+#       ECR_REPOSITORY: gaia-fin-studio
+#       APP_RUNNER_SERVICE_ARN: arn:aws:apprunner:us-east-1:567384985952:service/gaia-groq-dashboard/4dcbc22c4a4340e48c8c98fbd0a3fab1
 
-    steps:
-      - name: ✅ Checkout repo
-        uses: actions/checkout@v3
+#     steps:
+#       - name: ✅ Checkout repo
+#         uses: actions/checkout@v3
 
       - name: ✅ Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

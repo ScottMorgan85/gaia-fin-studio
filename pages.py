@@ -455,6 +455,8 @@ def display_forecast_lab(selected_client, selected_strategy):
             s = s.resample("Q").last().pct_change().dropna()
         macro_series[label] = s
     macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
+    macro["CPI YoY"] = macro["CPI YoY"] / 100  # convert to decimal
+    macro["Fed-Funds"] = macro["Fed-Funds"] / 100  # convert to decimal
 
     st.markdown("""
     *Why these inputs:*  
@@ -490,6 +492,7 @@ def display_forecast_lab(selected_client, selected_strategy):
     # device = "cuda" if use_gpu else "cpu"
     use_gpu = st.checkbox("Use GPU (CUDA)", False)      # ← default = False for AWS
     device  = "cuda" if use_gpu else "cpu"
+    st.info("⚡️ GPU acceleration is not available in this environment. Running on CPU only.")
     model = DQN("MlpPolicy", env, verbose=0, device=device)
     model.learn(total_timesteps=10_000, progress_bar=False)
 
@@ -686,27 +689,49 @@ def _show_recommendation_analytics():
     import pandas as pd
     import numpy as np
     from datetime import datetime, timedelta
+    import streamlit as st
+    import plotly.express as px
 
     st.markdown("---")
     st.subheader("📈 Hypothetical Performance Impact (last 6 months)")
 
-    # ----- fabricate time-series ------------------------------------------------
+    # ----- Fabricate time-series ------------------------------------------------
     buckets = ["Accepted-Good", "Accepted-Bad", "Ignored-Good", "Ignored-Bad"]
     days = pd.date_range(
         datetime.today().date() - timedelta(days=180),
         periods=181,
         freq="D",
     )
+    
     np.random.seed(42)
+    
+    # Simulate tiny daily moves, slightly positive for Good, negative for Bad
     data = {
-        b: (1 + np.random.normal(0.00035 if "Good" in b else -0.00025, 0.0025, len(days))).cumprod()
+        b: (1 + np.random.normal(
+                0.00035 if "Good" in b else -0.00025,
+                0.0025,
+                len(days))
+            ).cumprod()
         for b in buckets
     }
+    
     perf = pd.DataFrame(data, index=days)
-
-    # cumulative line chart
-    st.line_chart(perf)
-
+    
+    # ----- Plotly line chart with y-axis range -----------------------------------
+    fig = px.line(
+        perf,
+        title="📈 Hypothetical Performance Impact (last 6 months)",
+        labels={"value": "Cumulative Return", "index": "Date", "variable": "Bucket"}
+    )
+    
+    fig.update_layout(
+        yaxis_range=[0.8, 1.2],  # force y-axis to show more relative change
+        yaxis_title="Cumulative Performance",
+        xaxis_title="Date",
+        legend_title="Bucket"
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
     # ----- bar chart of final returns ------------------------------------------
     final_ret = perf.iloc[-1] - 1
     st.bar_chart(final_ret.to_frame(name="Return"))

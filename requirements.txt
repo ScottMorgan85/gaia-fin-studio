@@ -13,9 +13,9 @@ yfinance>=0.2
 
 # ── RL / data ────────────────────────
 gymnasium>=1.1,<2.0
-stable-baselines3>=2.6,<3.0
+pip install stable-baselines3 --index-url https://download.pytorch.org/whl/cpu
 pandas-datareader>=0.10
-torch>=2.7,<3.0
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 # ── LLM / API ────────────────────────
 groq>=0.9

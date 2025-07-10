@@ -3,47 +3,64 @@ import json
 import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import csv
 
-def _publish_to_sns(topic_arn: str, payload: dict) -> bool:
-    """Send the payload to an SNS topic. Return True if published."""
-    try:
-        client = boto3.client("sns", region_name=os.environ.get("AWS_REGION", "us-east-1"))
-        client.publish(TopicArn=topic_arn, Message=json.dumps(payload))
-        return True
-    except ClientError as e:
-        st.error(f"Could not notify admin: {e.response['Error']['Message']}")
-        return False
+# ── Visitor log helper ───────────────────────────────
+def log_visitor(payload: dict):
+    """
+    Append visitor request to a CSV log.
+    """
+    with open("visitor_log.csv", "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([datetime.now(), payload["name"], payload["email"]])
 
-def render_form() -> None:
-    """Render the access‑request form. Call this at top of app.py when GAIA_GATE_ON=true."""
-    st.title("GAIA Dashboard — Request Access")
-    st.markdown("""
-    Please leave your details. We’ll review and send you an access link.
-    """)
 
-    # ✅ Always initialize ok so it's defined
-    ok = False
+# ── Request Access Form ──────────────────────────────
+def render_request_form():
+    st.title("🚪 Request Access — GAIA Dashboard")
+    st.write("Please enter your details. We'll review and approve you if eligible!")
 
-    with st.form("request_form", clear_on_submit=True):
-        name  = st.text_input("Your name", max_chars=50)
-        email = st.text_input("Email address", max_chars=100)
-        submitted = st.form_submit_button("Request access →")
+    name = st.text_input("Your name", max_chars=50)
+    email = st.text_input("Email address", max_chars=100)
+    submitted = st.button("Request Access →")
 
     if submitted:
         if not name or not email or "@" not in email:
             st.warning("Please enter a valid name and email.")
             return
 
-        topic_arn = os.environ.get("SNS_TOPIC_ARN")
-        if not topic_arn:
-            st.error("SNS_TOPIC_ARN not configured in environment variables.")
-            return
-
-        ok = _publish_to_sns(topic_arn, {"name": name, "email": email})
-
-    if ok:
-        import utils
-        utils.log_visitor({"name": name, "email": email})
-        st.success("✅ Thanks! We will email you an access link once approved.")
+        log_visitor({"name": name, "email": email})
+        st.success("✅ Thanks! We'll review your request and email you once approved.")
         st.balloons()
 
+
+# ── Sign-In Form ─────────────────────────────────────
+def check_access(name: str, email: str) -> bool:
+    try:
+        df = pd.read_csv("visitor_log.csv")
+        match = df[
+            (df[1].str.lower() == name.lower()) &
+            (df[2].str.lower() == email.lower())
+        ]
+        return not match.empty
+    except FileNotFoundError:
+        return False
+
+
+def render_sign_in():
+    st.title("🔑 Sign In — GAIA Dashboard")
+
+    name = st.text_input("Your name", key="sign_in_name")
+    email = st.text_input("Email address", key="sign_in_email")
+
+    if st.button("Sign In →"):
+        if check_access(name, email):
+            st.session_state["signed_in"] = True
+            st.session_state["user_name"] = name
+            st.session_state["user_email"] = email
+            st.success(f"✅ Welcome back, {name}!")
+        else:
+            st.error("❌ Not found. Please request access first.")

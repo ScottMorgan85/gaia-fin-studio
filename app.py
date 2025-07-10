@@ -1,9 +1,16 @@
 import streamlit as st
 import os
 
-if os.environ.get("GAIA_GATE_ON") == "true":
-    import landing
-    landing.render_form()        # function inside landing.py
+# ── GAIA Gate Logic ──────────────────────────────────
+if os.environ.get("GAIA_GATE_ON", "true").lower() == "true":
+    if st.session_state.get("signed_in"):
+        st.success("✅ Access granted! Loading dashboard...")
+    else:
+        st.sidebar.info("🔐 GAIA Gate is ON")
+        if st.toggle("🔑 Already Approved?"):
+            landing.render_sign_in()
+        else:
+            landing.render_request_form()
     st.stop()
 
 import pandas as pd

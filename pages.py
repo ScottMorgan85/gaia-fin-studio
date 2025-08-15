@@ -22,10 +22,11 @@ from typing import Optional, Dict, Mapping, Tuple, Any
 import math
 import sys
 import io
-import time
 import typing as T
 from dataclasses import dataclass
 import utils
+import time, random
+
 
 
 LOG_PATH = "data/visitor_log.csv"
@@ -55,6 +56,41 @@ def _format_pct(value):
     except Exception:
         return value
 
+def _chat_with_retries(client, *, messages, model, max_tokens, temperature=0.3,
+                       retries=5, base_delay=1.0, max_delay=16.0):
+    """
+    Retry Groq chat.completions on transient errors like 503.
+    """
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            return client.chat.completions.create(
+                messages=messages,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        except Exception as e:
+            txt = str(e)
+            transient = ("503" in txt) or ("Service unavailable" in txt) or ("timeout" in txt.lower())
+            if not transient or attempt == retries:
+                raise
+            delay = min(max_delay, base_delay * (2 ** (attempt - 1))) + random.uniform(0, 0.25)
+            time.sleep(delay)
+            last_err = e
+    if last_err:
+        raise last_err
+
+def _fallback_dtd_commentary(selected_strategy: str) -> str:
+    # Keep this lightweight and deterministic so the page still renders.
+    # You can later enrich this with local data if you want (e.g., benchmark_returns.xlsx).
+    return (
+        f"**{selected_strategy} — Daily Market Note (Fallback)**\n\n"
+        "- Groq LLM is currently unavailable, so this is a brief standby summary.\n"
+        "- Markets were mixed as investors weighed macro data and earnings dispersion.\n"
+        "- Portfolio positioning remains aligned with the stated risk profile and benchmark.\n"
+        "- We will refresh this section automatically once the service is back online."
+    )
 
 
 def _send_access_email(email: str, app_url: str):
@@ -203,22 +239,80 @@ def _asset_panel(ticker: str, name: str):
 #─────────────────────────────────────────────────────────────────────────────
 # Default Overview & DTD Commentary
 #─────────────────────────────────────────────────────────────────────────────
-def generate_dtd_commentary(selected_strategy):
-    commentary_prompt = f"""
-Generate 3 bullet points on day-to-day performance for {selected_strategy} based
-on recent events. Just bullets, no intro line.
-"""
+def generate_dtd_commentary(selected_strategy: str) -> str:
+
     from groq import Groq
-    client = Groq(api_key=os.environ.get("GROQ_API_KEY",""))
-    resp = client.chat.completions.create(
-        messages=[
-            {"role":"system","content":commentary_prompt},
-            {"role":"user","content": "Generate DTD performance commentary."}
-        ],
-        model="llama3-70b-8192",
-        max_tokens=512
-    )
-    return resp.choices[0].message.content
+
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    client = Groq(api_key=groq_api_key)
+
+    # Prelude + request (exactly as asked)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an investment strategist creating a brief, same-day market note. "
+                "Start with exactly this prelude on its own line:\n"
+                f"Here is a concise DTD (Day-To-Day) commentary for {selected_strategy}:\n"
+                f"{selected_strategy}:"
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Write 6–8 crisp bullet points. No fluff. "
+                "Keep it factual, market-aware, and portfolio-relevant. "
+                "Avoid apologies or provider mentions."
+            ),
+        },
+    ]
+
+
+    model = "llama3-70b-8192"  # or whichever you’re using
+    max_tokens = 512
+
+    # Hidden retry: only enabled when the bottom-page button is pressed
+    do_retry = bool(st.session_state.get("retry_dtd", False))
+    st.session_state["retry_dtd"] = False  # consume the flag
+
+    try:
+        resp = _chat_with_retries(
+            client,
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=0.3,
+            retries=(5 if do_retry else 1),
+            base_delay=1.0,
+            max_delay=8.0,
+        )
+        return resp.choices[0].message.content
+    except Exception as e:
+        txt = str(e)
+        transient = ("503" in txt) or ("service unavailable" in txt.lower()) or ("timeout" in txt.lower())
+        if transient:
+            st.warning("Live commentary temporarily unavailable. Showing a fallback version.")
+            return _fallback_dtd_commentary(selected_strategy)
+        st.error(f"Error generating commentary: {txt}")
+        return _fallback_dtd_commentary(selected_strategy)
+
+
+# def generate_dtd_commentary(selected_strategy):
+#     commentary_prompt = f"""
+# Generate 3 bullet points on day-to-day performance for {selected_strategy} based
+# on recent events. Just bullets, no intro line.
+# """
+#     from groq import Groq
+#     client = Groq(api_key=os.environ.get("GROQ_API_KEY",""))
+#     resp = client.chat.completions.create(
+#         messages=[
+#             {"role":"system","content":commentary_prompt},
+#             {"role":"user","content": "Generate DTD performance commentary."}
+#         ],
+#         model="llama3-70b-8192",
+#         max_tokens=512
+#     )
+#     return resp.choices[0].message.content
 
 def _plot_price_bar(ticker: str, name: str):
     """
@@ -372,6 +466,13 @@ def display_market_commentary_and_overview(selected_strategy, display_df: bool =
             utils.create_dateframe_view(df_fi)
 
     return df_em_stocks, df_fi
+
+    # ── low-visibility retry control at the very bottom ─────────────────────
+    with st.expander("More options"):
+        st.caption("If the live commentary was unavailable earlier, you can try to refresh it now.")
+        if st.button("↻ Try again now", help="Retries the live DTD request (hidden control)"):
+            st.session_state["retry_dtd"] = True
+            st.rerun()
 
 #─────────────────────────────────────────────────────────────────────────────
 # Portfolio Page

@@ -1,5 +1,7 @@
 # 📈 GAIA: Generative AI Investment Analytics
 
+https://gaia-fin-studio-umumr.ondigitalocean.app/
+
 > **Free your data. Own your insights. Customize your edge.**
 
 **GAIA** is built to **showcase the power of open‑source LLMs and a Python-native analytics stack** as a practical alternative to expensive, inflexible vendor platforms such as **Bloomberg**, **FactSet**, **PitchBook**, **Morningstar Direct**, **Capital IQ**, and **YCharts**.  

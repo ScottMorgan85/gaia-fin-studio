@@ -1,16 +1,12 @@
 import streamlit as st
 import os
+import landing  # ← add this import
 
-# ── GAIA Gate Logic ──────────────────────────────────
-if os.environ.get("GAIA_GATE_ON", "true").lower() == "true":
-    if st.session_state.get("signed_in"):
-        st.success("✅ Access granted! Loading dashboard...")
-    else:
-        st.sidebar.info("🔐 GAIA Gate is ON")
-        if st.toggle("🔑 Already Approved?"):
-            landing.render_sign_in()
-        else:
-            landing.render_request_form()
+# ── GAIA Gate Logic (simple two-field gate) ────────────────────────────────
+GATE_ON = os.environ.get("GAIA_GATE_ON", "true").lower() == "true"
+
+if GATE_ON and not st.session_state.get("signed_in", False):
+    landing.render_gate()     # ← single, simple form (name + email)
     st.stop()
 
 import pandas as pd
@@ -23,13 +19,17 @@ from groq import Groq
 import pages
 import commentary
 
-# — Reset session state on start
+# — Reset session state on start (preserve sign-in)
 def reset_session_state():
-    for k in st.session_state.keys():
-        del st.session_state[k]
+    keep = {"signed_in", "user_name", "user_email", "reset_done"}
+    for k in list(st.session_state.keys()):
+        if k not in keep:
+            del st.session_state[k]
+
 if "reset_done" not in st.session_state:
     reset_session_state()
     st.session_state["reset_done"] = True
+
 
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
 
@@ -67,7 +67,7 @@ groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 # Navigation
 tabs = [
     "Default Overview", "Portfolio",
-    "Commentary", "Client",
+    "Commentary", "Client", "Scenario Allocator",
     "Forecast Lab", "Recommendations", "Log","Approvals"
 ]
 selected_tab = st.sidebar.radio("Navigate", tabs)
@@ -80,11 +80,12 @@ elif selected_tab == "Portfolio":
     pages.display_portfolio(selected_client, selected_strategy)
 elif selected_tab == "Commentary":
     text = commentary.generate_investment_commentary(
-        model_option, selected_client, selected_strategy, models
-    )
+        model_option, selected_client, selected_strategy, models)
     pages.display(text, selected_client, model_option, selected_strategy)
 elif selected_tab == "Client":
     pages.display_client_page(selected_client)
+elif selected_tab == "Scenario Allocator":
+    pages.display_scenario_allocator(selected_client, selected_strategy)
 elif selected_tab == "Forecast Lab":
     pages.display_forecast_lab(selected_client, selected_strategy)
 elif selected_tab == "Recommendations":

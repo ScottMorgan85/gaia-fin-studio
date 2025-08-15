@@ -23,6 +23,33 @@ from groq import Groq
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
+DEFAULT_FILE_PATH = "data/client_transactions.csv"
+
+def supports_transaction_period_filtering(file_path: str = DEFAULT_FILE_PATH) -> bool:
+    """Return True if the transactions dataset appears to support month-end filtering.
+    We detect this by the presence of a recognizable date column with any non-null date values.
+    """
+    try:
+        df = pd.read_csv(file_path, nrows=200)
+    except Exception:
+        return False
+    date_cols = [c for c in df.columns if c.lower() in ["date", "transaction date", "trade date", "asof", "as_of_date"]]
+    if not date_cols:
+        return False
+    dcol = date_cols[0]
+    s = pd.to_datetime(df[dcol], errors="coerce")
+    return s.notna().sum() > 0
+
+
+
+def get_model_configurations():
+    return {
+        "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
+        "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
+        "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
+        "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
+    }
+
 LOG_PATH = "data/visitor_log.csv"
 
 def log_visitor(payload):
@@ -38,13 +65,34 @@ def log_visitor(payload):
             writer.writeheader()
         writer.writerow(row)
 
-def get_model_configurations():
-    return {
-        "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
-        "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
-        "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
-        "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
-    }
+# --- Robust client listing for batch jobs ------------------------------------
+def list_clients() -> list[str]:
+    """
+    Return a list of client names from the primary mapping, with graceful fallbacks.
+    Order is preserved from the primary source when available.
+    """
+    # 1) Primary: data.client_mapping.get_client_names()
+    try:
+        from data.client_mapping import get_client_names  # same module used by app/pages
+        names = list(get_client_names())
+        if names:
+            return names
+    except Exception:
+        pass
+
+    # 2) Fallback: data.client_central_fact.fact_table (if loaded in memory)
+    try:
+        # fact_data is already imported in utils.py
+        names = sorted({row["client_name"] for row in fact_data.fact_table if "client_name" in row})
+        if names:
+            return names
+    except Exception:
+        pass
+
+    # 3) Nothing found
+    return []
+
+
 def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
     df = pd.read_excel(file_path)
     df['as_of_date'] = pd.to_datetime(df['as_of_date'])
@@ -67,26 +115,119 @@ def load_client_data(client_id):
         data['client_name'] = "Unknown Client"
     return data
 
+def get_client_strategy_details(client_name: str):
+    """
+    Look up the latest strategy details for a client from client_fact_table.xlsx.
+    Prints a brief summary (for logs) and returns the strategy name (string) if found, else None.
+    """
+    path = "data/client_fact_table.xlsx"
+    try:
+        fact = pd.read_excel(path)
+    except Exception:
+        return None
 
-def get_client_strategy_details(client_name):
-    details = client_mapping.get_strategy_details(client_name)
-    if details:
-        print(f"Client Name: {details['client_name']}")
-        print(f"Strategy Name: {details['strategy_name']}")
-        print(f"Description: {details['description']}")
-        print(f"Benchmark: {details['benchmark']}")
-        print(f"Risk: {details['risk']}")
-        return details['strategy_name'] 
-    else:
+    dfc = fact[fact["client_name"].astype(str).str.strip().str.casefold() == str(client_name).strip().casefold()].copy()
+    if dfc.empty:
         print("Client not found or no details available.")
-    return details
+        return None
+
+    if "as_of_date" in dfc.columns:
+        dfc["as_of_date"] = pd.to_datetime(dfc["as_of_date"], errors="coerce")
+        dfc = dfc.sort_values("as_of_date", ascending=False)
+    row = dfc.iloc[0]
+
+    details = {
+        'client_name': row.get('client_name', client_name),
+        'strategy_name': row.get('client_strategy', None),
+        'description': row.get('description', ''),  # optional/not present in data
+        'benchmark': row.get('benchmark', None),
+        'risk': row.get('risk_profile', None),
+    }
+
+    print(f"Client Name: {details['client_name']}")
+    print(f"Strategy Name: {details['strategy_name']}")
+    print(f"Description: {details['description']}")
+    print(f"Benchmark: {details['benchmark']}")
+    print(f"Risk: {details['risk']}")
+
+    return details['strategy_name']
+
+# def get_client_strategy_details(client_name):
+#     details = client_mapping.get_strategy_details(client_name)
+#     if details:
+#         print(f"Client Name: {details['client_name']}")
+#         print(f"Strategy Name: {details['strategy_name']}")
+#         print(f"Description: {details['description']}")
+#         print(f"Benchmark: {details['benchmark']}")
+#         print(f"Risk: {details['risk']}")
+#         return details['strategy_name'] 
+#     else:
+#         print("Client not found or no details available.")
+#     return details
+
+
+# def load_trailing_returns(client_name):
+#     client_info = client_mapping.get_client_info(client_name)
+#     if not client_info:
+#         return None
+
+#     client_id = client_info['client_id']
+#     trailing_columns = {
+#         'port_selected_quarter_return': 'Quarter',
+#         'bench_selected_quarter_return': 'Benchmark Quarter',
+#         'port_1_year_return': '1 Year',
+#         'bench_1_year_return': 'Benchmark 1 Year',
+#         'port_3_years_return': '3 Years',
+#         'bench_3_years_return': 'Benchmark 3 Years',
+#         'port_5_years_return': '5 Years',
+#         'bench_5_years_return': 'Benchmark 5 Years',
+#         'port_10_years_return': '10 Years',
+#         'bench_10_years_return': 'Benchmark 10 Years',
+#         'port_since_inception_return': 'Since Inception',
+#         'bench_since_inception_return': 'Benchmark Since Inception'
+#     }
+    
+#     trailing_returns = [entry for entry in fact_data.fact_table if entry['client_id'] == client_id]
+#     if not trailing_returns:
+#         return None
+
+#     # Create DataFrame with portfolio returns and benchmark returns combined
+#     combined_data = []
+#     period_names = {
+#         'port_selected_quarter_return': 'Quarter',
+#         'port_1_year_return': '1 Year',
+#         'port_3_years_return': '3 Years',
+#         'port_5_years_return': '5 Years',
+#         'port_10_years_return': '10 Years',
+#         'port_since_inception_return': 'Since Inception'
+#     }
+    
+#     for port_col, period in period_names.items():
+#         bench_col = port_col.replace('port', 'bench')
+#         port_value = float(trailing_returns[0][port_col])
+#         bench_value = float(trailing_returns[0][bench_col])
+#         active_value = port_value - bench_value
+#         combined_data.append([period, port_value, bench_value, active_value])
+
+#     # Convert to DataFrame
+#     combined_df = pd.DataFrame(combined_data, columns=['Period', 'Return', 'Benchmark', 'Active'])
+#     combined_df.set_index('Period', inplace=True)
+
+#     return combined_df
 
 def load_trailing_returns(client_name):
+    """
+    ORIGINAL STATIC IMPLEMENTATION (restored):
+    - Uses client_mapping + fact_data.fact_table (not Excel) to build trailing returns.
+    - Returns a DataFrame indexed by Period with columns: Return, Benchmark, Active.
+    """
     client_info = client_mapping.get_client_info(client_name)
     if not client_info:
         return None
 
     client_id = client_info['client_id']
+
+    # Column maps retained for clarity (unused directly but documents expectations)
     trailing_columns = {
         'port_selected_quarter_return': 'Quarter',
         'bench_selected_quarter_return': 'Benchmark Quarter',
@@ -101,12 +242,13 @@ def load_trailing_returns(client_name):
         'port_since_inception_return': 'Since Inception',
         'bench_since_inception_return': 'Benchmark Since Inception'
     }
-    
+
+    # Filter fact table for this client
     trailing_returns = [entry for entry in fact_data.fact_table if entry['client_id'] == client_id]
     if not trailing_returns:
         return None
 
-    # Create DataFrame with portfolio returns and benchmark returns combined
+    # Build combined rows
     combined_data = []
     period_names = {
         'port_selected_quarter_return': 'Quarter',
@@ -116,7 +258,7 @@ def load_trailing_returns(client_name):
         'port_10_years_return': '10 Years',
         'port_since_inception_return': 'Since Inception'
     }
-    
+
     for port_col, period in period_names.items():
         bench_col = port_col.replace('port', 'bench')
         port_value = float(trailing_returns[0][port_col])
@@ -124,14 +266,10 @@ def load_trailing_returns(client_name):
         active_value = port_value - bench_value
         combined_data.append([period, port_value, bench_value, active_value])
 
-    # Convert to DataFrame
     combined_df = pd.DataFrame(combined_data, columns=['Period', 'Return', 'Benchmark', 'Active'])
     combined_df.set_index('Period', inplace=True)
 
     return combined_df
-
-
-
 
 
 def create_state_variable(key: str, default_value: any) -> None:
@@ -585,10 +723,37 @@ def create_download_link(val, filename):
     return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}.pdf">Download file</a>'
 
 
-def load_client_data_csv(client_name):
-    # Load client data for the given client name
-    client_data = pd.read_csv('./data/client_data.csv')
-    return client_data[client_data['client_name'] == client_name]
+def load_client_data_csv(selected_client: str):
+    # Demo loader that returns a one-row client summary
+    try:
+        df = pd.read_csv("data/client_transactions.csv")
+        if df.empty:
+            return pd.DataFrame()
+        return pd.DataFrame({
+            "client":[selected_client],
+            "aum":[df.get("Total Value ($)", pd.Series([0])).sum()],
+            "age":[42],
+            "risk_profile":["Moderate"],
+        })
+    except Exception:
+        return pd.DataFrame()
+
+
+# def load_client_data_csv(selected_client: str):
+#     # Demo loader that returns a one-row client summary
+#     try:
+#         df = pd.read_csv("./data/client_data.csv")
+#         if df.empty:
+#             return pd.DataFrame()
+#         return pd.DataFrame({
+#             "client":[selected_client],
+#             "aum":[df.get("Total Value ($)", pd.Series([0])).sum()],
+#             "age":[42],
+#             "risk_profile":["Moderate"],
+#         })
+#     except Exception:
+#         return pd.DataFrame()
+
 
 def format_currency(value):
     """Return a currency formatted string with the sign preceding the "$"."""
@@ -893,26 +1058,159 @@ def get_portfolio_characteristics(selected_strategy):
 def get_top_holdings(selected_strategy):
     return top_holdings.get(selected_strategy, None)
 
-DEFAULT_FILE_PATH = 'data/client_transactions.csv'
 
-def get_top_transactions(selected_strategy):
-    file_path=DEFAULT_FILE_PATH
-    # Load the transactions data from CSV
-    transactions_df = pd.read_csv(DEFAULT_FILE_PATH)    
+# def get_top_transactions(selected_strategy):
+#     file_path=DEFAULT_FILE_PATH
+#     # Load the transactions data from CSV
+#     transactions_df = pd.read_csv(DEFAULT_FILE_PATH)    
+#     filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
+
+#     # Get the top buys and sells by 'Total Value ($)'
+#     top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
+#     top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nsmallest(2, 'Total Value ($)')
+#     # Combine buys and sells into a single DataFrame
+#     top_transactions = pd.concat([top_buys, top_sells])
+    
+#     # Select only relevant columns
+#     top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type','Total Value ($)', 'Commentary']]
+
+#     top_transactions_df['Total Value ($)'] = top_transactions_df['Total Value ($)'].apply(lambda x: f"${x:,.0f}")
+    
+#     # Return the DataFrame
+#     return top_transactions_df
+
+def get_top_transactions(selected_strategy, as_of_month_end=None, lookback_months=1):
+    """
+    Return top buys/sells for a strategy.
+    If as_of_month_end is provided, filter rows whose transaction date falls within that month.
+    We try common date column names; if none exist, we skip date filtering gracefully.
+    """
+    file_path = DEFAULT_FILE_PATH
+    transactions_df = pd.read_csv(DEFAULT_FILE_PATH)
+
+    # Optional month filter
+    if as_of_month_end is not None:
+        try:
+            if not isinstance(as_of_month_end, (pd.Timestamp,)):
+                as_of_month_end = pd.to_datetime(as_of_month_end)
+        except Exception:
+            as_of_month_end = None
+
+    # Normalize potential date columns
+    date_cols = [c for c in transactions_df.columns if c.lower() in
+                 ["date", "transaction date", "trade date", "asof", "as_of_date"]]
+    if as_of_month_end is not None and date_cols:
+        dcol = date_cols[0]
+        transactions_df[dcol] = pd.to_datetime(transactions_df[dcol], errors="coerce")
+        start_of_month = as_of_month_end.to_period("M").start_time
+        end_of_month   = as_of_month_end.to_period("M").end_time
+        month_mask = (transactions_df[dcol] >= start_of_month) & (transactions_df[dcol] <= end_of_month)
+        filtered = transactions_df.loc[month_mask].copy()
+        # If no rows after filter, fall back to full df (graceful)
+        if not filtered.empty:
+            transactions_df = filtered
+
     filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
 
-    # Get the top buys and sells by 'Total Value ($)'
-    top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
-    top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nsmallest(2, 'Total Value ($)')
-    # Combine buys and sells into a single DataFrame
-    top_transactions = pd.concat([top_buys, top_sells])
-    
-    # Select only relevant columns
-    top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type','Total Value ($)', 'Commentary']]
+    # If still empty, fall back to overall (strategy only) to avoid blank prompts
+    if filtered_transactions.empty:
+        filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy] if 'Selected_Strategy' in transactions_df.columns else transactions_df
 
-    top_transactions_df['Total Value ($)'] = top_transactions_df['Total Value ($)'].apply(lambda x: f"${x:,.0f}")
-    
-    # Return the DataFrame
+    # Determine top buys/sells
+    if 'Total Value ($)' in filtered_transactions.columns:
+        top_buys  = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
+        top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nsmallest(2, 'Total Value ($)')
+    else:
+        # Fallback: if no value column, just take 2 newest of each direction
+        if date_cols:
+            dcol = date_cols[0]
+            top_buys  = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].sort_values(dcol, ascending=False).head(2)
+            top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].sort_values(dcol, ascending=False).head(2)
+        else:
+            top_buys  = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].head(2)
+            top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].head(2)
+
+    # Combine
+    top_transactions = pd.concat([top_buys, top_sells]) if not top_buys.empty or not top_sells.empty else filtered_transactions.head(4)
+
+    # Select relevant columns if present
+    cols = [c for c in ['Name', 'Direction', 'Transaction Type', 'Total Value ($)', 'Commentary'] if c in top_transactions.columns]
+    top_transactions_df = top_transactions[cols].copy()
+
+    if 'Total Value ($)' in top_transactions_df.columns:
+        def _fmt(v):
+            try:
+                return f"${float(v):,.0f}"
+            except Exception:
+                return v
+        top_transactions_df['Total Value ($)'] = top_transactions_df['Total Value ($)'].apply(_fmt)
+
     return top_transactions_df
 
 
+
+def list_clients():
+    """Return a list of all client names. Prefer Excel source; fallback to fact_data."""
+    # Prefer the fact table Excel if available
+    try:
+        fact = pd.read_excel("/mnt/data/client_fact_table.xlsx")
+        if "client_name" in fact.columns:
+            names = fact["client_name"].dropna().astype(str).str.strip().unique().tolist()
+            names = [n for n in names if n]
+            if names:
+                return sorted(names)
+    except Exception:
+        pass
+    # Fallback to in-memory fact_data module
+    try:
+        import fact_data
+        names = sorted({str(x.get("client_name", "")).strip() for x in fact_data.fact_table if x.get("client_name")})
+        return [n for n in names if n]
+    except Exception:
+        return []
+
+
+def build_commentary_pdf(client_name: str, period_label: str, text: str, output_path: str, logo_path: str = None, signature_path: str = None):
+    """Render commentary text to a simple, branded PDF using FPDF.
+    - Letter size, 12pt font, auto page-breaks.
+    - Optional logo at top-left and signature at bottom.
+    Returns the output_path on success.
+    """
+    pdf = FPDF(orientation='P', unit='mm', format='Letter')
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    y_after_logo = 10
+    if logo_path and os.path.exists(logo_path):
+        try:
+            pdf.image(logo_path, x=10, y=10, w=30)
+            y_after_logo = 10 + 25
+        except Exception:
+            y_after_logo = 10
+
+    pdf.set_xy(10, max(15, y_after_logo))
+    pdf.set_font('Times', 'B', 16)
+    pdf.multi_cell(0, 8, f"{client_name} — Investment Commentary ({period_label})")
+
+    pdf.ln(2)
+    pdf.set_font('Times', '', 12)
+
+    # Split into paragraphs for nicer spacing
+    for para in (text or "").split(''):
+        para = para.strip()
+        if not para:
+            continue
+        pdf.multi_cell(0, 6, para)
+        pdf.ln(2)
+
+    # Optional signature
+    if signature_path and os.path.exists(signature_path):
+        try:
+            pdf.ln(6)
+            x = 10
+            pdf.image(signature_path, x=x, w=40)
+        except Exception:
+            pass
+
+    pdf.output(output_path)
+    return output_path

@@ -64,7 +64,6 @@ With those tools you’re often stuck with:
  ├── docs/                ← (optional) MkDocs site for deeper docs
  ├── requirements.txt     ← Python deps
  ├── Dockerfile           ← container build
- └── mkdocs.yml           ← docs site config
 ```
 
 ---

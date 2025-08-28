@@ -68,7 +68,7 @@ With those tools you’re often stuck with:
 
 ---
 
-## 🧠 Architecture (Mermaid)
+## 🧠 Architecture
 ```mermaid
 flowchart TD
   %% Data sources

@@ -262,88 +262,65 @@ def _asset_panel(ticker: str, name: str):
 #─────────────────────────────────────────────────────────────────────────────
 def generate_dtd_commentary(selected_strategy: str) -> str:
     """
-    Create 3 clean, client-ready DTD bullets for the given strategy.
-    Ensures: (a) exactly three bullets, (b) blank line between bullets,
-    (c) no preambles like "Here are some bullet points...".
+    Return exactly 3 short bullets for day-to-day (DTD) performance.
+    - Each bullet starts with "- " and is followed by a blank line
+    - Max ~2 sentences, ~25 words per bullet
+    - No headings/preambles
     """
-    import os
+    import os, re
     from groq import Groq
 
     sys_prompt = (
-        "You are an investment strategist writing a brief, same-day note for "
-        "portfolio managers, risk managers, and client-facing advisors. "
-        "Return only the bullets; no headings, preambles, or closers."
+        "You are an investment strategist writing a same-day note for PMs, risk, and advisors. "
+        "Return only 3 bullets. No headings, no preambles, no closers."
     )
     user_prompt = (
-        f"Generate 3 bullet points on day-to-day (DTD) performance for {selected_strategy}. "
-        "Include relevant market moves, macro factors, attribution, and any positioning tweaks. "
-        "Exactly 3 bullets. Each starts on its own line with no dash ('- ' or similar symbols) and is followed by a blank line."
+        f"Generate 3 bullets on DTD performance for {selected_strategy}. "
+        "Include key market moves, macro drivers, simple attribution, and any small positioning tweaks. "
+        "Format: start each line with '- ' then one blank line after each. "
+        "Keep each bullet to 1–2 short sentences (≤ ~25 words)."
     )
 
-    model_primary   = "llama-3.3-70b-versatile"
-    model_fallback  = "llama-3.1-8b-instant"
-    api_key = os.environ.get("GROQ_API_KEY", "")
-
-    # If no key, return a deterministic fallback so the UI never breaks
-    if not api_key:
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
         return (
-            "- Equities were mixed intraday as megacap gains offset weakness in cyclicals; "
-            "rates drifted higher on firmer growth prints.\n\n"
-            "- Attribution: OW AI/semis added alpha; UW defensives lagged as bond-proxies sold off.\n\n"
-            "- Positioning: Trimmed duration; rotated a point from staples into quality growth ahead of inflation data."
+            "- Tech strength offset cyclicals; rates edged up after firmer prints.  \n\n"
+            "- Attribution: OW AI/semis helped; defensives lagged as bond-proxies softened.  \n\n"
+            "- Positioning: Small duration trim; +1pt to quality growth ahead of CPI."
         )
 
-    client = Groq(api_key=api_key)
+    client = Groq(api_key=key)
     try:
         resp = client.chat.completions.create(
-            model=model_primary,
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=400,
-            temperature=0.3,
+            model="llama-3.3-70b-versatile",
+            messages=[{"role":"system","content":sys_prompt},
+                      {"role":"user","content":user_prompt}],
+            max_tokens=400, temperature=0.3
         )
-    except Exception as e:
-        # Soft-fallback if the primary model is unavailable/decommissioned
+        text = resp.choices[0].message.content.strip()
+    except Exception:
         resp = client.chat.completions.create(
-            model=model_fallback,
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=400,
-            temperature=0.3,
+            model="llama-3.1-8b-instant",
+            messages=[{"role":"system","content":sys_prompt},
+                      {"role":"user","content":user_prompt}],
+            max_tokens=400, temperature=0.3
         )
+        text = resp.choices[0].message.content.strip()
 
-    text = resp.choices[0].message.content.strip()
-
-    # --- sanitize into exactly three markdown bullets separated by a blank line
-    lines = [ln.strip(" •-\t") for ln in text.splitlines() if ln.strip()]
-    # collapse to sentences if the model returned a paragraph
+    # --- sanitize: normalize to exactly 3 short bullets
+    # split into lines or sentences, keep 3 items max
+    lines = [ln.strip("•- \t") for ln in text.splitlines() if ln.strip()]
     if len(lines) < 3:
-        import re
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-        lines = sentences[:3]
-    bullets = [f"- {ln}" for ln in lines[:3]]
+        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        lines = sents[:3]
+
+    def clamp_words(s: str, max_words=25):
+        w = s.split()
+        return " ".join(w[:max_words])
+
+    bullets = [f"- {clamp_words(ln)}" for ln in lines[:3]]
     return "\n\n".join(bullets)
 
-# def generate_dtd_commentary(selected_strategy):
-#     commentary_prompt = f"""
-# Generate 3 bullet points on day-to-day performance for {selected_strategy} based
-# on recent events. Just bullets, no intro line.
-# """
-#     from groq import Groq
-#     client = Groq(api_key=os.environ.get("GROQ_API_KEY",""))
-#     resp = client.chat.completions.create(
-#         messages=[
-#             {"role":"system","content":commentary_prompt},
-#             {"role":"user","content": "Generate DTD performance commentary."}
-#         ],
-#         model="llama3-70b-8192",
-#         max_tokens=512
-#     )
-#     return resp.choices[0].message.content
 
 def _plot_price_bar(ticker: str, name: str):
     """
@@ -447,13 +424,7 @@ def display_market_commentary_and_overview(selected_strategy, display_df: bool =
 
     # --- pretty bullet formatting ---------------------------------------------
     dtd = generate_dtd_commentary(selected_strategy)
-    # split on the bullet (•) or on newlines, strip, and rebuild as Markdown list
-    bullets = [b.strip(" •\n") for b in dtd.split("•") if b.strip()]
-    if bullets:
-        formatted = "\n".join([f"- {b}" for b in bullets])
-        st.markdown(formatted)
-    else:   # fallback if no bullets detected
-        st.markdown(dtd)
+    st.markdown(dtd)
 
     # ───────────────────────────────────────────────────────── Market Overview
 
@@ -1246,7 +1217,7 @@ def display_recommendations(selected_client, selected_strategy, full_page=False)
     """
     pool  = _build_card_pool(selected_client, selected_strategy)
     cards = pool if full_page else pool[:4]
-
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
     title = "🔥 Highest-Conviction Advisor Recommendations" if not full_page else "📋 Full Recommendation Deck"
     st.markdown(f"## {title}")
 

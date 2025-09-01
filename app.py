@@ -24,7 +24,7 @@ def _flag(name: str, default: str = "true") -> bool:
         val = os.getenv(name, default)
     return _to_bool(val)
 
-# ── Page flags (set these in DigitalOcean → Settings → Env Vars if needed) ──
+# ── Page flags (set these in DigitalOcean → Settings → Environment Variables) ──
 SHOW_PORTFOLIO_PULSE   = _flag("SHOW_PORTFOLIO_PULSE",   "true")
 SHOW_COMMENTARY        = _flag("SHOW_COMMENTARY",        "true")
 SHOW_PREDICTIVE_RECS   = _flag("SHOW_PREDICTIVE_RECS",   "true")
@@ -81,9 +81,31 @@ pages.render_theme_toggle_button()
 
 # ── Sidebar: client + model selection ───────────────────────────────────────
 st.sidebar.title("Insight Central")
-client_names = get_client_names()
-selected_client = st.sidebar.selectbox("Select Client", client_names)
 
+# helper to display a small strategy abbrev
+def _strategy_abbrev_for(client_name: str) -> str | None:
+    s = client_strategy_risk_mapping.get(client_name)
+    if isinstance(s, dict):
+        s = s.get("strategy_name") or s.get("strategy")
+    if not s:
+        return None
+    return {
+        "Equity": "Eq",
+        "Equities": "Eq",
+        "Fixed Income": "FI",
+        "Bonds": "FI",
+        "Alternatives": "Alt",
+    }.get(s, s)
+
+client_names = get_client_names()
+
+selected_client = st.sidebar.selectbox(
+    "Select Client",
+    client_names,
+    format_func=lambda n: f"{n} ({_strategy_abbrev_for(n)})" if _strategy_abbrev_for(n) else n
+)
+
+# keep your existing resolution of selected_strategy
 selected_strategy = client_strategy_risk_mapping[selected_client]
 if isinstance(selected_strategy, dict):
     selected_strategy = selected_strategy.get("strategy_name")
@@ -136,7 +158,6 @@ elif selected_tab == "Decision Tracking":
     pages.display_recommendation_log()
 
 elif selected_tab == "Allocator":
-    # implement pages.display_scenario_allocator if you haven't already
     pages.display_scenario_allocator(selected_client, selected_strategy)
 
 elif selected_tab == "Forecast Lab":

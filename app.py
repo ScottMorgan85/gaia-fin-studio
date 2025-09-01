@@ -2,6 +2,8 @@
 import os
 import streamlit as st
 import landing  # gate form collects contact info, then lets users through
+from typing import Optional, Dict, Mapping, Tuple, Any, List
+
 
 # ── Gate: collect contact info, then continue straight into the app ─────────
 GATE_ON = os.environ.get("GAIA_GATE_ON", "true").strip().lower() == "true"
@@ -83,7 +85,7 @@ pages.render_theme_toggle_button()
 st.sidebar.title("Insight Central")
 
 # helper to display a small strategy abbrev
-def _strategy_abbrev_for(client_name: str) -> str | None:
+def _strategy_abbrev_for(client_name: str) -> Optional[str]:
     s = client_strategy_risk_mapping.get(client_name)
     if isinstance(s, dict):
         s = s.get("strategy_name") or s.get("strategy")
@@ -96,7 +98,7 @@ def _strategy_abbrev_for(client_name: str) -> str | None:
         "Bonds": "FI",
         "Alternatives": "Alt",
     }.get(s, s)
-
+    
 client_names = get_client_names()
 
 selected_client = st.sidebar.selectbox(

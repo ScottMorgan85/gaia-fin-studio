@@ -104,7 +104,8 @@ def render_gate():
     st.session_state["user_email"] = email
     st.success(f"Thanks, {name}! Enjoy the app — we’ll reach out at **{email}** about networking/collab.")
     st.caption("This is not an authentication form and does not create an account.")
-    st.experimental_rerun()
+    st.rerun()  # <- replace experimental_rerun
+
 
 # If your app imports landing.render_form(), keep a thin alias
 def render_form():

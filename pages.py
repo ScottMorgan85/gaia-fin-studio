@@ -2,10 +2,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-import xml.etree.ElementTree as ET
 import random
 import os
+import base64
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
@@ -15,18 +14,15 @@ import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import DQN
 from groq import Groq
-from utils import groq_chat  
 import commentary
 import yfinance as yf
 import altair as alt
-from typing import Optional, Dict, Mapping, Tuple, Any
+from typing import Optional, Dict, Mapping, Tuple, Any, List
 import math
 import sys
 import io
-import typing as T
-from dataclasses import dataclass
 import utils
-import time, random
+import time, random as _rnd
 
 # ── Feature flags (read from DO env vars or st.secrets["env"]) ──────────────
 def _flag(name: str, default: str = "true") -> bool:
@@ -46,15 +42,13 @@ def _flag(name: str, default: str = "true") -> bool:
 # Toggle these in DigitalOcean → Settings → Environment Variables
 ENABLE_RL    = _flag("ENABLE_RL",    "true")   # turn off the RL overlay
 ENABLE_GROQ  = _flag("ENABLE_GROQ",  "true")   # turn off Groq trade ideas
-USE_GPU      = _flag("USE_GPU",      "false")  # request GPU for RL if available
-
-
+USE_GPU      = _flag("USE_GPU",      "false")  # (unused now; GPU toggle hidden)
 
 LOG_PATH = "data/visitor_log.csv"
 
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 # Helpers
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 def _df_download_button(df: pd.DataFrame, label: str, filename: str, help: str = ""):
     towrite = io.BytesIO()
     df.to_csv(towrite, index=False)
@@ -96,25 +90,25 @@ def _chat_with_retries(client, *, messages, model, max_tokens, temperature=0.3,
             transient = ("503" in txt) or ("Service unavailable" in txt) or ("timeout" in txt.lower())
             if not transient or attempt == retries:
                 raise
-            delay = min(max_delay, base_delay * (2 ** (attempt - 1))) + random.uniform(0, 0.25)
+            delay = min(max_delay, base_delay * (2 ** (attempt - 1))) + _rnd.uniform(0, 0.25)
             time.sleep(delay)
             last_err = e
     if last_err:
         raise last_err
 
 def _fallback_dtd_commentary(selected_strategy: str) -> str:
-    # Keep this lightweight and deterministic so the page still renders.
-    # You can later enrich this with local data if you want (e.g., benchmark_returns.xlsx).
+    # Lightweight deterministic fallback
     return (
         f"**{selected_strategy} — Daily Market Note (Fallback)**\n\n"
-        "- Groq LLM is currently unavailable, so this is a brief standby summary.\n"
-        "- Markets were mixed as investors weighed macro data and earnings dispersion.\n"
-        "- Portfolio positioning remains aligned with the stated risk profile and benchmark.\n"
+        "- Groq LLM is currently unavailable, so this is a brief standby summary.\n\n"
+        "- Markets were mixed as investors weighed macro data and earnings dispersion.\n\n"
+        "- Portfolio positioning remains aligned with the stated risk profile and benchmark.\n\n"
         "- We will refresh this section automatically once the service is back online."
     )
 
-
+# Email approval tools (unchanged)
 def _send_access_email(email: str, app_url: str):
+    import boto3
     """Send a simple approval email with the App Runner link."""
     client = boto3.client("sns", region_name=os.environ.get("AWS_REGION", "us-east-1"))
     message = f"""
@@ -151,8 +145,6 @@ def display_approvals(app_url: str):
             _send_access_email(email, app_url)
             st.success(f"Sent approval email to {email}")
 
-
-import utils
 from data.client_mapping import (
     get_client_info,
     get_client_names,
@@ -160,9 +152,9 @@ from data.client_mapping import (
     get_strategy_details
 )
 
-#─────────────────────────────────────────────────────────────────────────────
-# Theme functions (moved here for import in app.py)
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# Theme functions (imported by app.py)
+# ────────────────────────────────────────────────────────────────────────────
 def initialize_theme():
     if "themes" not in st.session_state:
         st.session_state.themes = {
@@ -203,15 +195,13 @@ def render_theme_toggle_button():
     if st.sidebar.button(face, on_click=change_theme):
         if not st.session_state.themes["refreshed"]:
             st.session_state.themes["refreshed"] = True
-            st.experimental_rerun()
+            st.rerun()  # <- replace experimental_rerun
 
 def _styled_price_df(df: pd.DataFrame):
     """
     Format price tables: 2-dec price, green ↑ red ↓, right-aligned numbers.
     Requires columns: close_price, price_change, pct_change (numeric).
     """
-    import pandas as pd, numpy as np
-
     for col in ["close_price", "price_change", "pct_change"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -228,25 +218,17 @@ def _styled_price_df(df: pd.DataFrame):
         .set_properties(**{"text-align": "right"})
     )
 
-
 def _asset_panel(ticker: str, name: str):
-    import yfinance as yf, pandas as pd, numpy as np, altair as alt, datetime as dt
-
     hist = yf.download(ticker, period="4mo", progress=False)["Close"]
-
-    # --- reduce to a 1-D Series no matter what ---
-    if isinstance(hist, pd.DataFrame):          # happens with multi-index “Close”
-        hist = hist.squeeze("columns")          # first col -> Series
-
+    if isinstance(hist, pd.DataFrame):
+        hist = hist.squeeze("columns")
     if hist.empty or hist.dropna().empty:
         st.metric(label=name, value="N/A")
         return
-
     last_px = float(hist.iloc[-1])
     day_pct = float((hist.iloc[-1] / hist.iloc[-2] - 1)) if len(hist) > 1 else np.nan
     pct_color = "🟢" if day_pct >= 0 else "🔴"
     st.metric(label=name, value=f"{last_px:,.2f}", delta=f"{day_pct:+.2%} {pct_color}")
-
     spark = (
         alt.Chart(hist.reset_index())
         .mark_line()
@@ -255,129 +237,89 @@ def _asset_panel(ticker: str, name: str):
     )
     st.altair_chart(spark, use_container_width=True)
 
-
-
-#─────────────────────────────────────────────────────────────────────────────
-# Default Overview & DTD Commentary
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# Default Overview & DTD Commentary (longer, strategy-aware)
+# ────────────────────────────────────────────────────────────────────────────
 def generate_dtd_commentary(selected_strategy: str) -> str:
     """
-    Return exactly 3 short bullets for day-to-day (DTD) performance.
-    - Each bullet starts with "- " and is followed by a blank line
-    - Max ~2 sentences, ~25 words per bullet
-    - No headings/preambles
+    Return exactly 3 richer bullets for DTD performance.
+    - Each bullet starts with "- " and then a blank line
+    - 2–3 sentences, ~45 words per bullet
+    - Strategy-aware; no headings/preambles
     """
-    import os, re
+    import os
     from groq import Groq
 
     sys_prompt = (
         "You are an investment strategist writing a same-day note for PMs, risk, and advisors. "
-        "Return only 3 bullets. No headings, no preambles, no closers."
+        "Return only 3 bullets, each 2–3 sentences. No headings or preambles."
     )
     user_prompt = (
-        f"Generate 3 bullets on DTD performance for {selected_strategy}. "
-        "Include key market moves, macro drivers, simple attribution, and any small positioning tweaks. "
-        "Format: start each line with '- ' then one blank line after each. "
-        "Keep each bullet to 1–2 short sentences (≤ ~25 words)."
+        f"Generate 3 bullets on day-to-day performance for {selected_strategy}. "
+        "Include market moves, macro drivers, simple attribution, and any positioning tweaks. "
+        'Start each bullet with "- " and include one blank line between bullets. '
+        "Keep each bullet around 45 words."
     )
 
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
         return (
-            "- Tech strength offset cyclicals; rates edged up after firmer prints.  \n\n"
-            "- Attribution: OW AI/semis helped; defensives lagged as bond-proxies softened.  \n\n"
-            "- Positioning: Small duration trim; +1pt to quality growth ahead of CPI."
+            "- Equities were mixed as megacap strength offset cyclicals; the dollar eased and front-end yields edged higher after firmer prints. "
+            "Flows favored quality/growth while defensives lagged.  \n\n"
+            "- Attribution skewed to AI/semis and quality factors, with value/defensives soft. "
+            "EM small alpha from country selection; energy beta detracted on a crude pullback.  \n\n"
+            "- Positioning: small duration trim, +1pt to quality growth; added a tiny FX hedge given policy events this week. "
+            "Remain OW U.S., UW Europe, monitoring CPI and Fed-speak for path-of-rates risk."
         )
 
     client = Groq(api_key=key)
-    try:
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role":"system","content":sys_prompt},
-                      {"role":"user","content":user_prompt}],
-            max_tokens=400, temperature=0.3
-        )
-        text = resp.choices[0].message.content.strip()
-    except Exception:
-        resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role":"system","content":sys_prompt},
-                      {"role":"user","content":user_prompt}],
-            max_tokens=400, temperature=0.3
-        )
-        text = resp.choices[0].message.content.strip()
 
-    # --- sanitize: normalize to exactly 3 short bullets
-    # split into lines or sentences, keep 3 items max
+    def _ask(model):
+        return client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": sys_prompt},
+                      {"role": "user", "content": user_prompt}],
+            max_tokens=700, temperature=0.3
+        ).choices[0].message.content.strip()
+
+    try:
+        text = _ask("llama-3.3-70b-versatile")
+    except Exception:
+        text = _ask("llama-3.1-8b-instant")
+
+    # sanitize: ensure exactly 3 bullets, ~45 words cap
     lines = [ln.strip("•- \t") for ln in text.splitlines() if ln.strip()]
     if len(lines) < 3:
-        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-        lines = sents[:3]
+        import re as _re
+        sents = [s.strip() for s in _re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        chunks, chunk = [], []
+        for s in sents:
+            chunk.append(s)
+            if len(chunk) >= 2:
+                chunks.append(" ".join(chunk)); chunk = []
+            if len(chunks) == 3:
+                break
+        lines = chunks[:3] or sents[:3]
 
-    def clamp_words(s: str, max_words=25):
+    def clamp_words(s: str, max_words=45):
         w = s.split()
         return " ".join(w[:max_words])
 
     bullets = [f"- {clamp_words(ln)}" for ln in lines[:3]]
     return "\n\n".join(bullets)
 
-
-def _plot_price_bar(ticker: str, name: str):
-    """
-    Draw a compact 6-month bar chart of closes.
-    If history is empty, fall back to yfinance fast_info['lastPrice'].
-    """
-    import pandas as pd
-
-    df = yf.download(ticker, period="6mo", progress=False)
-
-    # multi-index → Series
-    if isinstance(df.columns, pd.MultiIndex):
-        try:
-            close = df.xs("Close", level=1, axis=1).squeeze("columns")
-        except Exception:
-            close = pd.Series(dtype=float)
-    else:
-        close = df.get("Close", pd.Series(dtype=float))
-
-    if close.empty or close.dropna().empty:
-        # Fallback – single latest price
-        try:
-            last_px = yf.Ticker(ticker).fast_info["lastPrice"]
-            st.metric(label=name, value=f"{last_px:,.2f}")
-        except Exception:
-            st.metric(label=name, value="N/A")
-        return
-
-    chart = (
-        alt.Chart(close.reset_index())
-        .mark_bar(size=5, color="#4ba3ff")
-        .encode(
-            x=alt.X("Date:T", axis=alt.Axis(title=None, labelAngle=-45)),
-            y=alt.Y("Close:Q", axis=alt.Axis(title=None)),
-            tooltip=["Date:T", alt.Tooltip("Close:Q", format=".2f")],
-        )
-        .properties(title=name, height=160)
-    )
-    st.altair_chart(chart, use_container_width=True)
-
-
 # ---------------------------------------------------------------------------
-#  Rewritten Market Commentary + Bar-style Overview
+# Rewritten Market Commentary + Bar-style Overview
 # ---------------------------------------------------------------------------
 def _safe_stock_df(tickers, names):
-    import pandas as pd, numpy as np
     try:
         df = utils.create_stocks_dataframe(tickers, names)
     except Exception:
-        # fallback placeholder
         df = pd.DataFrame({"Ticker": tickers,
                            "Name": names,
                            "Close": np.nan,
                            "Price Change": np.nan,
                            "% Change": np.nan})
-
-    # --- unify column labels the styler will look for -----------------
     df = df.rename(columns={
         "Close": "close_price",
         "Price ($)": "close_price",
@@ -388,51 +330,30 @@ def _safe_stock_df(tickers, names):
     })
     return df
 
-
-def _styled_price_df(df: pd.DataFrame):
-    """
-    Return a Streamlit-friendly styled DataFrame:
-      * Price two-decimals, right-aligned.
-      * Green for positive change, red for negative.
-    Assumes columns: ['Ticker','Name','close_price','price_change','$ Change','% Change']
-    """
-    fmt_df = df.copy()
-    # assure numeric
-    for col in ["close_price", "price_change", "% Change"]:
-        fmt_df[col] = pd.to_numeric(fmt_df[col], errors="coerce")
-
-    def color_change(val):
-        if pd.isna(val):
-            return ""
-        return "color:green" if val > 0 else "color:red"
-
-    return (
-        fmt_df.style
-        .format({"close_price": "{:,.2f}", "price_change": "{:,.2f}", "% Change": "{:,.2%}"})
-        .applymap(color_change, subset=["price_change", "% Change"])
-        .set_properties(**{"text-align": "right"})
-    )
-
+def _round_percents(text: str, places: int = 2) -> str:
+    """Round any '%'-adjacent numbers to X.XX%."""
+    import re as _re
+    def _fmt(m):
+        try:
+            return f"{float(m.group(1)):.{places}f}%"
+        except Exception:
+            return m.group(0)
+    return _re.sub(r"(-?\d+(?:\.\d+)?)(?=%)", _fmt, text)
 
 def display_market_commentary_and_overview(selected_strategy, display_df: bool = True):
-    import datetime
+    import datetime as _dt
 
-    # ---------- header + DTD commentary ----------
-    now = datetime.datetime.now()
+    now = _dt.datetime.now()
     suffix = "th" if 4 <= now.day <= 20 or 24 <= now.day <= 30 else ["st", "nd", "rd"][now.day % 10 - 1]
     st.header(f"{selected_strategy} Daily Update — {now:%A, %B %d}{suffix}, {now.year}")
 
-    # --- pretty bullet formatting ---------------------------------------------
+    # --- DTD commentary (longer) ---------------------------------------------
     dtd = generate_dtd_commentary(selected_strategy)
     st.markdown(dtd)
 
-    # ───────────────────────────────────────────────────────── Market Overview
-
-   # Market Overview Section
+    # Market Overview
     st.title('Market Overview')
     col_stock1, col_stock_2, col_stock_3, col_stock_4 = st.columns(4)
-    
-    # Display candlestick plots for major indices
     with col_stock1:
         utils.create_candle_stick_plot(stock_ticker_name="^GSPC", stock_name="S&P 500")
     with col_stock_2:
@@ -441,44 +362,28 @@ def display_market_commentary_and_overview(selected_strategy, display_df: bool =
         utils.create_candle_stick_plot(stock_ticker_name="AGG", stock_name="U.S. Aggregate Bond")
     with col_stock_4:
         utils.create_candle_stick_plot(stock_ticker_name="^DJCI", stock_name="Dow Jones Commodity Index ")
-   
-    # Tech Stocks Overview
+
     col_sector1, col_sector2 = st.columns(2)
     with col_sector1:
         st.subheader("Emerging Markets Equities")
-        em_list = ["0700.HK",  # Tencent Holdings Ltd.
-                      "005930.KS",  # Samsung Electronics Co., Ltd.
-                      "7203.T",  # Toyota Motor Corporation
-                      "HSBC",  # HSBC Holdings plc
-                      "NSRGY",  # Nestle SA ADR
-                      "SIEGY"]  # Siemens AG ADR
-        em_name = ["Tencent", "Samsung", "Toyota", "HSBC", "Nestle", "Siemens"]
+        em_list = ["0700.HK","005930.KS","7203.T","HSBC","NSRGY","SIEGY"]
+        em_name = ["Tencent","Samsung","Toyota","HSBC","Nestle","Siemens"]
         df_em_stocks = utils.create_stocks_dataframe(em_list, em_name)
-        # utils.create_dateframe_view(df_em_stocks)
         if display_df:
             utils.create_dateframe_view(df_em_stocks)
-        
-    # Fixed Income Overview
     with col_sector2:
         st.subheader("Fixed Income Overview")
-        fi_list = ["AGG", "HYG", "TLT", "MBB", "EMB","BKLN"]
-        fi_name = ["US Aggregate", "High Yield Corporate", "Long Treasury", "Mortgage-Backed", "Emerging Markets Bond","U.S. Leveraged Loan"]
+        fi_list = ["AGG","HYG","TLT","MBB","EMB","BKLN"]
+        fi_name = ["US Aggregate","High Yield Corporate","Long Treasury","Mortgage-Backed","EM Bond","U.S. Leveraged Loan"]
         df_fi = utils.create_stocks_dataframe(fi_list, fi_name)
         if display_df:
             utils.create_dateframe_view(df_fi)
 
     return df_em_stocks, df_fi
 
-    # ── low-visibility retry control at the very bottom ─────────────────────
-    with st.expander("More options"):
-        st.caption("If the live commentary was unavailable earlier, you can try to refresh it now.")
-        if st.button("↻ Try again now", help="Retries the live DTD request (hidden control)"):
-            st.session_state["retry_dtd"] = True
-            st.rerun()
-
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 # Portfolio Page
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 def display_portfolio(selected_client, selected_strategy):
     st.header(f"{selected_strategy} — Portfolio Overview")
     info = get_client_info(selected_client) or {}
@@ -488,13 +393,10 @@ def display_portfolio(selected_client, selected_strategy):
         st.error("Missing strategy or benchmark")
         return
 
-    # sr = utils.load_strategy_returns()[["as_of_date",strat]].set_index("as_of_date").pct_change()
-    # br = utils.load_benchmark_returns()[["as_of_date",bench]].set_index("as_of_date").pct_change()
     sr = utils.load_strategy_returns()[["as_of_date", strat]]
     br = utils.load_benchmark_returns()[["as_of_date", bench]]
     utils.plot_cumulative_returns(sr, br, strat, bench)
 
-    # Details columns
     st.subheader("Portfolio Details")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -515,81 +417,56 @@ def display_portfolio(selected_client, selected_strategy):
     df = utils.get_top_transactions(selected_strategy)
     st.dataframe(df)
 
-#─────────────────────────────────────────────────────────────────────────────
-# Commentary Page
-#─────────────────────────────────────────────────────────────────────────────
-# def display(commentary_text, selected_client, model_option, selected_strategy):
-#     st.header(f"{selected_strategy} — Commentary")
-#     txt = commentary.generate_investment_commentary(
-#         model_option, selected_client, selected_strategy, utils.get_model_configurations()
-#     )
-#     st.markdown(txt)
-#─────────────────────────────────────────────────────────────────────────────
-# Commentary Page (updated with month-end dropdown)
-#─────────────────────────────────────────────────────────────────────────────
-#─────────────────────────────────────────────────────────────────────────────
-# Commentary Page (updated with month-end dropdown)
-#─────────────────────────────────────────────────────────────────────────────
-def display(commentary_text, selected_client, model_option, selected_strategy):
+# ────────────────────────────────────────────────────────────────────────────
+# Commentary Co-Pilot (round percents to X.XX%)
+# ────────────────────────────────────────────────────────────────────────────
+def display(_commentary_text, selected_client, model_option, selected_strategy):
     import io, zipfile
     from datetime import datetime
     st.header(f"{selected_strategy} — Commentary")
 
-    # Render single-client commentary (unchanged)
     txt = commentary.generate_investment_commentary(
         model_option, selected_client, selected_strategy, utils.get_model_configurations()
     )
+    txt = _round_percents(txt, 2)
     st.markdown(txt)
 
-    # ── Batch PDFs expander ───────────────────────────────────────────────
+    # Batch PDFs expander (unchanged)
     with st.expander("Batch generate PDFs for all clients (current settings)"):
         st.caption("Generates one PDF per client and bundles them into a ZIP.")
-
         if st.button("Generate ZIP of client PDFs"):
-            # 1) get all client names robustly
             clients = []
-            # try utils.list_clients()
             if hasattr(utils, "list_clients"):
                 try:
                     clients = utils.list_clients()
                 except Exception:
                     clients = []
-
-            # as a final safety fallback, try the mapping directly
             if not clients:
                 try:
                     from data.client_mapping import get_client_names
                     clients = list(get_client_names())
                 except Exception:
                     clients = []
-
             if not clients:
                 st.warning("No clients found to batch. Check client_mapping or fact table.")
             else:
-                # 2) generate commentary -> PDF -> add to ZIP
                 zip_buf = io.BytesIO()
                 with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
                     for name in clients:
-                        # resolve strategy name for each client; fall back to current UI strategy
                         try:
                             strat_name = utils.get_client_strategy_details(name) or selected_strategy
                         except Exception:
                             strat_name = selected_strategy
-
-                        # NB: use your existing signature (no month-end arg)
                         text = commentary.generate_investment_commentary(
                             model_option, name, strat_name, utils.get_model_configurations()
                         )
-
-                        # build PDF with existing helper
+                        text = _round_percents(text, 2)
                         try:
                             pdf_bytes = utils.create_pdf(text)
                             safe_client = str(name).replace("/", "-").replace("\\", "-")
                             zf.writestr(f"{safe_client}—commentary.pdf", pdf_bytes)
                         except Exception as e:
-                            # keep going even if one client fails
                             zf.writestr(f"{name}—ERROR.txt", f"Failed to generate PDF: {e}")
-
                 zip_buf.seek(0)
                 today = datetime.today().strftime("%Y-%m-%d")
                 st.download_button(
@@ -599,10 +476,9 @@ def display(commentary_text, selected_client, model_option, selected_strategy):
                     mime="application/zip"
                 )
 
-
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 # Client Page
-#─────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
 def display_client_page(selected_client):
     st.header(f"Client: {selected_client}")
     df = utils.load_client_data_csv(selected_client)
@@ -619,10 +495,9 @@ def display_client_page(selected_client):
     intr = utils.get_interactions_by_client(selected_client) or []
     st.table(pd.DataFrame(intr))
 
-#─────────────────────────────────────────────────────────────────────────────
-# Import the Forecast Lab submodule
-#─────────────────────────────────────────────────────────────────────────────
-
+# ────────────────────────────────────────────────────────────────────────────
+# Forecast Lab (GPU toggle hidden; pinned to CPU)
+# ────────────────────────────────────────────────────────────────────────────
 def display_forecast_lab(selected_client, selected_strategy):
     """
     Forecast Lab: historical & macro context, lightweight RL overlay,
@@ -644,7 +519,6 @@ def display_forecast_lab(selected_client, selected_strategy):
 
     st.title("🔮 Forecast Lab")
 
-    # ---- Config / clients
     today = datetime.today()
     api_key = os.environ.get("GROQ_API_KEY", "")
     model_primary  = "llama-3.3-70b-versatile"
@@ -683,7 +557,7 @@ def display_forecast_lab(selected_client, selected_strategy):
     with st.expander("Show macro inputs"):
         st.dataframe(macro.style.format("{:.2%}"))
 
-    # 3) Lightweight RL overlay (toy)
+    # 3) Lightweight RL overlay (toy) — pinned to CPU
     class PortEnv(gym.Env):
         def __init__(self, returns):
             super().__init__()
@@ -704,8 +578,7 @@ def display_forecast_lab(selected_client, selected_strategy):
             return obs, reward, done, False, {}
 
     env = PortEnv(strat)
-    use_gpu = st.checkbox("Use GPU (CUDA)", False)
-    device  = "cuda" if use_gpu else "cpu"
+    device = "cpu"  # <— GPU toggle removed/hidden
     model = DQN("MlpPolicy", env, verbose=0, device=device)
     model.learn(total_timesteps=10_000, progress_bar=False)
 
@@ -733,7 +606,7 @@ def display_forecast_lab(selected_client, selected_strategy):
         paths[name] = np.array(path_list)
 
     labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
-    median_vals = {k: sim[k][1] for k in sim}  # 50th pct for 1/3/5y
+    median_vals = {k: sim[k][1] for k in sim}
     med_df = pd.DataFrame(median_vals).T
     med_df.columns = labels
     med_df.index.name = "Scenario"
@@ -807,363 +680,97 @@ def display_forecast_lab(selected_client, selected_strategy):
         "Macro: FRED GDP/CPI/Fed. No liquidity shocks or costs. Past ≠ future."
     )
 
+import re
+from typing import List
 
-# def display_forecast_lab(selected_client, selected_strategy):
-#     """
-#     Forecast Lab: historical returns + macro context, optional RL overlay,
-#     Monte-Carlo scenarios, optional Groq trade ideas.
-#     Controlled by env flags: ENABLE_RL, USE_GPU, ENABLE_GROQ.
-#     """
-#     from datetime import datetime
-#     from dateutil.relativedelta import relativedelta
-#     import numpy as np
-#     import plotly.express as px
-#     import plotly.graph_objects as go
-#     import pandas as pd
+def _slugify(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")
 
-#     import utils
-#     from pandas_datareader import data as web
+def _classify_strategy(s: str) -> str:
+    s = (s or "").lower()
+    if any(k in s for k in ["fixed", "bond", "treasury", "gov", "ig credit", "credit", "income"]):
+        return "fixed"
+    if any(k in s for k in ["commod", "commodity", "real asset", "real-assets"]):
+        return "commodities"
+    if any(k in s for k in ["alt", "hedge", "private", "cta", "multi-strat"]):
+        return "alts"
+    return "equities"
 
-#     st.title("🔮 Forecast Lab")
+# ────────────────────────────────────────────────────────────────────────────
+# Strategy-specific recommendations (titles fixed; rationale LLM + fallback)
+# ────────────────────────────────────────────────────────────────────────────
+def _static_strategy_recs(strategy: str):
+    s = (strategy or "").lower()
+    if "fixed" in s or "bond" in s:
+        return [
+            {"title": "Extend duration by +1y", "fallback": "Curve bull-flattened; modestly extend duration toward benchmark to capture carry and rolldown."},
+            {"title": "Upgrade 5% to IG credit", "fallback": "Rotate from lower-tier HY to A/AA IG; resilience into data-heavy weeks."},
+            {"title": "Add 3% to TIPS", "fallback": "Sticky services inflation keeps breakevens supported; small hedge aids convexity."},
+            {"title": "Trim 3% securitized", "fallback": "Agency MBS convexity remains jumpy; trim into strength and recycle into liquid IG."},
+        ]
+    if "alt" in s:
+        return [
+            {"title": "Add 5% to CTAs", "fallback": "Trend following monetizes macro dispersion; diversifies equity/bond beta."},
+            {"title": "Increase real assets +3%", "fallback": "Inflation/geopolitics hedge while improving diversification."},
+            {"title": "Gold hedge +2%", "fallback": "Central-bank buying and rate-path uncertainty support allocation."},
+            {"title": "Private credit +3%", "fallback": "Deal supply and spreads attractive; keep senior/secured tilt."},
+        ]
+    # default: equities
+    return [
+        {"title": "Hedge with 10% into Gold", "fallback": "Rates/FX volatility and policy uncertainty support a small defensive ballast."},
+        {"title": "Trim 10% into IG Corp credit", "fallback": "Lock some YTD gains; recycle into carry with better drawdown math."},
+        {"title": "Switch into 10% into BB high-yield", "fallback": "Upgrade lower-quality cyclical beta to BBs; keeps income, lowers default risk."},
+        {"title": "Add 10% into Commodities", "fallback": "Supply tightness and reflationary impulses; low correlation to equities."},
+    ]
 
-#     today = datetime.today()
+def _llm_rationales_for_recs(strategy: str, titles: List[str]) -> Optional[List[str]]:
+    """Return one short rationale per title, tailored to strategy & current week. Fallback: None."""
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return None
+    prompt = (
+        f"Strategy: {strategy}\n"
+        "Give a one-line, current-week rationale for each of these recommendations "
+        "(separate lines, ≤ 25 words each, no numbering):\n- " + "\n- ".join(titles)
+    )
+    client = Groq(api_key=key)
+    try:
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role":"system","content":"You write concise, PM-ready rationales."},
+                      {"role":"user","content":prompt}],
+            max_tokens=400, temperature=0.3,
+        )
+        text = resp.choices[0].message.content.strip()
+    except Exception:
+        return None
 
-#     # ── 1) Historical returns (demo loader)
-#     strat_df = utils.load_strategy_returns()
-#     strat = strat_df[["as_of_date", selected_strategy]].set_index("as_of_date").pct_change().dropna()
+    lines = [ln.strip("-• \t") for ln in text.splitlines() if ln.strip()]
+    if len(lines) < len(titles):
+        return None
+    return lines[:len(titles)]
 
-#     # ── 2) Macro data (FRED with graceful fallback)
-#     MACRO = {"GDPC1": "Real GDP YoY", "CPIAUCSL": "CPI YoY", "FEDFUNDS": "Fed-Funds"}
-
-#     def fetch_fred_series(code):
-#         start = today.replace(year=today.year - 15)
-#         try:
-#             s = web.DataReader(code, "fred", start, today).squeeze()
-#         except Exception:
-#             idx = pd.date_range(start, today, freq="M")
-#             s = pd.Series(np.random.normal(0, 0.01, len(idx)), index=idx)
-#         return s
-
-#     macro_series = {}
-#     for code, label in MACRO.items():
-#         s = fetch_fred_series(code)
-#         if code == "GDPC1":
-#             s = s.resample("Q").last().pct_change().dropna()
-#         macro_series[label] = s
-
-#     macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
-#     # formatting convenience
-#     if "CPI YoY" in macro: macro["CPI YoY"] = macro["CPI YoY"] / 100
-#     if "Fed-Funds" in macro: macro["Fed-Funds"] = macro["Fed-Funds"] / 100
-
-#     st.markdown("**Macro inputs (demo):** GDP, CPI, and Fed-Funds often steer risk appetite.")
-#     with st.expander("Show macro inputs"):
-#         st.dataframe(macro.style.format("{:.2%}"))
-
-#     # ── 3) Optional RL overlay (DQN), GPU aware
-#     if ENABLE_RL:
-#         try:
-#             import gymnasium as gym
-#             from gymnasium import spaces
-#             from stable_baselines3 import DQN
-#             try:
-#                 import torch
-#                 has_cuda = torch.cuda.is_available()
-#             except Exception:
-#                 has_cuda = False
-
-#             device = "cuda" if (USE_GPU and has_cuda) else "cpu"
-#             if USE_GPU and not has_cuda:
-#                 st.warning("GPU requested but not available; falling back to CPU.")
-
-#             class PortEnv(gym.Env):
-#                 def __init__(self, returns):
-#                     super().__init__()
-#                     self.r = returns.values.flatten()
-#                     self.action_space = spaces.Discrete(3)
-#                     self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
-#                 def reset(self, **kwargs):
-#                     self.t, self.w, self.val = 0, 1.0, 1.0
-#                     return np.array([self.r[self.t]], dtype=np.float32), {}
-#                 def step(self, action):
-#                     if action == 1:   self.w += 0.1
-#                     elif action == 2: self.w = max(0.0, self.w - 0.1)
-#                     reward = self.w * self.r[self.t]
-#                     self.val *= 1 + reward
-#                     self.t += 1
-#                     done = self.t >= len(self.r) - 1
-#                     obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
-#                     return obs, reward, done, False, {}
-
-#             env = PortEnv(strat)
-#             model = DQN("MlpPolicy", env, verbose=0, device=device)
-#             model.learn(total_timesteps=10_000, progress_bar=False)
-#             st.caption(f"RL overlay trained on **{device.upper()}** (demo DQN).")
-#         except Exception as e:
-#             st.info("RL overlay unavailable in this environment.")
-#     else:
-#         st.caption("RL overlay disabled by configuration (ENABLE_RL=false).")
-
-#     # ── 4) Monte-Carlo scenarios (bootstrap + drift)
-#     scenarios = {"Base": 0.0, "Bull": 0.02, "Bear": -0.02}
-#     drift = st.slider("Custom drift shift (annual %)", -5.0, 5.0, 0.0, 0.25) / 100
-#     scenarios["Custom"] = drift
-
-#     years = [1, 3, 5]
-#     dates = [today + relativedelta(years=y) for y in years]
-#     sim, paths = {}, {}
-#     np.random.seed(42)
-#     for name, d in scenarios.items():
-#         term_vals, path_list = [], []
-#         for _ in range(1000):
-#             v, pts = 1.0, []
-#             for _ in range(60):
-#                 ret = strat.sample(1).values[0, 0]
-#                 v *= 1 + ret + d/12
-#                 pts.append(v)
-#             term_vals.append([pts[11], pts[35], pts[59]])
-#             path_list.append(pts)
-#         sim[name] = np.percentile(term_vals, [5, 50, 95], axis=0)
-#         paths[name] = np.array(path_list)
-
-#     labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
-#     med_df = pd.DataFrame({k: sim[k][1] for k in sim}).T
-#     med_df.columns = labels
-#     med_df.index.name = "Scenario"
-
-#     st.markdown("**Median multiples** — what $10k could become under each scenario.")
-#     st.dataframe(med_df)
-
-#     base_q = np.percentile(paths["Base"], [5, 25, 50, 75, 95], axis=0)
-#     months = pd.date_range(today, periods=60, freq="M")
-#     fan = go.Figure()
-#     for lo, hi, col in [(0, 1, "rgba(0,150,200,0.15)"), (1, 2, "rgba(0,150,200,0.25)")]:
-#         fan.add_scatter(x=months, y=base_q[hi], mode="lines", line=dict(width=0), showlegend=False)
-#         fan.add_scatter(x=months, y=base_q[lo], mode="lines", line=dict(width=0),
-#                         fill="tonexty", fillcolor=col, showlegend=False)
-#     fan.add_scatter(x=months, y=base_q[2], mode="lines", line=dict(color="steelblue"), name="Median")
-#     fan.update_layout(title="Forecast Fan Chart — Base", xaxis_title="", yaxis_title="Multiple")
-#     st.plotly_chart(fan, use_container_width=True)
-
-#     st.markdown("**Terminal distribution** — 5-yr multiples across scenarios.")
-#     term_df = pd.DataFrame({k: paths[k][:, -1] for k in paths})
-#     kde = px.violin(term_df, orientation="h", box=True, points=False,
-#                     labels={"value": "Multiple", "variable": "Scenario"})
-#     st.plotly_chart(kde, use_container_width=True)
-
-#     # ── 5) Optional Groq trade ideas
-#     if ENABLE_GROQ:
-#         from groq import Groq
-#         GROQ_MODEL = "llama3-70b-8192"
-#         key = os.environ.get("GROQ_API_KEY", "")
-#         if not key:
-#             st.info("Groq is not configured (no GROQ_API_KEY). Skipping trade ideas.")
-#         else:
-#             base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
-#             prompt = f"""
-# Client: {selected_client} | Strategy: {selected_strategy}
-# Median multiples (Base): {base_info}
-# For each scenario, provide two dated trade ideas with a one-line rationale.
-# Limit to 4 bullets.
-# """
-#             with st.spinner("Groq drafting trade ideas..."):
-#                 rec = Groq(api_key=key).chat.completions.create(
-#                     model=GROQ_MODEL, max_tokens=700,
-#                     messages=[
-#                         {"role": "system", "content": "You are an expert PM."},
-#                         {"role": "user", "content": prompt}
-#                     ]
-#                 ).choices[0].message.content
-#             st.subheader("🧑‍💼 AI Trade Ideas")
-#             st.markdown(rec)
-#     else:
-#         st.caption("Groq trade ideas disabled by configuration (ENABLE_GROQ=false).")
-
-#     st.markdown("""---\n**Methodology (demo):** bootstrap on 15-yr returns + drift, 1k×60 months. 
-# RL (if enabled): tiny DQN. Macro: GDP/CPI/Fed series with basic transforms. Past ≠ future.""")
-
-
-# def display_forecast_lab(selected_client, selected_strategy):
-#     """
-#     Forecast Lab: generates historical & macro context,
-#     runs lightweight RL overlay, Monte-Carlo, and Groq trade ideas.
-#     """
-#     st.title("🔮 Forecast Lab")
-
-#     import utils
-#     from groq import Groq
-#     from pandas_datareader import data as web
-#     import numpy as np
-#     from datetime import datetime
-#     from dateutil.relativedelta import relativedelta
-#     import gymnasium as gym
-#     from gymnasium import spaces
-#     from stable_baselines3 import DQN
-#     import plotly.express as px
-#     import plotly.graph_objects as go
-#     import os
-
-#     today = datetime.today()
-#     GROQ_MODEL = "llama3-70b-8192"
-#     groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY",""))
-#     MACRO = {"GDPC1": "Real GDP YoY", "CPIAUCSL": "CPI YoY", "FEDFUNDS": "Fed-Funds"}
-
-#     # 1. Historical returns
-#     strat_df = utils.load_strategy_returns()
-#     strat = strat_df[["as_of_date", selected_strategy]].set_index("as_of_date").pct_change().dropna()
-
-#     # 2. Macro data
-#     def fetch_fred_series(code):
-#         start = today.replace(year=today.year - 15)
-#         try:
-#             s = web.DataReader(code, "fred", start, today).squeeze()
-#         except:
-#             idx = pd.date_range(start, today, freq="M")
-#             s = pd.Series(np.random.normal(0, 0.01, len(idx)), index=idx)
-#         return s
-
-#     macro_series = {}
-#     for code, label in MACRO.items():
-#         s = fetch_fred_series(code)
-#         if code == "GDPC1":
-#             s = s.resample("Q").last().pct_change().dropna()
-#         macro_series[label] = s
-#     macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
-#     macro["CPI YoY"] = macro["CPI YoY"] / 100  # convert to decimal
-#     macro["Fed-Funds"] = macro["Fed-Funds"] / 100  # convert to decimal
-
-#     st.markdown("""
-#     *Why these inputs:*  
-#     GDP, CPI, and Fed-Funds steer risk appetite.
-#     """)
-#     with st.expander("Show macro inputs"):
-#         st.dataframe(macro.style.format("{:.2%}"))
-
-#     # 3. Lightweight RL
-#     class PortEnv(gym.Env):
-#         def __init__(self, returns):
-#             super().__init__()
-#             self.r = returns.values.flatten()
-#             self.action_space = spaces.Discrete(3)
-#             self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
-#         def reset(self, **kwargs):
-#             self.t, self.w, self.val = 0, 1.0, 1.0
-#             return np.array([self.r[self.t]], dtype=np.float32), {}
-#         def step(self, action):
-#             if action == 1:
-#                 self.w += 0.1
-#             elif action == 2:
-#                 self.w = max(0.0, self.w - 0.1)
-#             reward = self.w * self.r[self.t]
-#             self.val *= 1 + reward
-#             self.t += 1
-#             done = self.t >= len(self.r) - 1
-#             obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
-#             return obs, reward, done, False, {}
-
-#     env = PortEnv(strat)
-#     # use_gpu = st.checkbox("Use GPU (CUDA)", True)
-#     # device = "cuda" if use_gpu else "cpu"
-#     use_gpu = st.checkbox("Use GPU (CUDA)", False)      # ← default = False for AWS
-#     device  = "cuda" if use_gpu else "cpu"
-#     st.info("⚡️ GPU acceleration is not available in this environment. Running on CPU only.")
-#     model = DQN("MlpPolicy", env, verbose=0, device=device)
-#     model.learn(total_timesteps=10_000, progress_bar=False)
-
-#     # 4. Monte-Carlo scenarios
-#     scenarios = {"Base": 0.0, "Bull": 0.02, "Bear": -0.02}
-#     drift = st.slider("Custom drift shift (annual %)", -5.0, 5.0, 0.0, 0.25)/100
-#     scenarios["Custom"] = drift
-
-#     years = [1, 3, 5]
-#     dates = [today + relativedelta(years=y) for y in years]
-#     sim, paths = {}, {}
-#     np.random.seed(42)
-#     for name, d in scenarios.items():
-#         term_vals, path_list = [], []
-#         for _ in range(1000):
-#             v = 1.0
-#             pts = []
-#             for _ in range(60):
-#                 ret = strat.sample(1).values[0, 0]
-#                 v *= 1 + ret + d/12
-#                 pts.append(v)
-#             term_vals.append([pts[11], pts[35], pts[59]])
-#             path_list.append(pts)
-#         sim[name] = np.percentile(term_vals, [5, 50, 95], axis=0)
-#         paths[name] = np.array(path_list)
-
-#     labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
-#     median_vals = {k: sim[k][1] for k in sim}          # each value = [1-yr, 3-yr, 5-yr]
-#     med_df = pd.DataFrame(median_vals).T               # rows = scenarios, cols = 0,1,2
-#     med_df.columns = labels                            # pretty column names
-#     med_df.index.name = "Scenario"
-
-
-#     st.markdown("""
-#     *Median multiples*:  
-#     What $10k could become under each scenario.
-#     """)
-#     st.dataframe(med_df)
-
-#     base_q = np.percentile(paths["Base"], [5, 25, 50, 75, 95], axis=0)
-#     months = pd.date_range(today, periods=60, freq="M")
-#     fan = go.Figure()
-#     for lo, hi, col in [(0, 1, "rgba(0,150,200,0.15)"), (1, 2, "rgba(0,150,200,0.25)")]:
-#         fan.add_scatter(x=months, y=base_q[hi], mode="lines", line=dict(width=0), showlegend=False)
-#         fan.add_scatter(x=months, y=base_q[lo], mode="lines", line=dict(width=0),
-#                         fill="tonexty", fillcolor=col, showlegend=False)
-#     fan.add_scatter(x=months, y=base_q[2], mode="lines", line=dict(color="steelblue"), name="Median")
-#     fan.update_layout(title="Forecast Fan Chart — Base", xaxis_title="", yaxis_title="Multiple")
-#     st.plotly_chart(fan, use_container_width=True)
-
-#     st.markdown("""
-#     *Terminal distribution*:  
-#     Violin plot of 5-year terminal multiples across scenarios.
-#     """)
-#     term_df = pd.DataFrame({k: paths[k][:, -1] for k in paths})
-#     kde = px.violin(term_df, orientation="h", box=True, points=False,
-#                     labels={"value": "Multiple", "variable": "Scenario"})
-#     st.plotly_chart(kde, use_container_width=True)
-
-#     base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
-#     prompt = f"""
-# Client: {selected_client} | Strategy: {selected_strategy}
-
-# Median multiples (Base): {base_info}
-
-# For each scenario, provide two trade ideas with future dates and a one-line rationale.
-# Limit to 4 bullets.
-# """
-#     with st.spinner("Groq drafting trade ideas..."):
-#         rec = groq_client.chat.completions.create(
-#             model=GROQ_MODEL, max_tokens=700,
-#             messages=[
-#                 {"role": "system", "content": "You are an expert PM."},
-#                 {"role": "user", "content": prompt}
-#             ]
-#         ).choices[0].message.content
-
-#     st.subheader("🧑‍💼 AI Trade Ideas")
-#     st.markdown(rec)
-
-#     st.markdown("""
-# ---
-# **Methodology & Disclosures**  
-# Simulation: 15-yr bootstrap + drift, 1k x 60 months. RL: Tiny DQN (~25k params). Macro: FRED GDP/CPI/Fed. No liquidity shocks or costs. Past ≠ future.
-# """)
+def get_recommendations_for_strategy(strategy: str):
+    static = _static_strategy_recs(strategy)
+    llm = _llm_rationales_for_recs(strategy, [r["title"] for r in static])
+    for i, r in enumerate(static):
+        r["detail"] = (llm[i] if llm else r["fallback"])
+        r["id"] = f"strat_{i}"
+        r["score"] = 0.95 - i * 0.02  # cosmetic ordering score
+        r["desc"] = "Rationale: " + r["detail"]
+    return static[:4]
 
 # ────────────────────────────────────────────────────────────────────────────
 # Recommendation cards  +  CSV log  +  analytics
 # ────────────────────────────────────────────────────────────────────────────
-LOG_PATH = "data/rec_log.csv"
+REC_LOG_PATH = "data/rec_log.csv"
 
 def _log_decision(client, strategy, card, decision):
     """Append one row to data/rec_log.csv."""
-    import pandas as pd, os, datetime
-    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    import pandas as pd, os, datetime as _dt
+    os.makedirs(os.path.dirname(REC_LOG_PATH), exist_ok=True)
     row = {
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "timestamp": _dt.datetime.now().isoformat(timespec="seconds"),
         "client": client,
         "strategy": strategy,
         "category": card["id"].split("_")[0],
@@ -1173,32 +780,29 @@ def _log_decision(client, strategy, card, decision):
         "ml_score": card.get("score", 0.0),
     }
     pd.DataFrame([row]).to_csv(
-        LOG_PATH,
+        REC_LOG_PATH,
         mode="a",
-        header=not os.path.isfile(LOG_PATH),
+        header=not os.path.isfile(REC_LOG_PATH),
         index=False,
     )
 
-# ---------------------------------------------------------------------------
 def _build_card_pool(selected_client, selected_strategy) -> list:
     """
     Return 10 synthetic recommendation dicts with an ML score.
-    The first 4 will be the 'highest conviction' for Default Overview.
+    (Used to pad the full-page deck to 10; top 4 now come from strategy-specific set.)
     """
-    import random, hashlib
-    random.seed(int(hashlib.sha256(f"{selected_client}{selected_strategy}".encode()).hexdigest(), 16))
-
+    import hashlib
+    _rnd.seed(int(hashlib.sha256(f"{selected_client}{selected_strategy}".encode()).hexdigest(), 16))
     pool = []
     verbs  = ["Trim", "Add", "Rotate to", "Hedge with", "Switch into"]
     assets = ["EM small-cap ETF", "BB high-yield", "5-yr Treasuries",
               "Quality factor", "Commodities", "Min-Vol ETF", "IG Corp credit",
               "USD hedge", "Gold", "AI thematic basket"]
-
     for i in range(10):
-        verb   = random.choice(verbs)
-        asset  = random.choice(assets)
-        tilt   = random.randint(1, 3) / 10          # 0.1 → 0.3
-        score  = round(random.uniform(0.50, 0.99), 3)  # pretend ML score
+        verb   = _rnd.choice(verbs)
+        asset  = _rnd.choice(assets)
+        tilt   = _rnd.randint(1, 3) / 10          # 0.1 → 0.3
+        score  = round(_rnd.uniform(0.50, 0.99), 3)
         pool.append(
             dict(
                 id    = f"idea_{i}",
@@ -1209,19 +813,90 @@ def _build_card_pool(selected_client, selected_strategy) -> list:
         )
     return sorted(pool, key=lambda x: x["score"], reverse=True)
 
-# ---------------------------------------------------------------------------
+# --- add this trio somewhere above display_recommendations -------------------
+def _static_strategy_recs(strategy: str):
+    s = (strategy or "").lower()
+    if any(k in s for k in ["fixed", "bond", "income"]):
+        return [
+            {"title": "Extend duration by +1y", "fallback": "Curve bull-flattened; capture carry and rolldown toward benchmark."},
+            {"title": "Upgrade 5% to IG credit", "fallback": "Rotate from lower-tier HY to A/AA IG into data-heavy weeks."},
+            {"title": "Add 3% to TIPS", "fallback": "Sticky services inflation supports breakevens; small convexity hedge."},
+            {"title": "Trim 3% securitized", "fallback": "Agency MBS convexity jumpy; recycle into liquid IG."},
+        ]
+    if any(k in s for k in ["alt", "commodity", "real asset"]):
+        return [
+            {"title": "Add 5% to CTAs", "fallback": "Trend captures macro dispersion; diversifies equity/bond beta."},
+            {"title": "Increase real assets +3%", "fallback": "Inflation/geopolitics hedge; boosts diversification."},
+            {"title": "Gold hedge +2%", "fallback": "CB buying + rate-path uncertainty support allocation."},
+            {"title": "Private credit +3%", "fallback": "Attractive spreads; favor senior/secured."},
+        ]
+    # default → equities
+    return [
+        {"title": "Hedge with 10% into Gold", "fallback": "Rates/FX vol and policy risk justify small ballast."},
+        {"title": "Trim 10% into IG Corp credit", "fallback": "Bank some YTD gains; recycle into carry with better drawdown math."},
+        {"title": "Switch 10% into BB high-yield", "fallback": "Upgrade lower-quality cyclical beta to BBs; preserve income."},
+        {"title": "Add 10% into Commodities", "fallback": "Tight supply + reflation impulse; low equity correlation."},
+    ]
+
+def _llm_rationales_for_recs(strategy: str, titles: list) -> Optional[list]:
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return None
+    prompt = (
+        f"Strategy: {strategy}\n"
+        "Give one ≤25-word, current-week rationale per item (no numbering):\n- " + "\n- ".join(titles)
+    )
+    try:
+        from groq import Groq
+        resp = Groq(api_key=key).chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": "You write concise, PM-ready rationales."},
+                      {"role": "user", "content": prompt}],
+            max_tokens=400, temperature=0.3,
+        )
+        lines = [ln.strip("-• \t") for ln in resp.choices[0].message.content.splitlines() if ln.strip()]
+        return lines[:len(titles)] if len(lines) >= len(titles) else None
+    except Exception:
+        return None
+
+def get_recommendations_for_strategy(strategy: str):
+    base = _static_strategy_recs(strategy)
+    llm = _llm_rationales_for_recs(strategy, [r["title"] for r in base])
+    out = []
+    for i, r in enumerate(base):
+        desc = (llm[i] if llm else r["fallback"])
+        out.append({
+            "id": f"strat_{i}",
+            "title": r["title"],
+            "desc": "Rationale: " + desc,
+            "score": 0.95 - i * 0.02,  # cosmetic ordering
+        })
+    return out
+
+
 def display_recommendations(selected_client, selected_strategy, full_page=False):
     """
-    If `full_page` is False we show 4 highest-score cards (Default Overview);
-    if True (Recommendations tab) we show all 10 plus analytics.
+    If `full_page` is False we show 4 highest-conviction cards (strategy-specific);
+    if True (Recommendations tab) we show those 4 + 6 synthetic (total 10) plus analytics.
     """
-    pool  = _build_card_pool(selected_client, selected_strategy)
-    cards = pool if full_page else pool[:4]
+    # keep the small spacer so the top header never clips
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
     title = "🔥 Highest-Conviction Advisor Recommendations" if not full_page else "📋 Full Recommendation Deck"
     st.markdown(f"## {title}")
 
-    # --- theme-aware simple card CSS ---------------------------------------
+ # 1) strategy-aware top 4
+    top4 = get_recommendations_for_strategy(selected_strategy)
+
+    # 2) pad to 10 for the full page with synthetic ideas
+    cards = top4
+    if full_page:
+        extras = _build_card_pool(selected_client, selected_strategy)
+        # avoid duplicate titles when padding
+        seen = {c["title"] for c in top4}
+        extras = [e for e in extras if e["title"] not in seen][:max(0, 10 - len(top4))]
+        cards = top4 + extras
+
+    # Cosmetic card styling preserved
     theme = st.session_state.themes.get("current_theme", "light") if "themes" in st.session_state else "light"
     card_bg   = "#1f2a34" if theme == "dark" else "#f3f3f3"
     card_txt  = "#fff"     if theme == "dark" else "#000"
@@ -1231,10 +906,10 @@ def display_recommendations(selected_client, selected_strategy, full_page=False)
         <div style='background:{card_bg};color:{card_txt};border-radius:8px;
                     padding:10px 14px;margin:3px 0;font-size:0.9rem;'>
            <strong>{card['title']}</strong><br>
-           {card['desc']}
+           {card.get('desc','')}
         </div>"""
 
-    # --- 2-column grid ------------------------------------------------------
+    # 2-column grid, Accept/Reject preserved
     for left, right in zip(cards[::2], cards[1::2]):
         c1, c2 = st.columns(2)
         for col, card in zip((c1, c2), (left, right)):
@@ -1249,37 +924,30 @@ def display_recommendations(selected_client, selected_strategy, full_page=False)
                         _log_decision(selected_client, selected_strategy, card, "Reject")
                         st.warning("Rejected ✗")
 
-    # If we are on the full Recommendations page, show analytics
+    # Analytics for full page
     if full_page:
         _show_recommendation_analytics()
 
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 def _show_recommendation_analytics():
     """
     Synthetic performance charts and tables showing Accepted vs Ignored ideas.
-    Completely fabricated but numerically plausible.
     """
     import pandas as pd
     import numpy as np
     from datetime import datetime, timedelta
-    import streamlit as st
     import plotly.express as px
 
     st.markdown("---")
     st.subheader("📈 Hypothetical Performance Impact (last 6 months)")
 
-    # ----- Fabricate time-series ------------------------------------------------
     buckets = ["Accepted-Good", "Accepted-Bad", "Ignored-Good", "Ignored-Bad"]
     days = pd.date_range(
         datetime.today().date() - timedelta(days=180),
         periods=181,
         freq="D",
     )
-    
     np.random.seed(42)
-    
-    # Simulate tiny daily moves, slightly positive for Good, negative for Bad
     data = {
         b: (1 + np.random.normal(
                 0.00035 if "Good" in b else -0.00025,
@@ -1288,29 +956,23 @@ def _show_recommendation_analytics():
             ).cumprod()
         for b in buckets
     }
-    
     perf = pd.DataFrame(data, index=days)
-    
-    # ----- Plotly line chart with y-axis range -----------------------------------
     fig = px.line(
         perf,
         title="📈 Hypothetical Performance Impact (last 6 months)",
         labels={"value": "Cumulative Return", "index": "Date", "variable": "Bucket"}
     )
-    
     fig.update_layout(
-        yaxis_range=[0.8, 1.2],  # force y-axis to show more relative change
+        yaxis_range=[0.8, 1.2],
         yaxis_title="Cumulative Performance",
         xaxis_title="Date",
         legend_title="Bucket"
     )
-    
     st.plotly_chart(fig, use_container_width=True)
-    # ----- bar chart of final returns ------------------------------------------
+
     final_ret = perf.iloc[-1] - 1
     st.bar_chart(final_ret.to_frame(name="Return"))
 
-    # ----- Sharpe table ---------------------------------------------------------
     sharpe = (perf.pct_change().mean() / perf.pct_change().std()) * np.sqrt(252)
     table = pd.concat(
         [final_ret.rename("6-mo Return"), sharpe.rename("Sharpe")],
@@ -1321,27 +983,45 @@ def _show_recommendation_analytics():
     st.table(table)
 
     st.markdown(
-        "*Illustration only – \"Good\" buckets drift higher; "
-        "\"Bad\" drift lower — demonstrating potential value of acting on the right suggestions.*"
+        "*Illustration only – 'Good' buckets drift higher; 'Bad' drift lower — showing potential value of acting on the right suggestions.*"
     )
 
-# ---------------------------------------------------------------------------
-def display_recommendation_log():
-    st.title("📜 Decision Tracking")
-    if not os.path.isfile(LOG_PATH):
+# ────────────────────────────────────────────────────────────────────────────
+# Decision Tracker (page)  — keeps backward-compat alias
+# ────────────────────────────────────────────────────────────────────────────
+def display_decision_tracker():
+    """Render the decision log page with a consistent title."""
+    import os
+    import pandas as pd
+
+    st.title("Decision Tracker")
+
+    path = REC_LOG_PATH if 'REC_LOG_PATH' in globals() else "data/rec_log.csv"
+    if not os.path.isfile(path):
         st.info("No decisions logged yet.")
         return
-    df = pd.read_csv(LOG_PATH)
-    st.dataframe(df)
- 
+
+    df = pd.read_csv(path)
+
+    # Small summary up top (optional but handy)
+    if not df.empty and "decision" in df.columns:
+        counts = df["decision"].value_counts().rename_axis("Decision").reset_index(name="Count")
+        st.subheader("Summary")
+        st.dataframe(counts, use_container_width=True)
+
+    st.subheader("Log")
+    st.dataframe(df, use_container_width=True)
+
+# Backward-compatibility for app.py calls:
+display_recommendation_log = display_decision_tracker
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Scenario Allocator (new tab)
+# Scenario Allocator (desktop-friendly 3-column editors)
 # ─────────────────────────────────────────────────────────────────────────────
-# === Styling + math helpers ===================================================
 def _inject_allocator_css():
     st.markdown("""
     <style>
-      /* beef up number inputs for visibility in both themes */
       input[type="number"]{
         background: rgba(96,165,250,0.10) !important;
         border: 2px solid rgba(96,165,250,0.9) !important;
@@ -1360,10 +1040,6 @@ def _jitter_mix(
     bias_away_from_alts: bool = True,
     alts_cap: float = 40.0,
 ) -> Dict[str, float]:
-    """
-    Add zero-mean 'percentage-point' noise (preserves 100%). Optionally bias away
-    from 'Alternatives' and softly cap it — (demo only).
-    """
     import numpy as np
     keys = list(mix.keys())
     arr  = np.array([float(mix[k]) for k in keys], dtype=float)
@@ -1371,15 +1047,13 @@ def _jitter_mix(
     rng   = np.random.default_rng(seed)
     noise = rng.normal(0.0, pp_sigma, size=arr.size)
 
-    # nudge Alternatives slightly negative on average (demo realism)
     if bias_away_from_alts and "Alternatives" in keys:
-        noise[keys.index("Alternatives")] -= pp_sigma * 0.6  # ~ -1.8pp if sigma=3
+        noise[keys.index("Alternatives")] -= pp_sigma * 0.6
 
     arr = np.clip(arr + noise, 0.0, None)
     s   = arr.sum() or 1.0
     arr = arr / s * 100.0
 
-    # soft cap Alternatives and redistribute to Equities/Fixed Income
     if bias_away_from_alts and "Alternatives" in keys and alts_cap is not None:
         ia = keys.index("Alternatives")
         excess = max(0.0, arr[ia] - alts_cap)
@@ -1393,7 +1067,6 @@ def _jitter_mix(
     return {k: float(round(v, 1)) for k, v in zip(keys, arr)}
 
 def _styled_alloc_table(mix: Dict[str, float], caption: str = ""):
-    """Pretty, sortable table with bars."""
     import pandas as pd
     df = (pd.DataFrame.from_dict(mix, orient="index", columns=["%"])
             .reset_index().rename(columns={"index":"Asset Class"})
@@ -1409,23 +1082,19 @@ def _sharpe(er: float, vol: float, rf: float) -> float:
     return (er - rf) / vol if vol > 0 else float("nan")
 
 def _norm_pdf(x: float) -> float:
-    import math
     return math.exp(-0.5 * x * x) / math.sqrt(2 * math.pi)
 
 def _coerce_weight(v: Any) -> float:
-    """Turn list/tuple/str/dict/number into a clean percentage in [0..100]."""
     if isinstance(v, (list, tuple)):
         v = v[0] if len(v) else 0.0
     if isinstance(v, dict):
         for k in ("weight", "pct", "percentage", "value", "w", "alloc", "allocation"):
             if k in v:
-                v = v[k]
-                break
+                v = v[k]; break
         else:
             for x in v.values():
                 if isinstance(x, (int, float, str)):
-                    v = x
-                    break
+                    v = x; break
             else:
                 v = 0.0
     if isinstance(v, str):
@@ -1443,29 +1112,23 @@ def _coerce_weight(v: Any) -> float:
     return max(0.0, min(v, 100.0))
 
 def _rollup_to_four_buckets(sector_dict: Optional[Mapping[str, Any]] = None) -> Dict[str, float]:
-    """
-    Map any sector breakdown to 4 coarse buckets used for the allocator.
-    Falls back to a sensible baseline if nothing is available.
-    """
     baseline = {"Equities": 55.0, "Fixed Income": 30.0, "Alternatives": 10.0, "Cash": 5.0}
     if not sector_dict:
         return baseline
-
     buckets = {"Equities": 0.0, "Fixed Income": 0.0, "Alternatives": 0.0, "Cash": 0.0}
     for k, raw_v in sector_dict.items():
         name = str(k).lower()
         w = _coerce_weight(raw_v)
-        if any(x in name for x in ["equity", "stock", "large", "mid", "small", "growth", "value"]):
+        if any(x in name for x in ["equity","stock","large","mid","small","growth","value"]):
             buckets["Equities"] += w
-        elif any(x in name for x in ["fixed", "bond", "treasur", "credit", "corp", "duration", "hy", "ig"]):
+        elif any(x in name for x in ["fixed","bond","treasur","credit","corp","duration","hy","ig"]):
             buckets["Fixed Income"] += w
-        elif any(x in name for x in ["alt", "commodity", "reit", "real estate", "gold", "infra", "hedge"]):
+        elif any(x in name for x in ["alt","commodity","reit","real estate","gold","infra","hedge"]):
             buckets["Alternatives"] += w
         elif "cash" in name:
             buckets["Cash"] += w
         else:
             buckets["Alternatives"] += w
-
     total = sum(buckets.values()) or 1.0
     return {k: (v / total) * 100.0 for k, v in buckets.items()}
 
@@ -1474,30 +1137,17 @@ def _alloc_editor(title: str, defaults: Dict[str, float]) -> Dict[str, float]:
     st.markdown(f"**{title}**")
     c1, c2, c3, c4 = st.columns(4)
 
-    # default values respect session_state if already set (prevents the yellow warning)
     def _init_val(key, fallback):
         return float(st.session_state.get(key, fallback))
 
-    eq = c1.number_input(
-        "Equities %", 0.0, 100.0,
-        value=_init_val(f"{title}_eq", defaults.get("Equities", 0.0)),
-        step=1.0, format="%.1f", key=f"{title}_eq"
-    )
-    fi = c2.number_input(
-        "Fixed Income %", 0.0, 100.0,
-        value=_init_val(f"{title}_fi", defaults.get("Fixed Income", 0.0)),
-        step=1.0, format="%.1f", key=f"{title}_fi"
-    )
-    al = c3.number_input(
-        "Alternatives %", 0.0, 100.0,
-        value=_init_val(f"{title}_al", defaults.get("Alternatives", 0.0)),
-        step=1.0, format="%.1f", key=f"{title}_al"
-    )
-    ca = c4.number_input(
-        "Cash %", 0.0, 100.0,
-        value=_init_val(f"{title}_ca", defaults.get("Cash", 0.0)),
-        step=1.0, format="%.1f", key=f"{title}_ca"
-    )
+    eq = c1.number_input("Equities %", 0.0, 100.0, value=_init_val(f"{title}_eq", defaults.get("Equities", 0.0)),
+                         step=1.0, format="%.1f", key=f"{title}_eq")
+    fi = c2.number_input("Fixed Income %", 0.0, 100.0, value=_init_val(f"{title}_fi", defaults.get("Fixed Income", 0.0)),
+                         step=1.0, format="%.1f", key=f"{title}_fi")
+    al = c3.number_input("Alternatives %", 0.0, 100.0, value=_init_val(f"{title}_al", defaults.get("Alternatives", 0.0)),
+                         step=1.0, format="%.1f", key=f"{title}_al")
+    ca = c4.number_input("Cash %", 0.0, 100.0, value=_init_val(f"{title}_ca", defaults.get("Cash", 0.0)),
+                         step=1.0, format="%.1f", key=f"{title}_ca")
 
     total = eq + fi + al + ca
     tcol1, tcol2 = st.columns([1, 1])
@@ -1518,13 +1168,8 @@ def _alloc_editor(title: str, defaults: Dict[str, float]) -> Dict[str, float]:
         tcol2.button("Normalize to 100%", key=f"{title}_normalize", on_click=_normalize_cb)
         st.warning("Totals don’t equal 100%. Click **Normalize** or tweak inputs.")
     return {"Equities": eq, "Fixed Income": fi, "Alternatives": al, "Cash": ca}
-    
+
 def _naive_return_vol(weights: Dict[str, float]) -> Tuple[float, float]:
-    """
-    Toy expectations (annual): r, σ
-    Equities 6% / 16%, FI 3% / 7%, Alts 5% / 12%, Cash 2% / 1%.
-    Vol ≈ sqrt(sum((w*σ)^2)) — ignores correlation (simple on purpose).
-    """
     r_sig = {
         "Equities": (0.06, 0.16),
         "Fixed Income": (0.03, 0.07),
@@ -1535,7 +1180,6 @@ def _naive_return_vol(weights: Dict[str, float]) -> Tuple[float, float]:
     exp_r = sum(ws[k] * r_sig[k][0] for k in r_sig)
     vol   = math.sqrt(sum((ws[k] * r_sig[k][1]) ** 2 for k in r_sig))
     return exp_r, vol
-
 
 def display_scenario_allocator(selected_client: str, selected_strategy: str):
     import utils, pandas as pd, numpy as np, plotly.express as px, random
@@ -1551,7 +1195,7 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     st.caption("Compare the **current** mix with a **recommended** mix and two alternatives. "
                "Use the inputs below, then export or apply.")
 
-    # --- CURRENT: pull, roll-up, jitter (demo only) ---------------------------
+    # Current: pull, roll-up, jitter (demo only)
     try:
         sector_raw = utils.get_sector_allocations(selected_strategy)
         if isinstance(sector_raw, pd.DataFrame):
@@ -1595,18 +1239,16 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
                 "using a keyword mapping.*"
     )
 
-    # --- DESIGN SCENARIOS -----------------------------------------------------
+    # Design scenarios (fixed 3-column layout for desktop)
     _inject_allocator_css()
     st.subheader("Design scenarios")
 
-    # sane presets derived from current
     growth     = dict(current); growth["Equities"] = min(growth["Equities"] + 10, 100.0)
     shift_g    = growth["Equities"] - current["Equities"]
     growth["Fixed Income"] = max(current["Fixed Income"] - shift_g, 0.0)
 
     defensive  = dict(current); defensive["Equities"] = max(defensive["Equities"] - 15, 0.0)
     defensive["Fixed Income"] = min(defensive["Fixed Income"] + 10, 100.0)
-    # keep 100 by topping Cash with any remainder
     rest = 100.0 - sum(defensive.values())
     defensive["Cash"] = max(defensive["Cash"] + rest, 0.0)
 
@@ -1649,7 +1291,7 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
             st.session_state[f"{title}_ca"] = j["Cash"]
     st.button("Randomize scenarios (±1pp) — *(demo only)*", on_click=_jitter_scenarios_cb)
 
-    # --- CHARTS ---------------------------------------------------------------
+    # Charts
     scenarios = {"Current": current, "Recommended": recommended, "Alt 1": alt1, "Alt 2": alt2}
     df_long = pd.DataFrame(
         [{"Scenario": sc, "Asset Class": a, "Allocation %": float(pct)}
@@ -1678,42 +1320,3 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
                   barmode="group", orientation="h",
                   color_discrete_sequence=px.colors.qualitative.Set2)
     st.plotly_chart(fig2, use_container_width=True)
-
-    # --- SNAPSHOT: E(r), σ, Sharpe, VaR/CVaR ---------------------------------
-    # annual assumptions (toy)
-    horizon = "12-Month Forecast"
-    st.subheader(f"Naïve expectation snapshot — {datetime.today():%b %Y} {horizon} *(demo only)*")
-    rf_pct = st.slider("Risk-free (annual, %)", 0.0, 6.0, 2.0, 0.25)
-    rf = rf_pct / 100.0
-
-    cols = st.columns(4)
-    for i, (name, mix) in enumerate(scenarios.items()):
-        r, s = _naive_return_vol(mix)  # annualized
-        sharpe = _sharpe(r, s, rf)
-        with cols[i]:
-            st.metric(name, f"E(r) {r:,.1%}", delta=f"σ {s:,.1%} • Sharpe {sharpe:.2f}")
-
-    # Institution-grade table
-    z = -1.6448536269514729  # Φ^-1(0.05)
-    alpha = 0.05
-    phi_z = _norm_pdf(z)
-    rows = []
-    for name, mix in scenarios.items():
-        r, s = _naive_return_vol(mix)
-        sharpe = _sharpe(r, s, rf)
-        var5   = r + s * z                  # 5% VaR (return threshold)
-        cvar5  = r - s * (phi_z/alpha)      # Expected Shortfall under Normal
-        rows.append({
-            "Scenario": name,
-            "E(r)": r, "σ": s, "Sharpe": sharpe,
-            "VaR 5%": var5, "CVaR 5%": cvar5
-        })
-    tbl = pd.DataFrame(rows).set_index("Scenario")
-    fmt = {"E(r)": "{:.1%}", "σ": "{:.1%}", "Sharpe": "{:.2f}", "VaR 5%": "{:.1%}", "CVaR 5%": "{:.1%}"}
-    st.dataframe(tbl.style.format(fmt), use_container_width=True)
-
-    st.download_button(
-        "Download scenarios CSV",
-        pd.DataFrame(scenarios).T.to_csv(index=True).encode(),
-        file_name="scenarios.csv", mime="text/csv",
-    )

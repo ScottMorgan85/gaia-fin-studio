@@ -277,7 +277,7 @@ def generate_dtd_commentary(selected_strategy: str) -> str:
     user_prompt = (
         f"Generate 3 bullet points on day-to-day (DTD) performance for {selected_strategy}. "
         "Include relevant market moves, macro factors, attribution, and any positioning tweaks. "
-        "Exactly 3 bullets. Each bullet starts on its own line with a dash ('- ') and is followed by a blank line."
+        "Exactly 3 bullets. Each starts on its own line with no dash ('- ' or similar symbols) and is followed by a blank line."
     )
 
     model_primary   = "llama-3.3-70b-versatile"

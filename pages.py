@@ -1159,7 +1159,7 @@ def _show_recommendation_analytics():
 
 # ---------------------------------------------------------------------------
 def display_recommendation_log():
-    st.title("📜 Recommendation Log")
+    st.title("📜 Decision Tracking")
     if not os.path.isfile(LOG_PATH):
         st.info("No decisions logged yet.")
         return

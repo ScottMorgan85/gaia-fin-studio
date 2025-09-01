@@ -40,14 +40,20 @@ def supports_transaction_period_filtering(file_path: str = DEFAULT_FILE_PATH) ->
     s = pd.to_datetime(df[dcol], errors="coerce")
     return s.notna().sum() > 0
 
+# def get_model_configurations():
+#     return {
+#         "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
+#         "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
+#         "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
+#         "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
+#     }
 
-
-def get_model_configurations():
+ef get_model_configurations():
+    # Keep this short and stable; use env var to override at runtime
     return {
-        "llama3-70b-8192": {"name": "LLaMA3-70b-8192", "tokens": 8192, "developer": "Meta"},
-        "llama3-8b-8192": {"name": "LLaMA3-8b-8192", "tokens": 8192, "developer": "Meta"},
-        "gemma-7b-it": {"name": "Gemma-7b-it", "tokens": 8192, "developer": "Google"},
-        "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
+        "llama-3.3-70b-versatile": {"name": "Llama 3.3 70B (quality)", "tokens": 12000, "developer": "Meta"},
+        "llama-3.1-8b-instant":   {"name": "Llama 3.1 8B (fast)",    "tokens": 6000,  "developer": "Meta"},
+        # If you later add others, do it here (and keep the keys == Groq model IDs)
     }
 
 LOG_PATH = "data/visitor_log.csv"
@@ -151,69 +157,6 @@ def get_client_strategy_details(client_name: str):
     print(f"Risk: {details['risk']}")
 
     return details['strategy_name']
-
-# def get_client_strategy_details(client_name):
-#     details = client_mapping.get_strategy_details(client_name)
-#     if details:
-#         print(f"Client Name: {details['client_name']}")
-#         print(f"Strategy Name: {details['strategy_name']}")
-#         print(f"Description: {details['description']}")
-#         print(f"Benchmark: {details['benchmark']}")
-#         print(f"Risk: {details['risk']}")
-#         return details['strategy_name'] 
-#     else:
-#         print("Client not found or no details available.")
-#     return details
-
-
-# def load_trailing_returns(client_name):
-#     client_info = client_mapping.get_client_info(client_name)
-#     if not client_info:
-#         return None
-
-#     client_id = client_info['client_id']
-#     trailing_columns = {
-#         'port_selected_quarter_return': 'Quarter',
-#         'bench_selected_quarter_return': 'Benchmark Quarter',
-#         'port_1_year_return': '1 Year',
-#         'bench_1_year_return': 'Benchmark 1 Year',
-#         'port_3_years_return': '3 Years',
-#         'bench_3_years_return': 'Benchmark 3 Years',
-#         'port_5_years_return': '5 Years',
-#         'bench_5_years_return': 'Benchmark 5 Years',
-#         'port_10_years_return': '10 Years',
-#         'bench_10_years_return': 'Benchmark 10 Years',
-#         'port_since_inception_return': 'Since Inception',
-#         'bench_since_inception_return': 'Benchmark Since Inception'
-#     }
-    
-#     trailing_returns = [entry for entry in fact_data.fact_table if entry['client_id'] == client_id]
-#     if not trailing_returns:
-#         return None
-
-#     # Create DataFrame with portfolio returns and benchmark returns combined
-#     combined_data = []
-#     period_names = {
-#         'port_selected_quarter_return': 'Quarter',
-#         'port_1_year_return': '1 Year',
-#         'port_3_years_return': '3 Years',
-#         'port_5_years_return': '5 Years',
-#         'port_10_years_return': '10 Years',
-#         'port_since_inception_return': 'Since Inception'
-#     }
-    
-#     for port_col, period in period_names.items():
-#         bench_col = port_col.replace('port', 'bench')
-#         port_value = float(trailing_returns[0][port_col])
-#         bench_value = float(trailing_returns[0][bench_col])
-#         active_value = port_value - bench_value
-#         combined_data.append([period, port_value, bench_value, active_value])
-
-#     # Convert to DataFrame
-#     combined_df = pd.DataFrame(combined_data, columns=['Period', 'Return', 'Benchmark', 'Active'])
-#     combined_df.set_index('Period', inplace=True)
-
-#     return combined_df
 
 def load_trailing_returns(client_name):
     """
@@ -739,22 +682,6 @@ def load_client_data_csv(selected_client: str):
         return pd.DataFrame()
 
 
-# def load_client_data_csv(selected_client: str):
-#     # Demo loader that returns a one-row client summary
-#     try:
-#         df = pd.read_csv("./data/client_data.csv")
-#         if df.empty:
-#             return pd.DataFrame()
-#         return pd.DataFrame({
-#             "client":[selected_client],
-#             "aum":[df.get("Total Value ($)", pd.Series([0])).sum()],
-#             "age":[42],
-#             "risk_profile":["Moderate"],
-#         })
-#     except Exception:
-#         return pd.DataFrame()
-
-
 def format_currency(value):
     """Return a currency formatted string with the sign preceding the "$"."""
     if isinstance(value, Decimal):
@@ -1057,27 +984,6 @@ def get_portfolio_characteristics(selected_strategy):
 
 def get_top_holdings(selected_strategy):
     return top_holdings.get(selected_strategy, None)
-
-
-# def get_top_transactions(selected_strategy):
-#     file_path=DEFAULT_FILE_PATH
-#     # Load the transactions data from CSV
-#     transactions_df = pd.read_csv(DEFAULT_FILE_PATH)    
-#     filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
-
-#     # Get the top buys and sells by 'Total Value ($)'
-#     top_buys = filtered_transactions[filtered_transactions['Transaction Type'] == 'Buy'].nlargest(2, 'Total Value ($)')
-#     top_sells = filtered_transactions[filtered_transactions['Transaction Type'] == 'Sell'].nsmallest(2, 'Total Value ($)')
-#     # Combine buys and sells into a single DataFrame
-#     top_transactions = pd.concat([top_buys, top_sells])
-    
-#     # Select only relevant columns
-#     top_transactions_df = top_transactions[['Name', 'Direction', 'Transaction Type','Total Value ($)', 'Commentary']]
-
-#     top_transactions_df['Total Value ($)'] = top_transactions_df['Total Value ($)'].apply(lambda x: f"${x:,.0f}")
-    
-#     # Return the DataFrame
-#     return top_transactions_df
 
 def get_top_transactions(selected_strategy, as_of_month_end=None, lookback_months=1):
     """

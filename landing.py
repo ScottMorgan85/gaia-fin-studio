@@ -18,18 +18,18 @@ PERSONAL_DOMAINS = {
 EMAIL_RE = re.compile(r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$", re.IGNORECASE)
 
 def _has_enough_vowels(s: str) -> bool:
-    s2 = re.sub(r"[^a-z]", "", s.lower())
+    s2 = re.sub(r"[^a-z]", "", (s or "").lower())
     if not s2:
         return False
     vowels = sum(1 for c in s2 if c in "aeiou")
     return (vowels / max(1, len(s2))) >= 0.20  # 20%+ vowels
 
 def _no_long_consonant_runs(s: str, max_run: int = 4) -> bool:
-    return re.search(rf"[bcdfghjklmnpqrstvwxyz]{{{max_run+1},}}", s.lower()) is None
+    return re.search(rf"[bcdfghjklmnpqrstvwxyz]{{{max_run+1},}}", (s or "").lower()) is None
 
 def _looks_nonrandom_wordlike(s: str) -> bool:
     # Allow spaces, hyphens, apostrophes in names
-    s2 = re.sub(r"[^a-z'\- ]", "", s.lower()).strip()
+    s2 = re.sub(r"[^a-z'\- ]", "", (s or "").lower()).strip()
     return _has_enough_vowels(s2) and _no_long_consonant_runs(s2)
 
 def _valid_email(email: str) -> tuple[bool, str]:
@@ -58,13 +58,16 @@ def _valid_name(name: str) -> tuple[bool, str]:
 
 def render_gate():
     st.title("🔒 GAIA — Request Access (Not a login)")
-    st.caption("We’re only collecting your contact so we can email you an access link. No passwords. No SSO.")
+    st.caption(
+        "We’re just collecting contact info for **networking and potential collaboration**. "
+        "No passwords or SSO. After you submit, the app continues immediately."
+    )
 
     with st.form("gaia_access_request", clear_on_submit=False):
         name = st.text_input("Your name", max_chars=60, placeholder="Jane Doe")
         email = st.text_input("Work email", max_chars=120, placeholder="name@company.com")
-        note = st.text_area("Context (optional)", placeholder="What would you like to see or test?")
-        submitted = st.form_submit_button("Send access request →", use_container_width=True)
+        note = st.text_area("Context (optional)", placeholder="What would you like to explore or collaborate on?")
+        submitted = st.form_submit_button("Send contact details →", use_container_width=True)
 
     # Footer contact under the form (always visible)
     st.caption(f"Questions? Email **[{CONTACT_EMAIL}](mailto:{CONTACT_EMAIL})**.")
@@ -72,7 +75,7 @@ def render_gate():
     if not submitted:
         return
 
-    # Validation
+    # Validate, but still keep this lightweight
     ok_name, name_msg = _valid_name(name)
     ok_email, email_msg = _valid_email(email)
 
@@ -87,21 +90,21 @@ def render_gate():
     # Gentle nudge toward company emails (do not block)
     domain = email.split("@")[-1].lower()
     if domain in PERSONAL_DOMAINS:
-        st.info("Tip: we prioritize company emails for access approvals.")
+        st.info("Tip: company emails help us prioritize collaboration follow-ups.")
 
-    # Log to CSV (data/visitor_log.csv) with timestamp via utils
+    # Log to CSV (data/visitor_log.csv). If logging fails, still let them through.
     try:
         utils.log_visitor({"name": name, "email": email, "note": note})
     except Exception as e:
-        st.warning(f"Request received, but could not write visitor log: {e}")
+        st.warning(f"Thanks — we recorded your request, but logging failed: {e}")
 
-    # Store for the session (does NOT auto-login)
-    st.session_state["requested_access"] = True
+    # Mark gate as passed and proceed directly to the app
+    st.session_state["gate_passed"] = True
     st.session_state["user_name"] = name
     st.session_state["user_email"] = email
-
-    st.success(f"Thanks, {name}! We’ll review and email an access link to **{email}**.")
+    st.success(f"Thanks, {name}! Enjoy the app — we’ll reach out at **{email}** about networking/collab.")
     st.caption("This is not an authentication form and does not create an account.")
+    st.experimental_rerun()
 
 # If your app imports landing.render_form(), keep a thin alias
 def render_form():

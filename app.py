@@ -1,33 +1,30 @@
+# app.py
 import os
 import streamlit as st
-import landing  # simple name + email gate
+import landing  # gate form collects contact info, then lets users through
 
-# ── GAIA Gate Logic (simple two-field gate) ────────────────────────────────
+# ── Gate: collect contact info, then continue straight into the app ─────────
 GATE_ON = os.environ.get("GAIA_GATE_ON", "true").strip().lower() == "true"
-if GATE_ON and not st.session_state.get("signed_in", False):
-    landing.render_gate()  # single, simple form (name + email)
+if GATE_ON and not st.session_state.get("gate_passed"):
+    landing.render_form()  # (alias of render_gate) shows contact form
     st.stop()
 
-
-# ── Feature flag helper (reads DO env vars and optional st.secrets["env"]) ──
+# ── Feature flag helper (reads Streamlit secrets first, then env) ───────────
 def _flag(name: str, default: str = "true") -> bool:
-    """Return True/False from env or secrets; accepts true/1/yes/on."""
-    def _to_bool(v):
-        return str(v).strip().lower() in {"true", "1", "yes", "on"}
+    """Return True/False from secrets or env; accepts true/1/yes/on."""
+    def _to_bool(v): return str(v).strip().lower() in {"true", "1", "yes", "on"}
 
     val = None
-    # Prefer Streamlit secrets if present
     try:
         if "env" in st.secrets:
             val = st.secrets["env"].get(name)
     except Exception:
         pass
-    # Fallback to OS env
     if val is None:
         val = os.getenv(name, default)
     return _to_bool(val)
 
-# ── Page visibility flags (set these in DigitalOcean → Settings → Env Vars) ─
+# ── Page flags (set these in DigitalOcean → Settings → Env Vars if needed) ──
 SHOW_PORTFOLIO_PULSE   = _flag("SHOW_PORTFOLIO_PULSE",   "true")
 SHOW_COMMENTARY        = _flag("SHOW_COMMENTARY",        "true")
 SHOW_PREDICTIVE_RECS   = _flag("SHOW_PREDICTIVE_RECS",   "true")
@@ -35,34 +32,33 @@ SHOW_DECISION_TRACKING = _flag("SHOW_DECISION_TRACKING", "true")
 SHOW_ALLOCATOR         = _flag("SHOW_ALLOCATOR",         "true")
 SHOW_FORECAST_LAB      = _flag("SHOW_FORECAST_LAB",      "true")
 SHOW_PORTFOLIO         = _flag("SHOW_PORTFOLIO",         "true")
-SHOW_CLIENT            = _flag("SHOW_CLIENT",            "true")  # you’re keeping Client exposed
-USERLOG_ON              = _flag("SHOW_CLIENT",            "false")  # you’re keeping Client exposed
+SHOW_CLIENT            = _flag("SHOW_CLIENT",            "true")
+USERLOG_ON             = _flag("USERLOG_ON",             "false")
 
 # (Optional) show active flags during demos
 def show_active_flags():
     with st.sidebar.expander("⚙️ Active Flags", expanded=False):
         for k in [
-            "GAIA_GATE_ON","SHOW_PORTFOLIO_PULSE","SHOW_COMMENTARY","SHOW_PREDICTIVE_RECS",
-            "SHOW_DECISION_TRACKING","SHOW_ALLOCATOR","SHOW_FORECAST_LAB","SHOW_PORTFOLIO","SHOW_CLIENT"
+            "GAIA_GATE_ON", "SHOW_PORTFOLIO_PULSE", "SHOW_COMMENTARY", "SHOW_PREDICTIVE_RECS",
+            "SHOW_DECISION_TRACKING", "SHOW_ALLOCATOR", "SHOW_FORECAST_LAB", "SHOW_PORTFOLIO",
+            "SHOW_CLIENT", "USERLOG_ON"
         ]:
             st.write(k, os.getenv(k, "(unset)"))
 
-# ── Core imports (after gate) ──────────────────────────────────────────────
+# ── Core imports (after gate) ───────────────────────────────────────────────
 import pandas as pd
 from data.client_mapping import (
-    get_client_names,
-    get_client_info,
-    client_strategy_risk_mapping,
-    get_strategy_details,
+    get_client_names, get_client_info,
+    client_strategy_risk_mapping, get_strategy_details
 )
 import utils
 from groq import Groq
 import pages
 import commentary
 
-# ── Reset session state on start (preserve sign-in) ────────────────────────
+# ── Reset session state on start (preserve gate info) ───────────────────────
 def reset_session_state():
-    keep = {"signed_in", "user_name", "user_email", "reset_done"}
+    keep = {"gate_passed", "user_name", "user_email", "reset_done"}
     for k in list(st.session_state.keys()):
         if k not in keep:
             del st.session_state[k]
@@ -71,7 +67,7 @@ if "reset_done" not in st.session_state:
     reset_session_state()
     st.session_state["reset_done"] = True
 
-# ── App config & styling ───────────────────────────────────────────────────
+# ── App config & styling ────────────────────────────────────────────────────
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
 try:
     with open("assets/styles.css") as f:
@@ -83,10 +79,11 @@ except FileNotFoundError:
 pages.initialize_theme()
 pages.render_theme_toggle_button()
 
-# ── Sidebar: client + model selection ──────────────────────────────────────
+# ── Sidebar: client + model selection ───────────────────────────────────────
 st.sidebar.title("Insight Central")
 client_names = get_client_names()
 selected_client = st.sidebar.selectbox("Select Client", client_names)
+
 selected_strategy = client_strategy_risk_mapping[selected_client]
 if isinstance(selected_strategy, dict):
     selected_strategy = selected_strategy.get("strategy_name")
@@ -94,45 +91,34 @@ if isinstance(selected_strategy, dict):
 models = utils.get_model_configurations()
 model_option = st.sidebar.selectbox(
     "Choose a model:", options=list(models.keys()),
-    format_func=lambda x: models[x]["name"], index=0,
+    format_func=lambda x: models[x]["name"], index=0
 )
 
-# Groq client (global)
+# Groq client (global note only)
 groq_key = os.environ.get("GROQ_API_KEY", "")
 if not groq_key:
     st.sidebar.warning("GROQ_API_KEY not set; LLM features may be limited.")
-
 groq_client = Groq(api_key=groq_key) if groq_key else None
 
-# ── Env‑flag gating so you can toggle pages per audience ───────────────────
+# (Optional) reveal flags
+# show_active_flags()
 
-tabs = []
-if SHOW_PORTFOLIO_PULSE:   tabs.append("Portfolio Pulse")       # was: Default Overview
-if SHOW_COMMENTARY:        tabs.append("Commentary Co-Pilot")   # was: Commentary
-if SHOW_PREDICTIVE_RECS:   tabs.append("Predictive Recs")       # was: Recommendations
-if SHOW_DECISION_TRACKING: tabs.append("Decision Tracking")     # was: Log
-if SHOW_ALLOCATOR:         tabs.append("Allocator")             # was: Scenario Allocator
-if SHOW_FORECAST_LAB:      tabs.append("Forecast Lab")
-if SHOW_PORTFOLIO:         tabs.append("Portfolio")
-if SHOW_CLIENT:            tabs.append("Client")
-
-# ── Navigation ─────────────────────────────────────────────────────────────
+# ── Navigation tabs (single build, no duplicates) ───────────────────────────
 tabs = []
 if SHOW_PORTFOLIO_PULSE:   tabs.append("Portfolio Pulse")        # formerly "Default Overview"
 if SHOW_COMMENTARY:        tabs.append("Commentary Co-Pilot")    # formerly "Commentary"
 if SHOW_PREDICTIVE_RECS:   tabs.append("Predictive Recs")        # formerly "Recommendations"
 if SHOW_DECISION_TRACKING: tabs.append("Decision Tracking")      # formerly "Log"
-if SHOW_ALLOCATOR:         tabs.append("Allocator")               # renamed from "Scenario Allocator"
+if SHOW_ALLOCATOR:         tabs.append("Allocator")
 if SHOW_FORECAST_LAB:      tabs.append("Forecast Lab")
 if SHOW_PORTFOLIO:         tabs.append("Portfolio")
 if SHOW_CLIENT:            tabs.append("Client")
-
 if not tabs:
     tabs = ["Portfolio Pulse"]
 
 selected_tab = st.sidebar.radio("Navigate", tabs)
 
-# ── Routing ────────────────────────────────────────────────────────────────
+# ── Routing ─────────────────────────────────────────────────────────────────
 if selected_tab == "Portfolio Pulse":
     pages.display_recommendations(selected_client, selected_strategy, full_page=False)
     pages.display_market_commentary_and_overview(selected_strategy)
@@ -150,6 +136,7 @@ elif selected_tab == "Decision Tracking":
     pages.display_recommendation_log()
 
 elif selected_tab == "Allocator":
+    # implement pages.display_scenario_allocator if you haven't already
     pages.display_scenario_allocator(selected_client, selected_strategy)
 
 elif selected_tab == "Forecast Lab":

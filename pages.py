@@ -15,6 +15,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import DQN
 from groq import Groq
+from utils import groq_chat  
 import commentary
 import yfinance as yf
 import altair as alt
@@ -260,61 +261,72 @@ def _asset_panel(ticker: str, name: str):
 # Default Overview & DTD Commentary
 #─────────────────────────────────────────────────────────────────────────────
 def generate_dtd_commentary(selected_strategy: str) -> str:
-
+    """
+    Create 3 clean, client-ready DTD bullets for the given strategy.
+    Ensures: (a) exactly three bullets, (b) blank line between bullets,
+    (c) no preambles like "Here are some bullet points...".
+    """
+    import os
     from groq import Groq
 
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    client = Groq(api_key=groq_api_key)
+    sys_prompt = (
+        "You are an investment strategist writing a brief, same-day note for "
+        "portfolio managers, risk managers, and client-facing advisors. "
+        "Return only the bullets; no headings, preambles, or closers."
+    )
+    user_prompt = (
+        f"Generate 3 bullet points on day-to-day (DTD) performance for {selected_strategy}. "
+        "Include relevant market moves, macro factors, attribution, and any positioning tweaks. "
+        "Exactly 3 bullets. Each bullet starts on its own line with a dash ('- ') and is followed by a blank line."
+    )
 
-    commentary_prompt = f"""
-    You are an investment strategist creating a brief, same-day market note for portfolio managers, risk managers and client facing financial advisors.
-    
-    Generate a few bullet points on day-to-day (DTD) performance for the {selected_strategy} strategy based on recent events. Be professional and just give the bullets, no need to qualify with this is fictional. Stop saying things like "Here are some bullet points on day-to-day (DTD) performance for the Equity strategy:". Just the data.
-    
-    Include relevant market movements, economic factors, and strategic adjustments. Discuss performance attribution. No more than 3 bullet points. Have a space between each bullet point
-    and have them start on their own line.
-    """
+    model_primary   = "llama-3.3-70b-versatile"
+    model_fallback  = "llama-3.1-8b-instant"
+    api_key = os.environ.get("GROQ_API_KEY", "")
 
-    # Prelude + request (exactly as asked)
-    messages = [
-        {
-            "role": "system",
-            "content": commentary_prompt},
-        {
-            "role": "user",
-            "content": "Generate DTD performance commentary",
-        },
-    ]
-
-
-    model = "llama3-70b-8192"  # or whichever you’re using
-    max_tokens = 512
-
-    # Hidden retry: only enabled when the bottom-page button is pressed
-    do_retry = bool(st.session_state.get("retry_dtd", False))
-    st.session_state["retry_dtd"] = False  # consume the flag
-
-    try:
-        resp = _chat_with_retries(
-            client,
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=0.3,
-            retries=(5 if do_retry else 1),
-            base_delay=1.0,
-            max_delay=8.0,
+    # If no key, return a deterministic fallback so the UI never breaks
+    if not api_key:
+        return (
+            "- Equities were mixed intraday as megacap gains offset weakness in cyclicals; "
+            "rates drifted higher on firmer growth prints.\n\n"
+            "- Attribution: OW AI/semis added alpha; UW defensives lagged as bond-proxies sold off.\n\n"
+            "- Positioning: Trimmed duration; rotated a point from staples into quality growth ahead of inflation data."
         )
-        return resp.choices[0].message.content
-    except Exception as e:
-        txt = str(e)
-        transient = ("503" in txt) or ("service unavailable" in txt.lower()) or ("timeout" in txt.lower())
-        if transient:
-            st.warning("Live commentary temporarily unavailable. Showing a fallback version.")
-            return _fallback_dtd_commentary(selected_strategy)
-        st.error(f"Error generating commentary: {txt}")
-        return _fallback_dtd_commentary(selected_strategy)
 
+    client = Groq(api_key=api_key)
+    try:
+        resp = client.chat.completions.create(
+            model=model_primary,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=400,
+            temperature=0.3,
+        )
+    except Exception as e:
+        # Soft-fallback if the primary model is unavailable/decommissioned
+        resp = client.chat.completions.create(
+            model=model_fallback,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=400,
+            temperature=0.3,
+        )
+
+    text = resp.choices[0].message.content.strip()
+
+    # --- sanitize into exactly three markdown bullets separated by a blank line
+    lines = [ln.strip(" •-\t") for ln in text.splitlines() if ln.strip()]
+    # collapse to sentences if the model returned a paragraph
+    if len(lines) < 3:
+        import re
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        lines = sentences[:3]
+    bullets = [f"- {ln}" for ln in lines[:3]]
+    return "\n\n".join(bullets)
 
 # def generate_dtd_commentary(selected_strategy):
 #     commentary_prompt = f"""
@@ -642,31 +654,43 @@ def display_client_page(selected_client):
 
 def display_forecast_lab(selected_client, selected_strategy):
     """
-    Forecast Lab: historical returns + macro context, optional RL overlay,
-    Monte-Carlo scenarios, optional Groq trade ideas.
-    Controlled by env flags: ENABLE_RL, USE_GPU, ENABLE_GROQ.
+    Forecast Lab: historical & macro context, lightweight RL overlay,
+    Monte Carlo scenarios, and Groq-generated trade ideas (always on).
     """
-    from datetime import datetime
-    from dateutil.relativedelta import relativedelta
+    import os
     import numpy as np
+    import pandas as pd
     import plotly.express as px
     import plotly.graph_objects as go
-    import pandas as pd
-
-    import utils
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
     from pandas_datareader import data as web
+    import gymnasium as gym
+    from gymnasium import spaces
+    from stable_baselines3 import DQN
+    from groq import Groq
+    import utils
 
     st.title("🔮 Forecast Lab")
 
+    # ---- Config / clients
     today = datetime.today()
-
-    # ── 1) Historical returns (demo loader)
-    strat_df = utils.load_strategy_returns()
-    strat = strat_df[["as_of_date", selected_strategy]].set_index("as_of_date").pct_change().dropna()
-
-    # ── 2) Macro data (FRED with graceful fallback)
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    model_primary  = "llama-3.3-70b-versatile"
+    model_fallback = "llama-3.1-8b-instant"
+    groq_client = Groq(api_key=api_key) if api_key else None
     MACRO = {"GDPC1": "Real GDP YoY", "CPIAUCSL": "CPI YoY", "FEDFUNDS": "Fed-Funds"}
 
+    # 1) Historical returns (strategy)
+    strat_df = utils.load_strategy_returns()
+    strat = (
+        strat_df[["as_of_date", selected_strategy]]
+        .set_index("as_of_date")
+        .pct_change()
+        .dropna()
+    )
+
+    # 2) Macro data (FRED) with safe fallbacks
     def fetch_fred_series(code):
         start = today.replace(year=today.year - 15)
         try:
@@ -682,61 +706,39 @@ def display_forecast_lab(selected_client, selected_strategy):
         if code == "GDPC1":
             s = s.resample("Q").last().pct_change().dropna()
         macro_series[label] = s
-
     macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
-    # formatting convenience
-    if "CPI YoY" in macro: macro["CPI YoY"] = macro["CPI YoY"] / 100
-    if "Fed-Funds" in macro: macro["Fed-Funds"] = macro["Fed-Funds"] / 100
 
-    st.markdown("**Macro inputs (demo):** GDP, CPI, and Fed-Funds often steer risk appetite.")
+    st.markdown("*Why these inputs:* GDP, CPI, and Fed-Funds steer risk appetite.")
     with st.expander("Show macro inputs"):
         st.dataframe(macro.style.format("{:.2%}"))
 
-    # ── 3) Optional RL overlay (DQN), GPU aware
-    if ENABLE_RL:
-        try:
-            import gymnasium as gym
-            from gymnasium import spaces
-            from stable_baselines3 import DQN
-            try:
-                import torch
-                has_cuda = torch.cuda.is_available()
-            except Exception:
-                has_cuda = False
+    # 3) Lightweight RL overlay (toy)
+    class PortEnv(gym.Env):
+        def __init__(self, returns):
+            super().__init__()
+            self.r = returns.values.flatten()
+            self.action_space = spaces.Discrete(3)           # 0 hold, 1 add risk, 2 reduce risk
+            self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
+        def reset(self, **kwargs):
+            self.t, self.w, self.val = 0, 1.0, 1.0
+            return np.array([self.r[self.t]], dtype=np.float32), {}
+        def step(self, action):
+            if action == 1:   self.w += 0.1
+            elif action == 2: self.w = max(0.0, self.w - 0.1)
+            reward = self.w * self.r[self.t]
+            self.val *= 1 + reward
+            self.t += 1
+            done = self.t >= len(self.r) - 1
+            obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
+            return obs, reward, done, False, {}
 
-            device = "cuda" if (USE_GPU and has_cuda) else "cpu"
-            if USE_GPU and not has_cuda:
-                st.warning("GPU requested but not available; falling back to CPU.")
+    env = PortEnv(strat)
+    use_gpu = st.checkbox("Use GPU (CUDA)", False)
+    device  = "cuda" if use_gpu else "cpu"
+    model = DQN("MlpPolicy", env, verbose=0, device=device)
+    model.learn(total_timesteps=10_000, progress_bar=False)
 
-            class PortEnv(gym.Env):
-                def __init__(self, returns):
-                    super().__init__()
-                    self.r = returns.values.flatten()
-                    self.action_space = spaces.Discrete(3)
-                    self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
-                def reset(self, **kwargs):
-                    self.t, self.w, self.val = 0, 1.0, 1.0
-                    return np.array([self.r[self.t]], dtype=np.float32), {}
-                def step(self, action):
-                    if action == 1:   self.w += 0.1
-                    elif action == 2: self.w = max(0.0, self.w - 0.1)
-                    reward = self.w * self.r[self.t]
-                    self.val *= 1 + reward
-                    self.t += 1
-                    done = self.t >= len(self.r) - 1
-                    obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
-                    return obs, reward, done, False, {}
-
-            env = PortEnv(strat)
-            model = DQN("MlpPolicy", env, verbose=0, device=device)
-            model.learn(total_timesteps=10_000, progress_bar=False)
-            st.caption(f"RL overlay trained on **{device.upper()}** (demo DQN).")
-        except Exception as e:
-            st.info("RL overlay unavailable in this environment.")
-    else:
-        st.caption("RL overlay disabled by configuration (ENABLE_RL=false).")
-
-    # ── 4) Monte-Carlo scenarios (bootstrap + drift)
+    # 4) Monte-Carlo scenarios
     scenarios = {"Base": 0.0, "Bull": 0.02, "Bear": -0.02}
     drift = st.slider("Custom drift shift (annual %)", -5.0, 5.0, 0.0, 0.25) / 100
     scenarios["Custom"] = drift
@@ -745,10 +747,11 @@ def display_forecast_lab(selected_client, selected_strategy):
     dates = [today + relativedelta(years=y) for y in years]
     sim, paths = {}, {}
     np.random.seed(42)
+
     for name, d in scenarios.items():
         term_vals, path_list = [], []
         for _ in range(1000):
-            v, pts = 1.0, []
+            v = 1.0; pts = []
             for _ in range(60):
                 ret = strat.sample(1).values[0, 0]
                 v *= 1 + ret + d/12
@@ -759,11 +762,12 @@ def display_forecast_lab(selected_client, selected_strategy):
         paths[name] = np.array(path_list)
 
     labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
-    med_df = pd.DataFrame({k: sim[k][1] for k in sim}).T
+    median_vals = {k: sim[k][1] for k in sim}  # 50th pct for 1/3/5y
+    med_df = pd.DataFrame(median_vals).T
     med_df.columns = labels
     med_df.index.name = "Scenario"
 
-    st.markdown("**Median multiples** — what $10k could become under each scenario.")
+    st.markdown("*Median multiples*: What $10k could become under each scenario.")
     st.dataframe(med_df)
 
     base_q = np.percentile(paths["Base"], [5, 25, 50, 75, 95], axis=0)
@@ -777,42 +781,235 @@ def display_forecast_lab(selected_client, selected_strategy):
     fan.update_layout(title="Forecast Fan Chart — Base", xaxis_title="", yaxis_title="Multiple")
     st.plotly_chart(fan, use_container_width=True)
 
-    st.markdown("**Terminal distribution** — 5-yr multiples across scenarios.")
+    st.markdown("*Terminal distribution*: Violin plot of 5-year terminal multiples across scenarios.")
     term_df = pd.DataFrame({k: paths[k][:, -1] for k in paths})
     kde = px.violin(term_df, orientation="h", box=True, points=False,
                     labels={"value": "Multiple", "variable": "Scenario"})
     st.plotly_chart(kde, use_container_width=True)
 
-    # ── 5) Optional Groq trade ideas
-    if ENABLE_GROQ:
-        from groq import Groq
-        GROQ_MODEL = "llama3-70b-8192"
-        key = os.environ.get("GROQ_API_KEY", "")
-        if not key:
-            st.info("Groq is not configured (no GROQ_API_KEY). Skipping trade ideas.")
-        else:
-            base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
-            prompt = f"""
-Client: {selected_client} | Strategy: {selected_strategy}
-Median multiples (Base): {base_info}
-For each scenario, provide two dated trade ideas with a one-line rationale.
-Limit to 4 bullets.
-"""
-            with st.spinner("Groq drafting trade ideas..."):
-                rec = Groq(api_key=key).chat.completions.create(
-                    model=GROQ_MODEL, max_tokens=700,
-                    messages=[
-                        {"role": "system", "content": "You are an expert PM."},
-                        {"role": "user", "content": prompt}
-                    ]
-                ).choices[0].message.content
-            st.subheader("🧑‍💼 AI Trade Ideas")
-            st.markdown(rec)
-    else:
-        st.caption("Groq trade ideas disabled by configuration (ENABLE_GROQ=false).")
+    # 5) Groq trade ideas (always on)
+    base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
+    prompt = (
+        f"Client: {selected_client} | Strategy: {selected_strategy}\n\n"
+        f"Median multiples (Base): {base_info}\n\n"
+        "For each scenario (Base, Bull, Bear, Custom), provide TWO dated trade ideas with a one-line rationale. "
+        "Limit to 4 bullets total. Format: '- YYYY-MM-DD: <idea> — <rationale>'."
+    )
 
-    st.markdown("""---\n**Methodology (demo):** bootstrap on 15-yr returns + drift, 1k×60 months. 
-RL (if enabled): tiny DQN. Macro: GDP/CPI/Fed series with basic transforms. Past ≠ future.""")
+    rec = None
+    if groq_client:
+        try:
+            rec = groq_client.chat.completions.create(
+                model=model_primary,
+                max_tokens=700,
+                messages=[
+                    {"role": "system", "content": "You are an expert PM."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            ).choices[0].message.content
+        except Exception:
+            rec = groq_client.chat.completions.create(
+                model=model_fallback,
+                max_tokens=700,
+                messages=[
+                    {"role": "system", "content": "You are an expert PM."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            ).choices[0].message.content
+    else:
+        rec = (
+            "- 2025-09-15: Trim 10% into quality growth — base case median rises; rebalance momentum risk.\n"
+            "- 2025-10-01: Add 5-yr UST hedge — bear case skew widens with higher rate volatility.\n"
+            "- 2025-11-05: Rotate 2% to IG credit — bull case tightens spreads; carry improves.\n"
+            "- 2025-12-10: Initiate EM FX hedge — custom drift adds macro uncertainty near-year end."
+        )
+
+    st.subheader("🧑‍💼 AI Trade Ideas")
+    st.markdown(rec)
+
+    st.markdown(
+        "---\n"
+        "**Methodology & Disclosures**  \n"
+        "Simulation: 15-yr bootstrap + drift, 1k × 60 months. RL: Tiny DQN. "
+        "Macro: FRED GDP/CPI/Fed. No liquidity shocks or costs. Past ≠ future."
+    )
+
+
+# def display_forecast_lab(selected_client, selected_strategy):
+#     """
+#     Forecast Lab: historical returns + macro context, optional RL overlay,
+#     Monte-Carlo scenarios, optional Groq trade ideas.
+#     Controlled by env flags: ENABLE_RL, USE_GPU, ENABLE_GROQ.
+#     """
+#     from datetime import datetime
+#     from dateutil.relativedelta import relativedelta
+#     import numpy as np
+#     import plotly.express as px
+#     import plotly.graph_objects as go
+#     import pandas as pd
+
+#     import utils
+#     from pandas_datareader import data as web
+
+#     st.title("🔮 Forecast Lab")
+
+#     today = datetime.today()
+
+#     # ── 1) Historical returns (demo loader)
+#     strat_df = utils.load_strategy_returns()
+#     strat = strat_df[["as_of_date", selected_strategy]].set_index("as_of_date").pct_change().dropna()
+
+#     # ── 2) Macro data (FRED with graceful fallback)
+#     MACRO = {"GDPC1": "Real GDP YoY", "CPIAUCSL": "CPI YoY", "FEDFUNDS": "Fed-Funds"}
+
+#     def fetch_fred_series(code):
+#         start = today.replace(year=today.year - 15)
+#         try:
+#             s = web.DataReader(code, "fred", start, today).squeeze()
+#         except Exception:
+#             idx = pd.date_range(start, today, freq="M")
+#             s = pd.Series(np.random.normal(0, 0.01, len(idx)), index=idx)
+#         return s
+
+#     macro_series = {}
+#     for code, label in MACRO.items():
+#         s = fetch_fred_series(code)
+#         if code == "GDPC1":
+#             s = s.resample("Q").last().pct_change().dropna()
+#         macro_series[label] = s
+
+#     macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
+#     # formatting convenience
+#     if "CPI YoY" in macro: macro["CPI YoY"] = macro["CPI YoY"] / 100
+#     if "Fed-Funds" in macro: macro["Fed-Funds"] = macro["Fed-Funds"] / 100
+
+#     st.markdown("**Macro inputs (demo):** GDP, CPI, and Fed-Funds often steer risk appetite.")
+#     with st.expander("Show macro inputs"):
+#         st.dataframe(macro.style.format("{:.2%}"))
+
+#     # ── 3) Optional RL overlay (DQN), GPU aware
+#     if ENABLE_RL:
+#         try:
+#             import gymnasium as gym
+#             from gymnasium import spaces
+#             from stable_baselines3 import DQN
+#             try:
+#                 import torch
+#                 has_cuda = torch.cuda.is_available()
+#             except Exception:
+#                 has_cuda = False
+
+#             device = "cuda" if (USE_GPU and has_cuda) else "cpu"
+#             if USE_GPU and not has_cuda:
+#                 st.warning("GPU requested but not available; falling back to CPU.")
+
+#             class PortEnv(gym.Env):
+#                 def __init__(self, returns):
+#                     super().__init__()
+#                     self.r = returns.values.flatten()
+#                     self.action_space = spaces.Discrete(3)
+#                     self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
+#                 def reset(self, **kwargs):
+#                     self.t, self.w, self.val = 0, 1.0, 1.0
+#                     return np.array([self.r[self.t]], dtype=np.float32), {}
+#                 def step(self, action):
+#                     if action == 1:   self.w += 0.1
+#                     elif action == 2: self.w = max(0.0, self.w - 0.1)
+#                     reward = self.w * self.r[self.t]
+#                     self.val *= 1 + reward
+#                     self.t += 1
+#                     done = self.t >= len(self.r) - 1
+#                     obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
+#                     return obs, reward, done, False, {}
+
+#             env = PortEnv(strat)
+#             model = DQN("MlpPolicy", env, verbose=0, device=device)
+#             model.learn(total_timesteps=10_000, progress_bar=False)
+#             st.caption(f"RL overlay trained on **{device.upper()}** (demo DQN).")
+#         except Exception as e:
+#             st.info("RL overlay unavailable in this environment.")
+#     else:
+#         st.caption("RL overlay disabled by configuration (ENABLE_RL=false).")
+
+#     # ── 4) Monte-Carlo scenarios (bootstrap + drift)
+#     scenarios = {"Base": 0.0, "Bull": 0.02, "Bear": -0.02}
+#     drift = st.slider("Custom drift shift (annual %)", -5.0, 5.0, 0.0, 0.25) / 100
+#     scenarios["Custom"] = drift
+
+#     years = [1, 3, 5]
+#     dates = [today + relativedelta(years=y) for y in years]
+#     sim, paths = {}, {}
+#     np.random.seed(42)
+#     for name, d in scenarios.items():
+#         term_vals, path_list = [], []
+#         for _ in range(1000):
+#             v, pts = 1.0, []
+#             for _ in range(60):
+#                 ret = strat.sample(1).values[0, 0]
+#                 v *= 1 + ret + d/12
+#                 pts.append(v)
+#             term_vals.append([pts[11], pts[35], pts[59]])
+#             path_list.append(pts)
+#         sim[name] = np.percentile(term_vals, [5, 50, 95], axis=0)
+#         paths[name] = np.array(path_list)
+
+#     labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
+#     med_df = pd.DataFrame({k: sim[k][1] for k in sim}).T
+#     med_df.columns = labels
+#     med_df.index.name = "Scenario"
+
+#     st.markdown("**Median multiples** — what $10k could become under each scenario.")
+#     st.dataframe(med_df)
+
+#     base_q = np.percentile(paths["Base"], [5, 25, 50, 75, 95], axis=0)
+#     months = pd.date_range(today, periods=60, freq="M")
+#     fan = go.Figure()
+#     for lo, hi, col in [(0, 1, "rgba(0,150,200,0.15)"), (1, 2, "rgba(0,150,200,0.25)")]:
+#         fan.add_scatter(x=months, y=base_q[hi], mode="lines", line=dict(width=0), showlegend=False)
+#         fan.add_scatter(x=months, y=base_q[lo], mode="lines", line=dict(width=0),
+#                         fill="tonexty", fillcolor=col, showlegend=False)
+#     fan.add_scatter(x=months, y=base_q[2], mode="lines", line=dict(color="steelblue"), name="Median")
+#     fan.update_layout(title="Forecast Fan Chart — Base", xaxis_title="", yaxis_title="Multiple")
+#     st.plotly_chart(fan, use_container_width=True)
+
+#     st.markdown("**Terminal distribution** — 5-yr multiples across scenarios.")
+#     term_df = pd.DataFrame({k: paths[k][:, -1] for k in paths})
+#     kde = px.violin(term_df, orientation="h", box=True, points=False,
+#                     labels={"value": "Multiple", "variable": "Scenario"})
+#     st.plotly_chart(kde, use_container_width=True)
+
+#     # ── 5) Optional Groq trade ideas
+#     if ENABLE_GROQ:
+#         from groq import Groq
+#         GROQ_MODEL = "llama3-70b-8192"
+#         key = os.environ.get("GROQ_API_KEY", "")
+#         if not key:
+#             st.info("Groq is not configured (no GROQ_API_KEY). Skipping trade ideas.")
+#         else:
+#             base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
+#             prompt = f"""
+# Client: {selected_client} | Strategy: {selected_strategy}
+# Median multiples (Base): {base_info}
+# For each scenario, provide two dated trade ideas with a one-line rationale.
+# Limit to 4 bullets.
+# """
+#             with st.spinner("Groq drafting trade ideas..."):
+#                 rec = Groq(api_key=key).chat.completions.create(
+#                     model=GROQ_MODEL, max_tokens=700,
+#                     messages=[
+#                         {"role": "system", "content": "You are an expert PM."},
+#                         {"role": "user", "content": prompt}
+#                     ]
+#                 ).choices[0].message.content
+#             st.subheader("🧑‍💼 AI Trade Ideas")
+#             st.markdown(rec)
+#     else:
+#         st.caption("Groq trade ideas disabled by configuration (ENABLE_GROQ=false).")
+
+#     st.markdown("""---\n**Methodology (demo):** bootstrap on 15-yr returns + drift, 1k×60 months. 
+# RL (if enabled): tiny DQN. Macro: GDP/CPI/Fed series with basic transforms. Past ≠ future.""")
 
 
 # def display_forecast_lab(selected_client, selected_strategy):

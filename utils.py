@@ -23,6 +23,18 @@ from groq import Groq
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
+DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
+
+def groq_chat(messages, **kwargs):
+    """Centralized wrapper with graceful fallback on deprecations."""
+    try:
+        return client.chat.completions.create(model=DEFAULT_MODEL, messages=messages, **kwargs)
+    except Exception as e:
+        if "decommissioned" in str(e).lower() or "no longer supported" in str(e).lower():
+            return client.chat.completions.create(model=FALLBACK_MODEL, messages=messages, **kwargs)
+        raise
+
 DEFAULT_FILE_PATH = "data/client_transactions.csv"
 
 def supports_transaction_period_filtering(file_path: str = DEFAULT_FILE_PATH) -> bool:
@@ -693,13 +705,20 @@ def format_currency(value):
     return f"{sign}${val:,.2f}"
 
 def query_groq(query):
-    # Function to query Groq API and return response
-    response = client.chat.completions.create(
+    resp = groq_chat(
         messages=[{"role": "user", "content": query}],
-        model='llama3-70b-8192',
-        max_tokens=250
+        max_tokens=1500, temperature=0.2,
     )
-    return response.choices[0].message.content
+    return resp.choices[0].message.content
+
+# def query_groq(query):
+#     # Function to query Groq API and return response
+#     response = client.chat.completions.create(
+#         messages=[{"role": "user", "content": query}],
+#         model='llama3-70b-8192',
+#         max_tokens=250
+#     )
+#     return response.choices[0].message.content
 
 def get_interactions_by_client(client_name):
     # Retrieve interaction data based on client_name

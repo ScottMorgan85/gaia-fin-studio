@@ -48,7 +48,7 @@ def supports_transaction_period_filtering(file_path: str = DEFAULT_FILE_PATH) ->
 #         "mixtral-8x7b-32768": {"name": "Mixtral-8x7b-Instruct-v0.1", "tokens": 32768, "developer": "Mistral"}
 #     }
 
-ef get_model_configurations():
+def get_model_configurations():
     # Keep this short and stable; use env var to override at runtime
     return {
         "llama-3.3-70b-versatile": {"name": "Llama 3.3 70B (quality)", "tokens": 12000, "developer": "Meta"},

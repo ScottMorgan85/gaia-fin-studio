@@ -1,5 +1,6 @@
 # app.py
-import os
+import os, sys
+sys.path.insert(0, os.path.dirname(__file__))
 import streamlit as st
 import landing  # gate form collects contact info, then lets users through
 from typing import Optional
@@ -76,13 +77,88 @@ from groq import Groq
 
 # Import pages safely so we surface the real error if pages.py fails to import
 try:
-    import pages  # your pages.py module
+    import importlib
+    import gaia_pages as pages
+    pages = importlib.reload(pages)
 except Exception as e:
-    st.error("Failed to import pages.py. Fix the error shown below, then reload.")
+    import streamlit as st
+    st.error("Failed to import gaia_pages.py. Fix the error below, then reload.")
     st.exception(e)
     st.stop()
 
-import commentary
+# import commentary safely (so NameError can't happen)
+try:
+    import commentary as _commentary_mod
+    commentary = importlib.reload(_commentary_mod)
+except Exception as e:
+    st.error("Failed to import commentary.py. Fix the error below, then reload.")
+    st.exception(e)
+    st.stop()
+
+# ---- Compatibility shim for older/newer pages.py variants ----
+def _render_portfolio_pulse_sections(selected_client, selected_strategy):
+    """Render the 'market commentary / overview' section using whatever
+    function name & signature is available in pages.py."""
+    # try common names, newest → older
+    candidates = [
+        "display_market_commentary_and_overview",
+        "display_market_commentary",
+        "display_overview",
+        "display_default_overview",
+    ]
+    for name in candidates:
+        fn = getattr(pages, name, None)
+        if not callable(fn):
+            continue
+        # try common signatures
+        for args in [
+            (selected_strategy,),
+            (selected_client, selected_strategy),
+            tuple(),
+        ]:
+            try:
+                fn(*args)
+                return
+            except TypeError:
+                continue
+            except Exception as e:
+                st.warning(f"{name} raised: {e}")
+                return
+    st.info("Market commentary section is not available in this build.")
+
+def _render_commentary_section(text, selected_client, model_option, selected_strategy):
+    """Call the commentary renderer in gaia_pages regardless of its name/signature."""
+    candidates = (
+        "display",                       # old name
+        "display_commentary",            # common alt
+        "display_commentary_co_pilot",   # another alt
+        "render_commentary",
+        "show_commentary",
+    )
+    for name in candidates:
+        fn = getattr(pages, name, None)
+        if not callable(fn):
+            continue
+        # try a few common signatures
+        for args in (
+            (text, selected_client, model_option, selected_strategy),
+            (text, selected_client, selected_strategy),
+            (text, selected_client),
+            (text,),
+        ):
+            try:
+                fn(*args)
+                return
+            except TypeError:
+                continue
+            except Exception as e:
+                st.error(f"{name} failed: {e}")
+                return
+
+    # Final fallback: render something so the page still works
+    st.subheader(f"{selected_strategy} — Commentary")
+    st.markdown(text)
+
 
 # ── App config & styling ────────────────────────────────────────────────────
 st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
@@ -190,31 +266,33 @@ if st.query_params.get("admin") == ["1"]:
 
 
 # ── Router (single source of page titles) ───────────────────────────────────
-# Router (single source of page titles)
 if route == "overview":
     st.title("Portfolio Pulse")
-    # Highest-Conviction + DTD page
-        pages.display_market_commentary_and_overview(
-            selected_client,
-            selected_strategy,
-            show_recs=True  # if your function takes it
-)
-
+    pages.display_market_commentary_and_overview(
+        selected_client,
+        selected_strategy,
+        show_recs=True
     )
+
 elif route == "commentary":
     st.title("Commentary Co-Pilot")
-    text = commentary.generate_investment_commentary(
-        model_option, selected_client, selected_strategy, models
-    )
+    try:
+        import commentary as _c
+        text = _c.generate_investment_commentary(
+            model_option, selected_client, selected_strategy, models
+        )
+    except Exception as e:
+        st.error("Commentary generation failed.")
+        st.exception(e)
+        st.stop()
     pages.display(text, selected_client, model_option, selected_strategy)
+
 
 elif route == "recs":
     st.title("Predictive Recs")
     pages.display_recommendations(selected_client, selected_strategy, full_page=True, key_prefix="recs")
 
 
-
-# Router branch
 elif route == "log":
     st.title("Decision Tracker")
     pages.display_recommendation_log()
@@ -226,17 +304,26 @@ elif route == "allocator":
     else:
         st.info("Allocator module is not available in this build.")
 
-elif route == "forecast":
-    st.title("Forecast Lab")
-    pages.display_forecast_lab(selected_client, selected_strategy)
-
 elif route == "portfolio":
     st.title("Portfolio")
-    pages.display_portfolio(selected_client, selected_strategy)
+    if hasattr(pages, "display_portfolio"):
+        pages.display_portfolio(selected_client, selected_strategy)
+    else:
+        st.info("Portfolio page is not available in this build.")
+
+elif route == "forecast":
+    st.title("Forecast Lab")
+    if hasattr(pages, "display_forecast_lab"):
+        pages.display_forecast_lab(selected_client, selected_strategy)
+    else:
+        st.info("Forecast Lab is not available in this build.")
 
 elif route == "client":
     st.title("Client 360")
-    pages.display_client_page(selected_client)
+    if hasattr(pages, "display_client_page"):
+        pages.display_client_page(selected_client)
+    else:
+        st.info("Client page is not available in this build.")
 
 else:
     st.error("Page not found")

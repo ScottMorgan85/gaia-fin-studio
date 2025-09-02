@@ -1,4 +1,4 @@
-# pages.py
+# # pages.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,6 +23,253 @@ import sys
 import io
 import utils
 import time, random as _rnd
+
+REC_LOG_PATH = "data/rec_log.csv"
+
+def _format_dtd_clean(text: str, n: int = 3, max_words: int = 32) -> str:
+    """
+    Normalize Groq/LLM commentary into exactly `n` Markdown bullets.
+    - Strips any leading bullets (•, -, *, o, ◦) or numbering.
+    - Groups 1–2 sentences per bullet and clamps to `max_words`.
+    """
+    import re
+
+    # Replace common bullet symbols with newlines and strip list markers at line starts
+    t = re.sub(r'[\u2022\u2023\u25E6\u2043]', '\n', text)          # • ‣ ◦ ⁃ → newline
+    t = re.sub(r'^\s*([\-*•o◦]+|\d+\.)\s*', '', t, flags=re.M)     # rm leading bullets / "1."
+    t = re.sub(r'\n{2,}', '\n', t).strip()
+
+    # Split to sentences, then pack 1–2 per bullet while staying under max_words
+    sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', t) if s.strip()]
+    items, cur = [], []
+    for s in sents:
+        candidate = (' '.join(cur + [s])).strip()
+        if len(candidate.split()) <= max_words:
+            cur.append(s)
+        else:
+            if cur:
+                items.append(' '.join(cur))
+            cur = [s]
+    if cur:
+        items.append(' '.join(cur))
+
+    # Keep exactly n bullets & clamp words
+    items = items[:n]
+    items = [' '.join(i.split()[:max_words]) for i in items]
+
+    return '\n'.join(f'- {i}' for i in items)
+
+
+# --- LLM-backed rationale helper (supports old & new call styles) -----------
+def _safe_pick(container, i):
+    """Return container[i] safely across list/tuple, dict (int/str keys), or Series; else None."""
+    if container is None:
+        return None
+    try:
+        import pandas as pd
+    except Exception:
+        pd = None
+
+    if isinstance(container, (list, tuple)):
+        return container[i] if 0 <= i < len(container) else None
+    if isinstance(container, dict):
+        return container.get(i) or container.get(str(i))
+    if pd and isinstance(container, pd.Series):
+        # Use iloc for position, fall back to label
+        try:
+            return container.iloc[i]
+        except Exception:
+            return container.get(i, None)
+    # Last resort: try __getitem__ but catch KeyError/IndexError
+    try:
+        return container[i]
+    except Exception:
+        return None
+
+
+def _llm_rationales_for_recs(*args, model_name: str = None, temperature: float = 0.2, **kwargs):
+    """
+    Flexible helper that works with either signature:
+
+    (A) Legacy call (returns a dict):
+        _llm_rationales_for_recs(strategy: str, titles: list[str]) -> dict[title->rationale]
+
+    (B) New call (returns a list of cards with 'rationale' filled):
+        _llm_rationales_for_recs(cards: list[dict], client_name: str, strategy: str, ...)
+           -> list[dict]
+
+    It prefers LLM if USE_LLM_RECS=true and GROQ_API_KEY is set, otherwise uses templates.
+    Never raises on API issues; always returns something sensible.
+    """
+    import os, json
+
+    def _fallback_map(strategy: str, titles):
+        s = (strategy or "").lower()
+        prefix = ("Equity context" if ("equity" in s or "equities" in s) else
+                  "Fixed income context" if ("fixed" in s or "bond" in s or s == "fi") else
+                  "Alternatives context" if ("alt" in s or "alternative" in s) else
+                  "Portfolio context")
+        out = {}
+        for t in titles:
+            t0 = (t or "").strip() or "This action"
+            out[t] = (f"{prefix}: {t0} supports a balanced risk/return profile given "
+                      "current market conditions while keeping tracking error in check.")
+        return out
+
+    def _try_llm(strategy: str, titles):
+        use_llm = str(os.getenv("USE_LLM_RECS", "false")).strip().lower() in {"true", "1", "yes", "on"}
+        api_key = os.getenv("GROQ_API_KEY")
+        if not (use_llm and api_key and titles):
+            return None
+        try:
+            from groq import Groq
+            client = Groq(api_key=api_key)
+            model = model_name or os.getenv("GAIA_LLM_MODEL", "llama3-70b-8192")
+            system_msg = (
+                "You are an investment writing assistant. Given a list of recommendation titles, "
+                "generate concise (1–2 sentence), client-friendly rationales. "
+                "Return ONLY JSON like: {\"rationales\": {\"<title>\": \"...\", ...}}."
+            )
+            user_msg = json.dumps({
+                "strategy": strategy,
+                "titles": titles,
+                "constraints": {"max_sentences": 2, "tone": "professional, actionable, compliance-aware"},
+            })
+            resp = client.chat.completions.create(
+                model=model, temperature=temperature,
+                messages=[{"role": "system", "content": system_msg},
+                          {"role": "user", "content": user_msg}]
+            )
+            content = resp.choices[0].message.content
+            data = json.loads(content) if content else {}
+            mapping = data.get("rationales", {}) if isinstance(data, dict) else {}
+            # ensure string keys/values
+            return {str(k): str(v) for k, v in mapping.items() if isinstance(k, str) and isinstance(v, str)}
+        except Exception:
+            return None
+
+    # -------- Detect signature --------
+    # Legacy: (strategy: str, titles: list[str]) -> dict
+    if len(args) >= 2 and isinstance(args[0], str) and isinstance(args[1], (list, tuple)) \
+       and all(isinstance(x, str) for x in args[1]):
+        strategy, titles = args[0], list(args[1])
+        mapping = _try_llm(strategy, titles) or _fallback_map(strategy, titles)
+        return mapping
+
+    # New: (cards: list[dict], client_name: str, strategy: str, ...) -> list[dict]
+    if len(args) >= 1 and isinstance(args[0], (list, tuple)) and \
+       all(isinstance(c, dict) for c in args[0]):
+        cards = list(args[0])
+        strategy = None
+        # try to pick up strategy from args/kwargs
+        if len(args) >= 3 and isinstance(args[2], str):
+            strategy = args[2]
+        if strategy is None:
+            strategy = kwargs.get("strategy", "")
+        # Fill missing rationales using mapping
+        titles = [c.get("title", "") for c in cards]
+        mapping = _try_llm(strategy, titles) or _fallback_map(strategy, titles)
+        for c in cards:
+            if not c.get("rationale"):
+                c["rationale"] = mapping.get(c.get("title", ""), mapping.get("", None))
+                if not c["rationale"]:
+                    # absolute last resort one-liner
+                    c["rationale"] = f"{(strategy or 'Portfolio')} context: {c.get('title','Action')} supports the mandate."
+        return cards
+
+    # If signature is unrecognized, return something harmless
+    # (legacy callers expect a dict; new callers expect list → choose dict as it's safer in your traceback)
+    return {}
+
+# --- Fallback static ideas so get_recommendations_for_strategy() never breaks --
+def _static_strategy_recs(strategy: str):
+    """
+    Return a small set of reasonable, human-readable recommendation cards
+    for the given strategy. Minimal schema: each item has at least 'title'
+    and 'rationale'. Your display code can ignore extra keys.
+    """
+    s = (strategy or "").strip().lower()
+
+    if "equity" in s or "equities" in s:
+        return [
+            {
+                "title": "Trim mega-cap concentration",
+                "rationale": "Top-10 weights > benchmark; harvest gains and recycle into quality midcaps.",
+            },
+            {
+                "title": "Overweight quality defensives",
+                "rationale": "Earnings breadth narrowing; add cash-flow compounders to stabilize drawdowns.",
+            },
+            {
+                "title": "Covered calls on low-vol holdings",
+                "rationale": "Enhance yield by ~1–2% annualized with limited upside sacrifice.",
+            },
+            {
+                "title": "Add EM ex-China tilt",
+                "rationale": "Attractive relative valuations; momentum improving vs. DM.",
+            },
+        ]
+
+    if "fixed" in s or "bond" in s or "fi" == s:
+        return [
+            {
+                "title": "Extend duration modestly",
+                "rationale": "Curve likely to bull-steepen as cuts price in; improve downside hedging.",
+            },
+            {
+                "title": "Upgrade credit quality",
+                "rationale": "Spreads tight; prefer BBB/A over HY beta to protect carry.",
+            },
+            {
+                "title": "Barbell TIPS + 2–3y IG",
+                "rationale": "Residual inflation tails + positive carry; improves robustness.",
+            },
+            {
+                "title": "Harvest muni tax-losses",
+                "rationale": "Lock losses and reset basis ahead of year-end distributions.",
+            },
+        ]
+
+    if "alt" in s or "alternative" in s:
+        return [
+            {
+                "title": "Increase core real assets",
+                "rationale": "Inflation-hedge and diversifier vs. equity/bond shocks.",
+            },
+            {
+                "title": "Secondaries allocation",
+                "rationale": "Vintage diversification; mitigates J-curve vs. primaries.",
+            },
+            {
+                "title": "Systematic trend sleeve",
+                "rationale": "Crisis convexity with low equity beta; improves tails.",
+            },
+            {
+                "title": "Private credit (senior secured)",
+                "rationale": "Attractive spreads with covenant protection; floating-rate exposure.",
+            },
+        ]
+
+    # generic fallback if strategy string is missing/unknown
+    return [
+        {
+            "title": "Raise cash buffer to 3–5%",
+            "rationale": "Dry powder for dislocations; reduces forced selling risk.",
+        },
+        {
+            "title": "Tighten position limits",
+            "rationale": "Reduce tail exposure and single-name concentration.",
+        },
+        {
+            "title": "Low-cost factor tilt (Quality/Value)",
+            "rationale": "Improves resilience without idiosyncratic risk.",
+        },
+        {
+            "title": "Review fees & slippage",
+            "rationale": "Improve net alpha via vehicle selection and trading hygiene.",
+        },
+    ]
+
 
 # ── Feature flags (read from DO env vars or st.secrets["env"]) ──────────────
 def _flag(name: str, default: str = "true") -> bool:
@@ -195,7 +442,7 @@ def render_theme_toggle_button():
     if st.sidebar.button(face, on_click=change_theme):
         if not st.session_state.themes["refreshed"]:
             st.session_state.themes["refreshed"] = True
-            st.rerun()  # <- replace experimental_rerun
+            st.rerun() 
 
 def _styled_price_df(df: pd.DataFrame):
     """
@@ -244,7 +491,7 @@ def generate_dtd_commentary(selected_strategy: str) -> str:
     """
     Return exactly 3 richer bullets for DTD performance.
     - Each bullet starts with "- " and then a blank line
-    - 3–4 sentences, ~120-150 words per bullet 
+    - 3–4 sentences, ~110 words per bullet 
     - Strategy-aware; no headings/preambles
     """
     import os
@@ -253,13 +500,13 @@ def generate_dtd_commentary(selected_strategy: str) -> str:
     sys_prompt = (
         "You are an investment strategist writing a same-day note for portfolio managers, risk, economists and cleint facing sales people and advisors. "
         "Return only 3 bullets, each 3-4 sentences. No headings or preambles."
+         "Do NOT include bullets, numbering, markdown, emojis, or headings."
     )
     user_prompt = (
         f"Generate 3 bullets on day-to-day performance for {selected_strategy}. "
         "Blend market moves, macro drivers, simple performance attribution (what helped/hurt), "
         "and any positioning/hedge tweaks or risk flags for the next few sessions. "
-        "Start each bullet with '- ' and include one blank line between bullets. "
-        "Keep each bullet around 120-150 words; do not exceed 160 words."
+        "Keep each bullet around 110 words; do not exceed 160 words."
     )
 
     key = os.environ.get("GROQ_API_KEY", "")
@@ -361,202 +608,184 @@ def _round_percents(text: str, places: int = 2) -> str:
             return m.group(0)
     return _re.sub(r"(-?\d+(?:\.\d+)?)(?=%)", _fmt, text)
 
-def get_recommendations_for_strategy(strategy: str, n: int = 4, client: str = None):
+def get_recommendations_for_strategy(strategy, n=4):
     """
-    Return up to `n` strategy-specific recommendation cards.
-    Priority: LLM (titles + rationales) → static titles with LLM rationales → static titles/fallback rationales.
-
-    Each card: {id, title, desc, score}
-      - id: unique within this list (prefixed with 'strat_llm_' or 'strat_')
-      - title: concise action (e.g., "Extend duration by +1y")
-      - desc: "Rationale: <one-liner>"
-      - score: cosmetic ordering score (descends top-to-bottom)
+    Return up to `n` strategy-specific recommendation dicts.
+    Uses LLM rationales when available; falls back to static text.
+    Each item: {id,title,desc,score}
     """
-    import os, json, re
-    from groq import Groq
+    static = _static_strategy_recs(strategy)  # must return [{title, fallback}, ...]
+    n = max(1, int(n))
+    titles = [r.get("title", "") for r in static]
 
-    # Clamp n
-    try:
-        n = int(n)
-    except Exception:
-        n = 4
-    n = max(1, min(n, 10))
+    # Try to get LLM rationales; they may come back as list/tuple/Series/dict/str/None
+    llm_raw = _llm_rationales_for_recs(strategy, titles)
 
-    # 1) Static pool (strategy-aware titles + built-in fallback rationales)
-    static_pool = _static_strategy_recs(strategy)  # already defined above
-    static_titles = [r["title"] for r in static_pool]
+    # Normalize LLM outputs into two helpers:
+    ll_by_title = {}
+    ll_list = []
 
-    # Helper to finalize a list of (title, rationale) pairs into card dicts
-    def _to_cards(pairs, llm_based: bool) -> list:
-        cards = []
-        base = 0.97 if llm_based else 0.95
-        step = 0.01
-        for i, (t, r) in enumerate(pairs[:n]):
-            cards.append({
-                "id": f"{'strat_llm' if llm_based else 'strat'}_{i}",
-                "title": str(t).strip() if t else "(untitled)",
-                "desc": "Rationale: " + (str(r).strip() if r else "—"),
-                "score": round(base - i * step, 3),
-            })
-        return cards
-
-    # 2) Try full LLM generation: titles + rationales (JSON contract)
-    api_key = os.environ.get("GROQ_API_KEY", "") or ""
-    if api_key:
+    if isinstance(llm_raw, dict):
+        # Map of {title: rationale}
+        ll_by_title = {str(k).strip(): str(v).strip() for k, v in llm_raw.items() if v}
+    elif isinstance(llm_raw, (list, tuple)):
+        ll_list = [str(x).strip() for x in llm_raw]
+    else:
+        # Try to coerce other iterables (e.g., pandas Series / numpy array) to a list
         try:
-            prompt = (
-                "You are a portfolio manager assistant.\n"
-                f"Strategy: {strategy}\n"
-                f"Client (optional): {client or 'N/A'}\n\n"
-                f"Produce exactly {n} strategy-specific allocation/trade recommendations as JSON array. "
-                "Each item must be an object with keys: title (≤14 words), rationale (≤25 words). "
-                "Avoid duplication; be concrete and PM-ready. Return ONLY JSON."
-            )
-            client_g = Groq(api_key=api_key)
-            resp = client_g.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                temperature=0.2,
-                max_tokens=800,
-                messages=[
-                    {"role": "system", "content": "Respond with valid JSON only."},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            raw = resp.choices[0].message.content.strip()
-
-            # Be lenient: extract JSON array if the model wrapped it in text
-            m = re.search(r"\[\s*{.*}\s*\]", raw, flags=re.S)
-            json_text = m.group(0) if m else raw
-            items = json.loads(json_text)
-            pairs = []
-            for it in items:
-                title = str(it.get("title", "")).strip()
-                rationale = str(it.get("rationale", "")).strip()
-                if title:
-                    pairs.append((title, rationale))
-            if pairs:
-                # If we got fewer than n, top-up with static titles (dedupe)
-                if len(pairs) < n:
-                    used_titles = {t.lower() for t, _ in pairs}
-                    for r in static_pool:
-                        if len(pairs) >= n:
-                            break
-                        if r["title"].lower() not in used_titles:
-                            pairs.append((r["title"], r.get("fallback", "")))
-                            used_titles.add(r["title"].lower())
-                return _to_cards(pairs, llm_based=True)
+            ll_list = [str(x).strip() for x in list(llm_raw or [])]
         except Exception:
-            pass  # fall through to static+LLM-rationale path
-
-    # 3) Static titles + LLM rationales (if possible), else static fallbacks
-    llm_r = None
-    if api_key:
-        try:
-            llm_r = _llm_rationales_for_recs(strategy, static_titles)  # may return None
-        except Exception:
-            llm_r = None
-
-    pairs = []
-    for i, r in enumerate(static_pool[:n]):
-        rationale = (llm_r[i] if (llm_r and i < len(llm_r)) else r.get("fallback", ""))
-        pairs.append((r["title"], rationale))
-
-    return _to_cards(pairs, llm_based=bool(llm_r))
-
-
-# ── LLM + fallback strategy-specific recommendations (3.9-safe) ─────────────
-def get_recommendations_for_strategy(strategy, n=4, client=None):
-    """
-    Return up to n strategy-specific cards.
-    Tries LLM rationales; falls back to static text if LLM is unavailable.
-    Each card has: id, title, desc, score, source.
-    """
-    try:
-        n = int(n)
-    except Exception:
-        n = 4
-    n = max(1, n)
-
-    static = _static_strategy_recs(strategy)  # already in pages.py
-    titles = [r["title"] for r in static[:n]]
-    llm = _llm_rationales_for_recs(strategy, titles)  # may return None
+            ll_list = []
 
     cards = []
-    for i, r in enumerate(static[:n]):
-        detail = r.get("fallback", "")
-        if llm and i < len(llm) and llm[i]:
-            detail = llm[i]
+    for i, base in enumerate(static[:n]):
+        title = base.get("title", f"Recommendation {i+1}")
+        fallback = base.get("fallback") or base.get("detail") or ""
 
-        # deterministic, unique per (strategy, title)
-        cid = "strat_%s_%d" % (abs(hash((str(strategy), str(r["title"])))) % 100000, i)
+        # Prefer exact title match from dict, then position in list, then fallback
+        detail = ll_by_title.get(title)
+        if not detail and i < len(ll_list):
+            detail = ll_list[i]
+        if not detail:
+            detail = fallback
 
         cards.append({
-            "id": cid,
-            "title": r["title"],
-            "desc": "Rationale: " + detail,
-            "score": round(0.95 - i * 0.02, 3),
-            "source": "llm" if llm else "fallback",
+            "id":    f"strat_{i}",
+            "title": title,
+            "desc":  "Rationale: " + detail,
+            "score": 0.95 - i * 0.02,
         })
+
     return cards
 
 
-# ── Card renderer with unique keys per page via key_prefix ──────────────────
-def display_recommendations(selected_client, selected_strategy, full_page=False, key_prefix="pulse"):
+def display_recommendations(selected_client, selected_strategy, full_page=False, key_prefix="pulse", n=None):
     """
-    If full_page is False: show 4 strategy-specific cards (LLM-backed with fallback).
-    If True: show those 4 plus 6 synthetic extras (total 10) + analytics.
-    key_prefix ensures Streamlit widget keys are unique across pages.
+    When full_page=False: show top `n` (default 4) strategy-aware cards.
+    When full_page=True: show top 4 strategy-aware + 6 synthetic (total 10) and analytics.
+    Widget keys are prefixed to avoid DuplicateWidgetID across pages.
     """
-    # Spacer so first expander never clips
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-    title = "Highest-Conviction Advisor Recommendations" if not full_page else "📋 Full Recommendation Deck"
+    title = "🔥 Highest-Conviction Advisor Recommendations" if not full_page else "📋 Full Recommendation Deck"
     st.markdown(f"## {title}")
 
-    # Strategy-aware top cards
-    strat_recs = get_recommendations_for_strategy(selected_strategy, n=4, client=selected_client)
+    # unique, readable key prefix (prevents duplicate widget IDs across pages)
+    def _safe_key(x: str) -> str:
+        return str(x).replace(" ", "_").replace("/", "_").replace("\\", "_")
+    unique_prefix = f"{key_prefix}_{_safe_key(selected_client)}_{_safe_key(selected_strategy)}"
 
-    # Pad to 10 on full page
-    cards = list(strat_recs)
-    if full_page:
-        extras = _build_card_pool(selected_client, selected_strategy)[:6]  # already in pages.py
-        cards.extend(extras)
+    # how many cards to show in “pulse” mode
+    n_cards = int(n) if n is not None else (10 if full_page else 4)
 
-    # Theme colors
+    # Strategy-specific cards (LLM-backed with fallback)
+    strat_recs = get_recommendations_for_strategy(selected_strategy, n=n_cards)
+
+    # Pad to 10 on the full page with synthetic ideas
+    cards = strat_recs
+    if full_page and len(cards) < 10:
+        extras = _build_card_pool(selected_client, selected_strategy)[: (10 - len(cards))]
+        cards = cards + extras
+
+    # Light/dark style
     theme = st.session_state.themes.get("current_theme", "light") if "themes" in st.session_state else "light"
-    card_bg  = "#1f2a34" if theme == "dark" else "#f3f3f3"
-    card_txt = "#fff"     if theme == "dark" else "#000"
+    card_bg   = "#1f2a34" if theme == "dark" else "#f3f3f3"
+    card_txt  = "#fff"     if theme == "dark" else "#000"
 
     def card_html(card):
-        return (
-            f"<div style='background:{card_bg};color:{card_txt};border-radius:8px;"
-            f"padding:10px 14px;margin:3px 0;font-size:0.9rem;'>"
-            f"<strong>{card['title']}</strong><br>{card.get('desc','')}</div>"
-        )
+        return f"""
+        <div style='background:{card_bg};color:{card_txt};border-radius:8px;
+                    padding:10px 14px;margin:3px 0;font-size:0.9rem;'>
+           <strong>{card['title']}</strong><br>
+           {card.get('desc','')}
+        </div>"""
 
-    # Render 2 cards per row
-    for idx in range(0, len(cards), 2):
-        c1, c2 = st.columns(2)
-        row = cards[idx:idx+2]
-        for j, card in enumerate(row):
-            col = c1 if j == 0 else c2
+    # Render 2-up grid
+    for i in range(0, len(cards), 2):
+        row = cards[i:i+2]
+        cols = st.columns(2) if len(row) == 2 else (st.container(),)
+        for col, card in zip(cols, row):
             with col:
                 with st.expander(card["title"], expanded=False):
                     st.markdown(card_html(card), unsafe_allow_html=True)
-
-                    # Unique widget keys per page via key_prefix
-                    acc_key = f"{key_prefix}_A_{card['id']}"
-                    rej_key = f"{key_prefix}_R_{card['id']}"
-
                     a, r = st.columns(2)
-                    if a.button("Accept", key=acc_key):
+                    if a.button("Accept", key=f"{unique_prefix}_A_{card['id']}"):
                         _log_decision(selected_client, selected_strategy, card, "Accept")
                         st.success("Accepted ✓")
-                    if r.button("Reject", key=rej_key):
+                    if r.button("Reject", key=f"{unique_prefix}_R_{card['id']}"):
                         _log_decision(selected_client, selected_strategy, card, "Reject")
                         st.warning("Rejected ✗")
 
     if full_page:
         _show_recommendation_analytics()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio Pulse: DTD commentary + optional recs + market overview
+# ─────────────────────────────────────────────────────────────────────────────
+import re
+def display_market_commentary_and_overview(selected_client, selected_strategy, show_recs=True, n_cards=4, display_df=True):
+    import datetime as _dt
+
+    # ---------- header ----------
+    now = _dt.datetime.now()
+    suffix = "th" if 4 <= now.day <= 20 or 24 <= now.day <= 30 else ["st", "nd", "rd"][now.day % 10 - 1]
+    st.header(f"{selected_strategy} Daily Update — {now:%A, %B %d}{suffix}, {now.year}")
+
+    # ---------- DTD commentary (keeps your formatter) ----------
+    dtd = generate_dtd_commentary(selected_strategy)
+    
+    # Prefer newline-separated lines from the LLM…
+    lines = [ln.strip(" -•\t") for ln in dtd.splitlines() if ln.strip()]
+    
+    # …fallback: split to sentences if it came back as one paragraph
+    if len(lines) < 3:
+        lines = [s.strip() for s in re.split(r'(?<=[.!?])\s+', dtd) if s.strip()][:3]
+    
+    # Final clamp & render
+    max_words = 32
+    lines = [' '.join(ln.split()[:max_words]) for ln in lines[:3]]
+    st.markdown("\n".join(f"- {ln}" for ln in lines))
+    # ---------- Optional: show strategy-aware LLM cards on this page ----------
+    if show_recs:
+        display_recommendations(
+            selected_client=selected_client,
+            selected_strategy=selected_strategy,
+            full_page=False,
+            key_prefix="pulse",        # key namespace → avoids DuplicateWidgetID
+            n=n_cards
+        )
+
+    # ---------- Market Overview ----------
+    st.title('Market Overview')
+    col_stock1, col_stock_2, col_stock_3, col_stock_4 = st.columns(4)
+    with col_stock1:
+        utils.create_candle_stick_plot(stock_ticker_name="^GSPC", stock_name="S&P 500")
+    with col_stock_2:
+        utils.create_candle_stick_plot(stock_ticker_name="EFA",   stock_name="MSCI EAFE")
+    with col_stock_3:
+        utils.create_candle_stick_plot(stock_ticker_name="AGG",   stock_name="U.S. Aggregate Bond")
+    with col_stock_4:
+        utils.create_candle_stick_plot(stock_ticker_name="^DJCI", stock_name="Dow Jones Commodity Index ")
+
+    col_sector1, col_sector2 = st.columns(2)
+    with col_sector1:
+        st.subheader("Emerging Markets Equities")
+        em_list = ["0700.HK","005930.KS","7203.T","HSBC","NSRGY","SIEGY"]
+        em_name = ["Tencent","Samsung","Toyota","HSBC","Nestle","Siemens"]
+        df_em_stocks = utils.create_stocks_dataframe(em_list, em_name)
+        if display_df:
+            utils.create_dateframe_view(df_em_stocks)
+
+    with col_sector2:
+        st.subheader("Fixed Income Overview")
+        fi_list = ["AGG","HYG","TLT","MBB","EMB","BKLN"]
+        fi_name = ["US Aggregate","High Yield Corporate","Long Treasury","Mortgage-Backed","EM Bond","U.S. Leveraged Loan"]
+        df_fi = utils.create_stocks_dataframe(fi_list, fi_name)
+        if display_df:
+            utils.create_dateframe_view(df_fi)
+
+    return df_em_stocks, df_fi
+
 # ---------------------------------------------------------------------------
 def _show_recommendation_analytics():
     """
@@ -646,8 +875,287 @@ def display_recommendation_log():
         c1.metric("Accepts", accepts)
         c2.metric("Rejects", rejects)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Import the Forecast Lab submodule
+# ─────────────────────────────────────────────────────────────────────────────
 
+def display_forecast_lab(selected_client, selected_strategy):
+    """
+    Forecast Lab: historical & macro context, lightweight RL overlay,
+    Monte Carlo scenarios, and Groq-generated trade ideas (always on).
+    """
+    import os
+    import numpy as np
+    import pandas as pd
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+    from pandas_datareader import data as web
+    import gymnasium as gym
+    from gymnasium import spaces
+    from stable_baselines3 import DQN
+    from groq import Groq
+    import utils
+    import streamlit as st
 
+    # st.title("🔮 Forecast Lab")
+
+    # ---- Config / clients
+    today = datetime.today()
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    model_primary = "llama-3.3-70b-versatile"
+    model_fallback = "llama-3.1-8b-instant"
+    groq_client = Groq(api_key=api_key) if api_key else None
+
+    MACRO = {
+        "GDPC1": "Real GDP YoY",
+        "CPIAUCSL": "CPI YoY",
+        "FEDFUNDS": "Fed-Funds",
+    }
+
+    # 1) Historical returns (strategy)
+    strat_df = utils.load_strategy_returns()
+    strat = (
+        strat_df[["as_of_date", selected_strategy]]
+        .set_index("as_of_date")
+        .pct_change()
+        .dropna()
+    )
+
+    # 2) Macro data (FRED) with safe fallbacks
+    def fetch_fred_series(code):
+        start = today.replace(year=today.year - 15)
+        try:
+            s = web.DataReader(code, "fred", start, today).squeeze()
+        except Exception:
+            idx = pd.date_range(start, today, freq="M")
+            s = pd.Series(np.random.normal(0, 0.01, len(idx)), index=idx)
+        return s
+
+    macro_series = {}
+    for code, label in MACRO.items():
+        s = fetch_fred_series(code)
+        if code == "GDPC1":
+            s = s.resample("Q").last().pct_change().dropna()
+        macro_series[label] = s
+
+    macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
+    st.markdown("*Why these inputs:* GDP, CPI, and Fed-Funds steer risk appetite.")
+    with st.expander("Show macro inputs"):
+        st.dataframe(macro.style.format("{:.2%}"))
+
+    # 3) Lightweight RL overlay (toy)
+    class PortEnv(gym.Env):
+        def __init__(self, returns):
+            super().__init__()
+            self.r = returns.values.flatten()
+            self.action_space = spaces.Discrete(3)  # 0 hold, 1 add risk, 2 reduce risk
+            self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
+
+        def reset(self, **kwargs):
+            self.t, self.w, self.val = 0, 1.0, 1.0
+            return np.array([self.r[self.t]], dtype=np.float32), {}
+
+        def step(self, action):
+            if action == 1:
+                self.w += 0.1
+            elif action == 2:
+                self.w = max(0.0, self.w - 0.1)
+            reward = self.w * self.r[self.t]
+            self.val *= 1 + reward
+            self.t += 1
+            done = self.t >= len(self.r) - 1
+            obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
+            return obs, reward, done, False, {}
+
+    env = PortEnv(strat)
+    # use_gpu = st.checkbox("Use GPU (CUDA)", False)
+    # 
+    device =  "cpu"
+
+    model = DQN("MlpPolicy", env, verbose=0, device=device)
+    model.learn(total_timesteps=10_000, progress_bar=False)
+
+    # 4) Monte-Carlo scenarios
+    scenarios = {"Base": 0.0, "Bull": 0.02, "Bear": -0.02}
+    drift = st.slider("Custom drift shift (annual %)", -5.0, 5.0, 0.0, 0.25) / 100
+    scenarios["Custom"] = drift
+
+    years = [1, 3, 5]
+    dates = [today + relativedelta(years=y) for y in years]
+    sim, paths = {}, {}
+    np.random.seed(42)
+
+    for name, d in scenarios.items():
+        term_vals, path_list = [], []
+        for _ in range(1000):
+            v = 1.0
+            pts = []
+            for _ in range(60):
+                ret = strat.sample(1).values[0, 0]
+                v *= 1 + ret + d / 12
+                pts.append(v)
+            term_vals.append([pts[11], pts[35], pts[59]])
+            path_list.append(pts)
+        sim[name] = np.percentile(term_vals, [5, 50, 95], axis=0)
+        paths[name] = np.array(path_list)
+
+    labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
+    median_vals = {k: sim[k][1] for k in sim}  # 50th pct for 1/3/5y
+    med_df = pd.DataFrame(median_vals).T
+    med_df.columns = labels
+    med_df.index.name = "Scenario"
+
+    st.markdown("*Median multiples*: What $10k could become under each scenario.")
+    st.dataframe(med_df)
+
+    base_q = np.percentile(paths["Base"], [5, 25, 50, 75, 95], axis=0)
+    months = pd.date_range(today, periods=60, freq="M")
+    fan = go.Figure()
+    for lo, hi, col in [
+        (0, 1, "rgba(0,150,200,0.15)"),
+        (1, 2, "rgba(0,150,200,0.25)"),
+    ]:
+        fan.add_scatter(
+            x=months, y=base_q[hi], mode="lines", line=dict(width=0), showlegend=False
+        )
+        fan.add_scatter(
+            x=months,
+            y=base_q[lo],
+            mode="lines",
+            line=dict(width=0),
+            fill="tonexty",
+            fillcolor=col,
+            showlegend=False,
+        )
+    fan.add_scatter(
+        x=months,
+        y=base_q[2],
+        mode="lines",
+        line=dict(color="steelblue"),
+        name="Median",
+    )
+    fan.update_layout(
+        title="Forecast Fan Chart — Base", xaxis_title="", yaxis_title="Multiple"
+    )
+    st.plotly_chart(fan, use_container_width=True)
+
+    st.markdown(
+        "*Terminal distribution*: Violin plot of 5-year terminal multiples across scenarios."
+    )
+    term_df = pd.DataFrame({k: paths[k][:, -1] for k in paths})
+    kde = px.violin(
+        term_df,
+        orientation="h",
+        box=True,
+        points=False,
+        labels={"value": "Multiple", "variable": "Scenario"},
+    )
+    st.plotly_chart(kde, use_container_width=True)
+
+    # 5) Groq trade ideas (always on)
+    base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
+    prompt = (
+        f"Client: {selected_client} | Strategy: {selected_strategy}\n\n"
+        f"Median multiples (Base): {base_info}\n\n"
+        "For each scenario (Base, Bull, Bear, Custom), provide TWO dated trade ideas with a one-line rationale. "
+        "Limit to 4 bullets total. Format: '- YYYY-MM-DD: <idea> — <rationale>'."
+    )
+
+    rec = None
+    if groq_client:
+        try:
+            rec = groq_client.chat.completions.create(
+                model=model_primary,
+                max_tokens=700,
+                messages=[
+                    {"role": "system", "content": "You are an expert PM."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            ).choices[0].message.content
+        except Exception:
+            rec = groq_client.chat.completions.create(
+                model=model_fallback,
+                max_tokens=700,
+                messages=[
+                    {"role": "system", "content": "You are an expert PM."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            ).choices[0].message.content
+    else:
+        rec = (
+            "- 2025-09-15: Trim 10% into quality growth — base case median rises; rebalance momentum risk.\n"
+            "- 2025-10-01: Add 5-yr UST hedge — bear case skew widens with higher rate volatility.\n"
+            "- 2025-11-05: Rotate 2% to IG credit — bull case tightens spreads; carry improves.\n"
+            "- 2025-12-10: Initiate EM FX hedge — custom drift adds macro uncertainty near-year end."
+        )
+
+    st.subheader("🧑‍💼 AI Trade Ideas")
+    st.markdown(rec)
+
+    st.markdown(
+        "---\n"
+        "**Methodology & Disclosures** \n"
+        "Simulation: 15-yr bootstrap + drift, 1k × 60 months. RL: Tiny DQN. "
+        "Macro: FRED GDP/CPI/Fed. No liquidity shocks or costs. Past ≠ future."
+    )
+
+#─────────────────────────────────────────────────────────────────────────────
+# Client Page
+#─────────────────────────────────────────────────────────────────────────────
+def display_client_page(selected_client: str):
+    import streamlit as st
+    try:
+        import pandas as pd
+    except Exception:
+        pd = None
+    try:
+        import utils
+    except Exception as e:
+        st.error(f"Utilities not available: {e}")
+        return
+
+    st.header(f"Client: {selected_client}")
+
+    # Load client CSV robustly
+    try:
+        df = utils.load_client_data_csv(selected_client)
+    except Exception as e:
+        st.error(f"Failed to load client data: {e}")
+        return
+
+    if df is None or getattr(df, "empty", True):
+        st.error("No client data.")
+        return
+
+    # Pull fields safely
+    def _safe_first(series_name, default="—"):
+        try:
+            return df[series_name].iloc[0]
+        except Exception:
+            return default
+
+    aum = _safe_first("aum", "—")
+    age = _safe_first("age", "—")
+    ip  = _safe_first("risk_profile", "—")
+
+    c1, c2, c3 = st.columns(3)
+    with c1: st.metric("AUM", aum)
+    with c2: st.metric("Age", age)
+    with c3: st.metric("Risk Profile", ip)
+
+    st.subheader("Interactions")
+    try:
+        intr = utils.get_interactions_by_client(selected_client) or []
+        if pd is not None:
+            st.table(pd.DataFrame(intr))
+        else:
+            st.write(intr)
+    except Exception as e:
+        st.caption(f"(interactions unavailable: {e})")
 # ─────────────────────────────────────────────────────────────────────────────
 # Scenario Allocator (desktop-friendly 3-column editors)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1135,6 +1643,53 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     except Exception:
         st.info("Trade ideas unavailable right now; will show again once the LLM is reachable.")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio Page
+# ─────────────────────────────────────────────────────────────────────────────
+
+def display_portfolio(selected_client, selected_strategy):
+    st.header(f"{selected_strategy} — Portfolio Overview")
+
+    info = get_client_info(selected_client) or {}
+    strat = info.get("strategy_name")
+    bench = info.get("benchmark_name")
+
+    if not (strat and bench):
+        st.error("Missing strategy or benchmark")
+        return
+
+    # Strategy and benchmark returns
+    # sr = utils.load_strategy_returns()[["as_of_date", strat]].set_index("as_of_date").pct_change()
+    # br = utils.load_benchmark_returns()[["as_of_date", bench]].set_index("as_of_date").pct_change()
+    sr = utils.load_strategy_returns()[["as_of_date", strat]]
+    br = utils.load_benchmark_returns()[["as_of_date", bench]]
+
+    utils.plot_cumulative_returns(sr, br, strat, bench)
+
+    # Details columns
+    st.subheader("Portfolio Details")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.markdown("#### Trailing Returns")
+        dr = utils.load_trailing_returns(selected_client)
+        if dr is not None:
+            utils.format_trailing_returns(dr)
+
+    with c2:
+        st.markdown("#### Characteristics")
+        df = pd.DataFrame(utils.get_portfolio_characteristics(selected_strategy))
+        st.dataframe(df)
+
+    with c3:
+        st.markdown("#### Allocations")
+        df = pd.DataFrame(utils.get_sector_allocations(selected_strategy))
+        st.dataframe(df)
+
+    st.subheader("Top Buys & Sells")
+    df = utils.get_top_transactions(selected_strategy)
+    st.dataframe(df)
+
 
 # ── LLM recommendations (titles + rationales) with JSON parsing ─────────────
 def _slugify_title(s):
@@ -1242,3 +1797,138 @@ def _llm_recs_for_strategy(strategy, n=4):
         if len(out) >= n:
             break
     return out or None
+
+def _build_card_pool(selected_client, selected_strategy) -> list:
+    """
+    Return 10 synthetic recommendation dicts with an ML score.
+    (Used to pad the full-page deck to 10; top 4 now come from strategy-specific set.)
+    """
+    import hashlib
+    _rnd.seed(int(hashlib.sha256(f"{selected_client}{selected_strategy}".encode()).hexdigest(), 16))
+    pool = []
+    verbs  = ["Trim", "Add", "Rotate to", "Hedge with", "Switch into"]
+    assets = ["EM small-cap ETF", "BB high-yield", "5-yr Treasuries",
+              "Quality factor", "Commodities", "Min-Vol ETF", "IG Corp credit",
+              "USD hedge", "Gold", "AI thematic basket"]
+    for i in range(10):
+        verb   = _rnd.choice(verbs)
+        asset  = _rnd.choice(assets)
+        tilt   = _rnd.randint(1, 3) / 10          # 0.1 → 0.3
+        score  = round(_rnd.uniform(0.50, 0.99), 3)
+        pool.append(
+            dict(
+                id    = f"idea_{i}",
+                title = f"{verb} {tilt:.0%} into {asset}",
+                desc  = f"Model confidence: {score:.2%}.",
+                score = score,
+            )
+        )
+    return sorted(pool, key=lambda x: x["score"], reverse=True)
+
+# --- Utilities (safe if redefined) -------------------------------------------
+if "_round_percents" not in globals():
+    def _round_percents(text: str, places: int = 2) -> str:
+        import re
+        def _fmt(m):
+            try:
+                return f"{float(m.group(1)):.{places}f}%"
+            except Exception:
+                return m.group(0)
+        return re.sub(r"(-?\d+(?:\.\d+)?)(?=%)", _fmt, text)
+
+# --- Commentary Co-Pilot renderer (with single + batch export) ---------------
+def display_commentary(commentary_text, selected_client, model_option, selected_strategy):
+    import io, zipfile
+    from datetime import datetime
+    import streamlit as st
+
+    st.header(f"{selected_strategy} — Commentary")
+
+    # Round 12.345% -> 12.35%
+    try:
+        txt = _round_percents(commentary_text, 2)
+    except Exception:
+        txt = commentary_text
+
+    # Top toolbar: single download + batch ZIP
+    c_single, c_batch = st.columns([1, 1])
+
+    with c_single:
+        try:
+            pdf_bytes = utils.create_pdf(txt)
+            st.download_button(
+                "⬇️ Download PDF",
+                data=pdf_bytes,
+                file_name=f"{str(selected_client).replace('/','-')}—commentary.pdf",
+                mime="application/pdf",
+                key=f"dl_pdf_{selected_client}"
+            )
+        except Exception:
+            st.download_button(
+                "⬇️ Download .txt",
+                data=txt.encode("utf-8"),
+                file_name=f"{str(selected_client).replace('/','-')}—commentary.txt",
+                mime="text/plain",
+                key=f"dl_txt_{selected_client}"
+            )
+
+    with c_batch:
+        with st.expander("📦 Batch: generate ZIP for all clients", expanded=False):
+            st.caption("Creates one PDF per client using the current model & settings.")
+            if st.button("Create ZIP", key=f"mkzip_{selected_client}"):
+                clients = []
+                try:
+                    if hasattr(utils, "list_clients"):
+                        clients = utils.list_clients()
+                except Exception:
+                    pass
+                if not clients:
+                    try:
+                        from data.client_mapping import get_client_names
+                        clients = list(get_client_names())
+                    except Exception:
+                        clients = []
+
+                if not clients:
+                    st.warning("No clients found to batch.")
+                else:
+                    zip_buf = io.BytesIO()
+                    with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                        for name in clients:
+                            try:
+                                # Pick the strategy for each client, fall back to current
+                                try:
+                                    strat_name = utils.get_client_strategy_details(name) or selected_strategy
+                                except Exception:
+                                    strat_name = selected_strategy
+
+                                # Generate + tidy text
+                                text_i = commentary.generate_investment_commentary(
+                                    model_option, name, strat_name, utils.get_model_configurations()
+                                )
+                                text_i = _round_percents(text_i, 2)
+
+                                # PDF
+                                pdf_i = utils.create_pdf(text_i)
+                                safe = str(name).replace("/", "-").replace("\\", "-")
+                                zf.writestr(f"{safe}—commentary.pdf", pdf_i)
+                            except Exception as e:
+                                zf.writestr(f"{name}—ERROR.txt", f"Failed to create PDF: {e}")
+
+                    zip_buf.seek(0)
+                    today = datetime.today().strftime("%Y-%m-%d")
+                    st.download_button(
+                        "📦 Download ZIP",
+                        data=zip_buf.getvalue(),
+                        file_name=f"client_commentaries_{today}.zip",
+                        mime="application/zip",
+                        key=f"dl_zip_{selected_client}"
+                    )
+
+    # Render the commentary body
+    st.markdown(txt)
+
+# Backward-compat shim so app.py can call pages.display(...)
+def display(commentary_text, selected_client, model_option, selected_strategy):
+    return display_commentary(commentary_text, selected_client, model_option, selected_strategy)
+

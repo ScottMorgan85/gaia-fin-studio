@@ -5,6 +5,10 @@ import os
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
+# commentary.py
+PRIMARY_MODEL  = "llama-3.1-8b-instant"      # fast default
+FALLBACK_MODEL = "llama-3.3-70b-versatile"   # larger backup
+
 def generate_investment_commentary(model_option, selected_client, selected_strategy, models, selected_month_end=None):
 
     # Commentary structure

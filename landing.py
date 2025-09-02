@@ -22,19 +22,15 @@ def render_form() -> None:
     with st.form("request_form", clear_on_submit=True):
         name  = st.text_input("Your name",  max_chars=100, placeholder="e.g., Jordan Lee")
         email = st.text_input("Work email", max_chars=120, placeholder="e.g., jordan@firm.com")
-
-        # gentle pre-submit hints
         if name and not _is_valid_name(name):
             st.caption("⚠️ Use letters, spaces, or - , . '")
         if email and not _is_valid_email(email):
             st.caption("⚠️ Enter a valid email like name@company.com")
-
         submitted = st.form_submit_button("Continue →")
 
     if not submitted:
         return
 
-    # hard validation
     if not name or not _is_valid_name(name):
         st.warning("Please provide a valid name.")
         return
@@ -42,7 +38,6 @@ def render_form() -> None:
         st.warning("Please provide a valid email.")
         return
 
-    # log + pass the gate
     row = {
         "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
         "name": name.strip(),
@@ -51,9 +46,7 @@ def render_form() -> None:
     _append_csv(row)
 
     # mark session and proceed immediately
-    st.session_state["user_name"] = row["name"]
-    st.session_state["user_email"] = row["email"]
+    st.session_state["user_name"]   = row["name"]
+    st.session_state["user_email"]  = row["email"]
     st.session_state["gate_passed"] = True
-
-    # no confetti, just go
-    st.rerun
+    st.rerun()  # <-- was missing ()

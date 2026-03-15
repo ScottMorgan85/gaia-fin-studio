@@ -2,6 +2,8 @@ import csv
 import os
 import base64
 import datetime
+import numpy as np
+import requests
 import pandas as pd
 import yfinance
 import streamlit as st
@@ -1139,3 +1141,425 @@ def build_commentary_pdf(client_name: str, period_label: str, text: str, output_
 
     pdf.output(output_path)
     return output_path
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DATA LAYER — market data, macro series, derived signals, client enrichment,
+#              earnings / FOMC calendar
+# All functions: return empty df/dict on failure, never None, never crash app.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=3600)
+def get_market_data() -> dict:
+    """
+    Fetch monthly prices/returns for equities, FI, commodities, factors;
+    plus daily VIX.  Returns dict with keys:
+      monthly_prices, monthly_returns, vix_daily, factor_returns
+    """
+    MONTHLY_TICKERS = [
+        "SPY", "QQQ", "IWM", "EFA", "EEM", "VNQ",   # equities
+        "AGG", "TLT", "HYG", "LQD", "TIP",            # fixed income
+        "GLD", "SLV", "USO", "DBA",                    # commodities
+        "MTUM", "VLUE", "QUAL", "USMV",                # factors
+    ]
+    FACTOR_TICKERS = ["MTUM", "VLUE", "QUAL", "USMV"]
+
+    monthly_prices: dict = {}
+    for ticker in MONTHLY_TICKERS:
+        try:
+            df = yfinance.download(
+                ticker, period="5y", interval="1mo",
+                auto_adjust=True, progress=False, actions=False,
+            )
+            if not df.empty:
+                close = df["Close"] if "Close" in df.columns else df.iloc[:, 0]
+                monthly_prices[ticker] = close.squeeze()
+        except Exception as e:
+            print(f"[GAIA] skipped {ticker}: {e}", flush=True)
+
+    vix_daily = pd.DataFrame()
+    try:
+        vdf = yfinance.download(
+            "^VIX", period="2y", interval="1d",
+            auto_adjust=True, progress=False, actions=False,
+        )
+        if not vdf.empty:
+            close = vdf["Close"] if "Close" in vdf.columns else vdf.iloc[:, 0]
+            vix_daily = close.squeeze().rename("VIX").to_frame()
+            vix_daily.index = pd.to_datetime(vix_daily.index)
+    except Exception as e:
+        print(f"[GAIA] skipped ^VIX: {e}", flush=True)
+
+    if monthly_prices:
+        price_df = pd.DataFrame(monthly_prices)
+        price_df.index = pd.to_datetime(price_df.index)
+        price_df = price_df.sort_index()
+        returns_df = price_df.pct_change().dropna(how="all")
+    else:
+        price_df = pd.DataFrame()
+        returns_df = pd.DataFrame()
+
+    factor_returns = (
+        returns_df[[c for c in FACTOR_TICKERS if c in returns_df.columns]]
+        if not returns_df.empty else pd.DataFrame()
+    )
+
+    return {
+        "monthly_prices":  price_df,
+        "monthly_returns": returns_df,
+        "vix_daily":       vix_daily,
+        "factor_returns":  factor_returns,
+    }
+
+
+@st.cache_data(ttl=86400)
+def get_macro_data() -> pd.DataFrame:
+    """
+    Fetch macro series from FRED REST API (no fredapi package — pure requests).
+    Returns DataFrame indexed by month-end date with one column per series.
+    Returns empty DataFrame on total failure.
+    """
+    try:
+        api_key = st.secrets.get("FRED_API_KEY", "b722a33d9fe927f7fe3e494aeeed3e0e")
+    except Exception:
+        api_key = os.environ.get("FRED_API_KEY", "b722a33d9fe927f7fe3e494aeeed3e0e")
+
+    SERIES = [
+        "GDPC1",        # Real GDP (quarterly → ffill monthly)
+        "CPIAUCSL",     # CPI All Items
+        "CPILFESL",     # Core CPI
+        "FEDFUNDS",     # Fed Funds Rate
+        "T10Y2Y",       # 10yr-2yr spread
+        "T10YIE",       # 10yr breakeven inflation
+        "UNRATE",       # Unemployment rate
+        "ICSA",         # Initial jobless claims (weekly)
+        "BAMLH0A0HYM2", # HY OAS spread
+        "BAMLC0A0CM",   # IG OAS spread
+        "DRTSCILM",     # Senior loan officer survey
+        "HOUST",        # Housing starts
+        "UMCSENT",      # U Michigan consumer sentiment
+        "DTWEXBGS",     # USD broad trade-weighted index
+    ]
+
+    BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
+    obs_start = "2010-01-01"
+    all_series: dict = {}
+
+    for code in SERIES:
+        try:
+            resp = requests.get(
+                BASE_URL,
+                params={
+                    "series_id":         code,
+                    "api_key":           api_key,
+                    "file_type":         "json",
+                    "observation_start": obs_start,
+                },
+                timeout=12,
+            )
+            resp.raise_for_status()
+            obs = resp.json().get("observations", [])
+            if not obs:
+                continue
+            s = pd.Series(
+                {o["date"]: float(o["value"]) for o in obs if o["value"] != "."},
+                name=code,
+            )
+            s.index = pd.to_datetime(s.index)
+            s = s.sort_index()
+            # Resample to month-end
+            if code == "ICSA":
+                s = s.resample("M").mean()
+            elif code == "GDPC1":
+                s = s.resample("M").last().ffill()
+            else:
+                s = s.resample("M").last().ffill()
+            all_series[code] = s
+        except Exception as e:
+            print(f"[GAIA] data fetch failed FRED/{code}: {e}", flush=True)
+
+    if not all_series:
+        st.warning("[GAIA] Macro data unavailable — FRED API unreachable.")
+        return pd.DataFrame()
+
+    macro_df = pd.DataFrame(all_series)
+    macro_df.index = pd.to_datetime(macro_df.index)
+    macro_df = macro_df.sort_index().ffill()
+    return macro_df
+
+
+@st.cache_data(ttl=3600)
+def get_derived_signals() -> dict:
+    """
+    Compute momentum, macro regime score, vol regime, yield curve shape,
+    and rolling 24-month correlation matrix from get_market_data() /
+    get_macro_data().  Returns dict — all keys always present.
+    """
+    result: dict = {
+        "momentum":       pd.DataFrame(),
+        "regime_score":   0,
+        "vol_regime":     "Unknown",
+        "vix_current":    None,
+        "yield_curve":    "Unknown",
+        "t10y2y_current": None,
+        "rolling_corr":   pd.DataFrame(),
+        "hy_spread":      None,
+    }
+
+    try:
+        mkt   = get_market_data()
+        macro = get_macro_data()
+    except Exception as e:
+        print(f"[GAIA] data fetch failed get_derived_signals: {e}", flush=True)
+        return result
+
+    # 1. Momentum (12-1 month — skip last month)
+    try:
+        ret = mkt["monthly_returns"]
+        if not ret.empty and len(ret) >= 13:
+            mom = (1 + ret.iloc[-13:-1]).prod() - 1
+            result["momentum"] = mom.to_frame("momentum_12_1")
+    except Exception as e:
+        print(f"[GAIA] momentum calc failed: {e}", flush=True)
+
+    # 2. Macro regime score (-2 to +2)
+    try:
+        if not macro.empty:
+            score = 0
+            if "GDPC1" in macro.columns:
+                gdp = macro["GDPC1"].dropna()
+                if len(gdp) >= 7:
+                    score += 1 if float(gdp.iloc[-1]) > float(gdp.iloc[-7:].mean()) else 0
+            if "CPIAUCSL" in macro.columns:
+                cpi = macro["CPIAUCSL"].dropna()
+                if len(cpi) >= 2:
+                    score += 1 if float(cpi.diff().iloc[-1]) < 0 else 0
+            if "T10Y2Y" in macro.columns:
+                t = macro["T10Y2Y"].dropna()
+                if len(t) >= 1:
+                    score -= 1 if float(t.iloc[-1]) < 0 else 0
+            if "BAMLH0A0HYM2" in macro.columns:
+                hy = macro["BAMLH0A0HYM2"].dropna()
+                if len(hy) >= 3:
+                    score -= 1 if (float(hy.iloc[-1]) - float(hy.iloc[-3])) > 0.5 else 0
+                result["hy_spread"] = float(hy.iloc[-1]) if len(hy) > 0 else None
+            result["regime_score"] = max(-2, min(2, score))
+    except Exception as e:
+        print(f"[GAIA] regime score failed: {e}", flush=True)
+
+    # 3. Volatility regime (20-day VIX MA)
+    try:
+        vix = mkt["vix_daily"]
+        if not vix.empty and "VIX" in vix.columns:
+            vma = vix["VIX"].rolling(20).mean().dropna()
+            if len(vma) > 0:
+                v = float(vma.iloc[-1])
+                result["vol_regime"]  = ("Low Vol" if v < 15 else
+                                         "Normal"   if v < 25 else
+                                         "Elevated" if v < 35 else "Crisis")
+                result["vix_current"] = round(float(vix["VIX"].iloc[-1]), 2)
+    except Exception as e:
+        print(f"[GAIA] vol regime failed: {e}", flush=True)
+
+    # 4. Yield curve shape
+    try:
+        if not macro.empty and "T10Y2Y" in macro.columns:
+            t = macro["T10Y2Y"].dropna()
+            if len(t) > 0:
+                v = float(t.iloc[-1])
+                result["yield_curve"]    = ("Steep"    if v > 1.5  else
+                                            "Normal"   if v > 0.5  else
+                                            "Flat"     if v > 0    else "Inverted")
+                result["t10y2y_current"] = round(v, 2)
+    except Exception as e:
+        print(f"[GAIA] yield curve failed: {e}", flush=True)
+
+    # 5. Rolling 24-month correlation matrix
+    try:
+        ret = mkt["monthly_returns"]
+        if not ret.empty and len(ret) >= 24:
+            result["rolling_corr"] = ret.tail(24).corr()
+    except Exception as e:
+        print(f"[GAIA] rolling corr failed: {e}", flush=True)
+
+    return result
+
+
+@st.cache_data(ttl=3600)
+def enrich_client_data() -> pd.DataFrame:
+    """
+    Load strategy_returns.xlsx, compute risk/return metrics per strategy,
+    return a DataFrame indexed by strategy name.
+    Columns: return_1yr, return_3yr, return_5yr, max_drawdown, sharpe,
+             sortino, calmar, beta, alpha, up_capture, down_capture.
+    """
+    RF_ANNUAL  = 0.05
+    rf_monthly = (1 + RF_ANNUAL) ** (1 / 12) - 1
+
+    try:
+        ret_df = load_strategy_returns()
+    except Exception as e:
+        print(f"[GAIA] enrich_client_data load failed: {e}", flush=True)
+        return pd.DataFrame()
+
+    if ret_df is None or ret_df.empty:
+        return pd.DataFrame()
+
+    date_col = next(
+        (c for c in ret_df.columns if c.lower() in ("as_of_date", "date")), None
+    )
+    if not date_col:
+        return pd.DataFrame()
+
+    ret_df[date_col] = pd.to_datetime(ret_df[date_col])
+    ret_df = ret_df.sort_values(date_col).set_index(date_col)
+
+    strat_cols = list(ret_df.columns)
+    for col in strat_cols:
+        s = ret_df[col].dropna()
+        if len(s) > 0 and s.abs().mean() > 5.0:
+            ret_df[col] = ret_df[col].pct_change()
+    ret_df = ret_df.dropna(how="all")
+
+    # SPY benchmark (monthly)
+    spy_ret = pd.Series(dtype=float)
+    try:
+        spy_df = yfinance.download(
+            "SPY", period="10y", interval="1mo",
+            auto_adjust=True, progress=False, actions=False,
+        )
+        if not spy_df.empty:
+            close = spy_df["Close"] if "Close" in spy_df.columns else spy_df.iloc[:, 0]
+            spy_ret = close.squeeze().pct_change().dropna()
+            spy_ret.index = pd.to_datetime(spy_ret.index).to_period("M").to_timestamp()
+    except Exception as e:
+        print(f"[GAIA] SPY fetch failed: {e}", flush=True)
+
+    metrics: dict = {}
+    for col in strat_cols:
+        s = ret_df[col].dropna()
+        if len(s) < 12:
+            continue
+        m: dict = {}
+        # Trailing annualized returns
+        for label, months in [("1yr", 12), ("3yr", 36), ("5yr", 60)]:
+            subset = s.tail(months)
+            if len(subset) >= max(12, months // 2):
+                m[f"return_{label}"] = round(
+                    float((1 + subset).prod() ** (12 / len(subset)) - 1), 4
+                )
+        # Max drawdown
+        cum     = (1 + s).cumprod()
+        dd      = (cum - cum.cummax()) / cum.cummax()
+        m["max_drawdown"] = round(float(dd.min()), 4)
+        # Sharpe
+        excess  = s - rf_monthly
+        if excess.std() > 0:
+            m["sharpe"] = round(float(excess.mean() / excess.std() * np.sqrt(12)), 4)
+        # Sortino
+        downside = excess[excess < 0]
+        if len(downside) > 1 and downside.std() > 0:
+            m["sortino"] = round(
+                float(excess.mean() / downside.std() * np.sqrt(12)), 4
+            )
+        # Calmar
+        ann_ret = float((1 + s).prod() ** (12 / len(s)) - 1)
+        if m.get("max_drawdown", 0) != 0:
+            m["calmar"] = round(ann_ret / abs(m["max_drawdown"]), 4)
+        # Beta, alpha, up/down capture vs SPY (36-month)
+        if not spy_ret.empty:
+            try:
+                aligned = pd.concat(
+                    [s.tail(36).rename("strat"), spy_ret.rename("spy")],
+                    axis=1, join="inner",
+                ).dropna()
+                if len(aligned) >= 24:
+                    cov_mat  = np.cov(aligned["strat"], aligned["spy"])
+                    beta     = cov_mat[0, 1] / cov_mat[1, 1]
+                    alpha_m  = aligned["strat"].mean() - beta * aligned["spy"].mean()
+                    m["beta"]  = round(float(beta), 4)
+                    m["alpha"] = round(float(alpha_m * 12), 4)
+                    up   = aligned[aligned["spy"] > 0]
+                    down = aligned[aligned["spy"] < 0]
+                    if not up.empty and up["spy"].mean() != 0:
+                        m["up_capture"]   = round(
+                            float(up["strat"].mean() / up["spy"].mean()), 4
+                        )
+                    if not down.empty and down["spy"].mean() != 0:
+                        m["down_capture"] = round(
+                            float(down["strat"].mean() / down["spy"].mean()), 4
+                        )
+            except Exception as e:
+                print(f"[GAIA] beta/alpha calc failed {col}: {e}", flush=True)
+        metrics[col] = m
+
+    if not metrics:
+        return pd.DataFrame()
+    return pd.DataFrame(metrics).T
+
+
+@st.cache_data(ttl=43200)
+def get_upcoming_events() -> dict:
+    """
+    Fetch upcoming earnings dates for a watchlist and return hardcoded FOMC dates.
+    Returns dict: {"earnings": DataFrame, "fomc_dates": list[date]}
+    """
+    from datetime import date as _date
+
+    WATCHLIST = [
+        "AAPL", "MSFT", "NVDA", "JPM", "GS",
+        "BAC",  "XOM",  "META", "AMZN", "GOOGL",
+    ]
+
+    earnings_rows = []
+    for ticker in WATCHLIST:
+        try:
+            t   = yfinance.Ticker(ticker)
+            cal = t.calendar
+            # yfinance returns calendar as a dict or DataFrame depending on version
+            ed = None
+            if isinstance(cal, dict):
+                ed = cal.get("Earnings Date", [None])[0] if cal.get("Earnings Date") else None
+            elif cal is not None and not cal.empty:
+                if "Earnings Date" in cal.index:
+                    ed = cal.loc["Earnings Date"].iloc[0]
+            if ed is not None:
+                info = {}
+                try:
+                    info = t.info or {}
+                except Exception:
+                    pass
+                earnings_rows.append({
+                    "ticker":       ticker,
+                    "company":      info.get("shortName", ticker),
+                    "earnings_date": pd.to_datetime(ed).date(),
+                    "eps_estimate": info.get("forwardEps", None),
+                })
+        except Exception as e:
+            print(f"[GAIA] earnings fetch failed {ticker}: {e}", flush=True)
+
+    earnings_df = (
+        pd.DataFrame(earnings_rows)
+        if earnings_rows
+        else pd.DataFrame(columns=["ticker", "company", "earnings_date", "eps_estimate"])
+    )
+
+    # FOMC scheduled meeting dates — update via CLAUDE.md when stale
+    fomc_all = [
+        _date(2025, 3, 19),
+        _date(2025, 5, 7),
+        _date(2025, 6, 18),
+        _date(2025, 7, 30),
+        _date(2025, 9, 17),
+        _date(2025, 10, 29),
+        _date(2025, 12, 10),
+        _date(2026, 1, 28),
+        _date(2026, 3, 18),
+        _date(2026, 4, 29),
+        _date(2026, 6, 17),
+        _date(2026, 7, 29),
+    ]
+    today = _date.today()
+    fomc_dates = [d for d in fomc_all if d >= today]
+
+    return {"earnings": earnings_df, "fomc_dates": fomc_dates}

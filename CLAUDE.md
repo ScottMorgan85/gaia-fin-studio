@@ -51,6 +51,13 @@ DigitalOcean App Platform where `secrets.toml` is absent.
 Local dev: `.streamlit/secrets.toml` (never commit).
 DigitalOcean: Settings → Environment Variables (flat `GROQ_API_KEY=...`).
 
+| Key | Required | Where to get |
+|-----|----------|--------------|
+| `GROQ_API_KEY` | Yes | console.groq.com |
+| `FRED_API_KEY` | Optional | [fred.stlouisfed.org/docs/api/api_key.html](https://fred.stlouisfed.org/docs/api/api_key.html) — free registration |
+
+**FRED_API_KEY note:** The FRED REST API requires a real registered key. Without it, `get_macro_data()` returns an empty DataFrame and Forecast Lab / Market Pulse fall back to synthetic data gracefully. The demo key `b722a33d9fe927f7fe3e494aeeed3e0e` in the spec is **not valid** — register at FRED for a free key and add it to `secrets.toml` as `FRED_API_KEY = "..."`.
+
 ---
 
 ## Features
@@ -99,6 +106,28 @@ Full probabilistic simulation and macro analysis overlay for the selected client
 GDP > 0   Goldilocks / Reflation
 GDP ≤ 0   Stagflation            Deflation
 ```
+
+---
+
+## Data Layer — utils.py functions
+
+All five functions are in `utils.py` (appended at end). All cache with `@st.cache_data`, return empty df/dict on failure, never crash.
+
+| Function | TTL | Description |
+|----------|-----|-------------|
+| `get_market_data()` | 1hr | yfinance: monthly prices+returns for 19 tickers, daily VIX, factor returns |
+| `get_macro_data()` | 24hr | FRED REST API: 14 macro series → monthly DataFrame. **Requires `FRED_API_KEY` in secrets.toml.** Falls back to empty df. |
+| `get_derived_signals()` | 1hr | Computes momentum (12-1), regime score (-2→+2), vol regime, yield curve shape, 24-month rolling corr matrix |
+| `enrich_client_data()` | 1hr | Per-strategy risk metrics: 1/3/5yr returns, sharpe, sortino, calmar, beta, alpha, up/down capture vs SPY |
+| `get_upcoming_events()` | 12hr | yfinance earnings calendar for 10 tickers + hardcoded FOMC dates |
+
+**Integrations:**
+- **Market Pulse sidebar** — added to `display_market_commentary_and_overview()`: VIX/vol regime badge, HY spread, yield curve shape, regime score, next FOMC countdown
+- **Forecast Lab** — macro section replaced with `utils.get_macro_data()`; vol regime badge next to scenario selector; T10Y2Y and HY spread available for regime callout
+- **Client 360** — enriched risk metrics (Sharpe, Sortino, max DD, beta, alpha, up/down capture) added below AUM/Age/Risk Profile cards via `utils.enrich_client_data()`
+- **Quantum Studio** — sleeve correlation multipliers calibrated from `utils.get_derived_signals()["rolling_corr"]`
+
+**FOMC dates:** Hardcoded in `get_upcoming_events()` through July 2026. Update when stale (see function comment).
 
 ---
 

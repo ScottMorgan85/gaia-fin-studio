@@ -779,6 +779,39 @@ import re
 def display_market_commentary_and_overview(selected_client, selected_strategy, show_recs=True, n_cards=4, display_df=True):
     import datetime as _dt
 
+    # ---------- Market Pulse sidebar ----------
+    try:
+        _sig = utils.get_derived_signals()
+        _events = utils.get_upcoming_events()
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown("**Market Pulse**")
+            # VIX / vol regime
+            _vix = _sig.get("vix_current")
+            _vol = _sig.get("vol_regime", "Unknown")
+            _vol_color = {"Low Vol": "🟢", "Normal": "🔵", "Elevated": "🟠", "Crisis": "🔴"}.get(_vol, "⚪")
+            st.caption(f"{_vol_color} VIX {f'{_vix:.1f}' if _vix else '—'} · {_vol}")
+            # HY spread
+            _hy = _sig.get("hy_spread")
+            if _hy is not None:
+                st.caption(f"HY Spread: {_hy:.0f} bps")
+            # Yield curve
+            _yc = _sig.get("yield_curve", "Unknown")
+            _yc_color = {"Steep": "🟢", "Normal": "🔵", "Flat": "🟡", "Inverted": "🔴"}.get(_yc, "⚪")
+            _t10 = _sig.get("t10y2y_current")
+            st.caption(f"{_yc_color} Curve: {_yc} ({f'{_t10:+.2f}%' if _t10 is not None else '—'})")
+            # Macro regime score
+            _rs = _sig.get("regime_score", 0)
+            _rs_color = "🟢" if _rs >= 1 else ("🔴" if _rs <= -1 else "🟡")
+            st.caption(f"{_rs_color} Regime score: {_rs:+d} / 2")
+            # Next FOMC
+            _fomc = _events.get("fomc_dates", [])
+            if _fomc:
+                _days = (_fomc[0] - _dt.date.today()).days
+                st.caption(f"📅 FOMC in {_days}d ({_fomc[0].strftime('%b %d')})")
+    except Exception as _e:
+        print(f"[GAIA] Market Pulse sidebar failed: {_e}", flush=True)
+
     # ---------- header ----------
     now = _dt.datetime.now()
     suffix = "th" if 4 <= now.day <= 20 or 24 <= now.day <= 30 else ["st", "nd", "rd"][now.day % 10 - 1]
@@ -985,57 +1018,54 @@ def display_forecast_lab(selected_client, selected_strategy):
         return
 
     # ─────────────────────────────────────────────────────────────────────────
-    # FIX 2 — Macro data: load, convert to %, format
+    # FIX 2 — Macro data via utils.get_macro_data() (FRED REST API, cached 24hr)
     # ─────────────────────────────────────────────────────────────────────────
-    MACRO = {
-        "GDPC1":    "Real GDP YoY",
-        "CPIAUCSL": "CPI YoY",
-        "FEDFUNDS": "Fed-Funds",
-    }
+    _raw_macro = utils.get_macro_data()
 
-    def fetch_fred_series(code):
-        start = today.replace(year=today.year - 15)
-        try:
-            return web.DataReader(code, "fred", start, today).squeeze()
-        except Exception:
-            rng_f = np.random.default_rng(abs(hash(code)) % (2 ** 31))
-            idx_m = pd.date_range(start, today, freq="M")
-            idx_q = pd.date_range(start, today, freq="Q")
-            if code == "CPIAUCSL":
-                return pd.Series(3.0 + rng_f.normal(0, 0.4, len(idx_m)), index=idx_m)
-            elif code == "GDPC1":
-                return pd.Series(2.0 + rng_f.normal(0, 0.8, len(idx_q)), index=idx_q)
-            elif code == "FEDFUNDS":
-                return pd.Series(4.5 + rng_f.normal(0, 0.15, len(idx_m)), index=idx_m)
-            return pd.Series(rng_f.normal(0, 0.01, len(idx_m)), index=idx_m)
-
+    # Map FRED codes → display labels and compute YoY % series
     macro_raw = {}
-    for code, label in MACRO.items():
-        s = fetch_fred_series(code)
-        if code == "GDPC1":
-            s = s.resample("Q").last()
+    if not _raw_macro.empty:
+        if "GDPC1" in _raw_macro.columns:
+            s = _raw_macro["GDPC1"].dropna()
             if s.abs().mean() > 100:
                 s = s.pct_change(4) * 100
-            s = s.dropna()
-        elif code == "CPIAUCSL":
+            macro_raw["Real GDP YoY"] = s.dropna()
+        if "CPIAUCSL" in _raw_macro.columns:
+            s = _raw_macro["CPIAUCSL"].dropna()
             if s.abs().mean() > 100:
                 s = s.pct_change(12) * 100
-            s = s.dropna()
-        macro_raw[label] = s.resample("M").last().ffill()
+            macro_raw["CPI YoY"] = s.dropna()
+        if "FEDFUNDS" in _raw_macro.columns:
+            macro_raw["Fed-Funds"] = _raw_macro["FEDFUNDS"].dropna()
 
-    macro = pd.concat(macro_raw, axis=1).ffill().dropna(how="all")
+    if macro_raw:
+        macro = pd.concat(macro_raw, axis=1).ffill().dropna(how="all")
+    else:
+        # Synthetic fallback so the rest of the page still works
+        rng_f = np.random.default_rng(0)
+        idx_m = pd.date_range(today.replace(year=today.year - 5), today, freq="M")
+        macro = pd.DataFrame({
+            "Real GDP YoY": 2.0 + rng_f.normal(0, 0.8, len(idx_m)),
+            "CPI YoY":      3.0 + rng_f.normal(0, 0.4, len(idx_m)),
+            "Fed-Funds":    4.5 + rng_f.normal(0, 0.15, len(idx_m)),
+        }, index=idx_m)
+        st.warning("Macro data unavailable — showing synthetic fallback.")
 
-    # Safety net: catch any residual index-level columns
-    if "CPI YoY" in macro.columns and macro["CPI YoY"].abs().mean() > 100:
-        macro["CPI YoY"] = macro["CPI YoY"].pct_change(12) * 100
-    if "Real GDP YoY" in macro.columns and macro["Real GDP YoY"].abs().mean() > 100:
-        macro["Real GDP YoY"] = macro["Real GDP YoY"].pct_change(4) * 100
-    macro = macro.dropna()
-
-    # Build macro_df with a proper as_of_date column for regime analysis
     macro_df = macro.reset_index()
     if macro_df.columns[0] != "as_of_date":
         macro_df = macro_df.rename(columns={macro_df.columns[0]: "as_of_date"})
+
+    # Also pull yield-curve and HY spread for regime callout
+    _t10y2y = (
+        float(_raw_macro["T10Y2Y"].dropna().iloc[-1])
+        if not _raw_macro.empty and "T10Y2Y" in _raw_macro.columns and not _raw_macro["T10Y2Y"].dropna().empty
+        else None
+    )
+    _hy_spread = (
+        float(_raw_macro["BAMLH0A0HYM2"].dropna().iloc[-1])
+        if not _raw_macro.empty and "BAMLH0A0HYM2" in _raw_macro.columns and not _raw_macro["BAMLH0A0HYM2"].dropna().empty
+        else None
+    )
 
     st.markdown("*Why these inputs:* GDP, CPI, and Fed-Funds steer risk appetite and discount rates.")
     with st.expander("Show macro inputs", expanded=False):
@@ -1052,11 +1082,24 @@ def display_forecast_lab(selected_client, selected_strategy):
                      use_container_width=True, hide_index=True)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Controls
+    # Controls — scenario selector with vol regime badge
     # ─────────────────────────────────────────────────────────────────────────
-    ctrl_l, ctrl_r = st.columns([2, 1])
+    try:
+        _sigs = utils.get_derived_signals()
+        _vol_regime  = _sigs.get("vol_regime", "Unknown")
+        _vix_now     = _sigs.get("vix_current")
+        _vol_badge   = {"Low Vol": "🟢", "Normal": "🔵", "Elevated": "🟠", "Crisis": "🔴"}.get(_vol_regime, "⚪")
+        _vol_label   = f"{_vol_badge} Vol: {_vol_regime}" + (f" (VIX {_vix_now:.1f})" if _vix_now else "")
+    except Exception:
+        _vol_label = ""
+
+    ctrl_l, ctrl_m, ctrl_r = st.columns([2, 1.5, 1])
     with ctrl_l:
         drift = st.slider("Custom drift shift (annual %)", -10.0, 10.0, 0.0, 0.5)
+    with ctrl_m:
+        if _vol_label:
+            st.markdown(f"<br><span style='font-size:0.85em'>{_vol_label}</span>",
+                        unsafe_allow_html=True)
     with ctrl_r:
         selected_scenario = st.selectbox("Fan chart scenario",
                                          ["Base", "Bull", "Bear", "Custom"])
@@ -1452,6 +1495,40 @@ def display_client_page(selected_client: str):
     with c1: st.metric("AUM", aum)
     with c2: st.metric("Age", age)
     with c3: st.metric("Risk Profile", ip)
+
+    # Risk metrics from enrich_client_data
+    try:
+        from data.client_mapping import client_strategy_risk_mapping as _csrm
+        _strat_info = _csrm.get(selected_client, {})
+        _strat_name = _strat_info.get("strategy_name") if isinstance(_strat_info, dict) else str(_strat_info)
+        _enriched = utils.enrich_client_data()
+        if _enriched is not None and not _enriched.empty and _strat_name and _strat_name in _enriched.index:
+            _rm = _enriched.loc[_strat_name]
+            st.subheader("Risk & Return Metrics")
+            _mc1, _mc2, _mc3, _mc4 = st.columns(4)
+            def _pct(v):
+                try: return f"{float(v):.1%}"
+                except Exception: return "—"
+            def _num(v, d=2):
+                try: return f"{float(v):.{d}f}"
+                except Exception: return "—"
+            with _mc1:
+                st.metric("1yr Return",   _pct(_rm.get("return_1yr")))
+                st.metric("3yr Return",   _pct(_rm.get("return_3yr")))
+                st.metric("5yr Return",   _pct(_rm.get("return_5yr")))
+            with _mc2:
+                st.metric("Sharpe",       _num(_rm.get("sharpe")))
+                st.metric("Sortino",      _num(_rm.get("sortino")))
+                st.metric("Calmar",       _num(_rm.get("calmar")))
+            with _mc3:
+                st.metric("Max Drawdown", _pct(_rm.get("max_drawdown")))
+                st.metric("Beta (SPY)",   _num(_rm.get("beta")))
+                st.metric("Alpha (ann.)", _pct(_rm.get("alpha")))
+            with _mc4:
+                st.metric("Up Capture",   _num(_rm.get("up_capture")))
+                st.metric("Down Capture", _num(_rm.get("down_capture")))
+    except Exception as _e:
+        st.caption(f"(risk metrics unavailable: {_e})")
 
     st.subheader("Interactions")
     try:
@@ -2346,14 +2423,35 @@ not a live trading signal.
 
     rng = np.random.default_rng(42)
 
+    # Use live rolling correlations from get_derived_signals() to calibrate
+    # sleeve noise scaling more realistically (SPY≈1.0, AGG≈-0.1, GLD≈0.05)
+    _qs_corr_scale = {
+        "Core Equity": 1.00, "Quality": 0.82, "Min Vol": 0.55,
+        "Credit": 0.30, "Treasury": -0.10, "Commodities": 0.25,
+    }
+    try:
+        _qs_sigs = utils.get_derived_signals()
+        _rc = _qs_sigs.get("rolling_corr", pd.DataFrame())
+        if not _rc.empty:
+            _corr_map = {
+                "Core Equity": "SPY",  "Quality": "QUAL",  "Min Vol": "USMV",
+                "Credit": "HYG",       "Treasury": "TLT",  "Commodities": "GLD",
+            }
+            for _sl, _tk in _corr_map.items():
+                if _tk in _rc.index and "SPY" in _rc.columns:
+                    _c = float(_rc.loc[_tk, "SPY"]) if _tk in _rc.index else _qs_corr_scale[_sl]
+                    _qs_corr_scale[_sl] = max(-0.5, min(1.0, _c))
+    except Exception as _e:
+        print(f"[GAIA] QS rolling corr failed: {_e}", flush=True)
+
     sleeves = pd.DataFrame(
         {
-            "Core Equity":  base.values * 1.00 + rng.normal(0, 0.003,  len(base)),
-            "Quality":      base.values * 0.82 + rng.normal(0, 0.002,  len(base)),
-            "Min Vol":      base.values * 0.55 + rng.normal(0, 0.0015, len(base)),
-            "Credit":       base.values * 0.30 + rng.normal(0, 0.0012, len(base)),
-            "Treasury":    -base.values * 0.10 + rng.normal(0, 0.0008, len(base)),
-            "Commodities":  base.values * 0.25 + rng.normal(0, 0.002,  len(base)),
+            "Core Equity":  base.values * _qs_corr_scale["Core Equity"]  + rng.normal(0, 0.003,  len(base)),
+            "Quality":      base.values * _qs_corr_scale["Quality"]      + rng.normal(0, 0.002,  len(base)),
+            "Min Vol":      base.values * _qs_corr_scale["Min Vol"]      + rng.normal(0, 0.0015, len(base)),
+            "Credit":       base.values * _qs_corr_scale["Credit"]       + rng.normal(0, 0.0012, len(base)),
+            "Treasury":     base.values * _qs_corr_scale["Treasury"]     + rng.normal(0, 0.0008, len(base)),
+            "Commodities":  base.values * _qs_corr_scale["Commodities"]  + rng.normal(0, 0.002,  len(base)),
         },
         index=base.index,
     )

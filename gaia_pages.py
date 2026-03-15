@@ -35,23 +35,8 @@ REC_LOG_PATH = "data/rec_log.csv"
 
 
 def get_groq_key() -> str:
-    """Return the first non-empty GROQ_API_KEY from env → secrets (flat) → secrets ([env])."""
-    key = os.environ.get("GROQ_API_KEY", "")
-    if key:
-        return key
-    try:
-        key = st.secrets.get("GROQ_API_KEY", "")
-        if key:
-            return key
-    except Exception:
-        pass
-    try:
-        key = st.secrets.get("env", {}).get("GROQ_API_KEY", "")
-        if key:
-            return key
-    except Exception:
-        pass
-    return ""
+    """Return GROQ_API_KEY from environment variables."""
+    return os.environ.get("GROQ_API_KEY", "")
 
 
 def _log_decision(client: str, strategy: str, card: dict, decision: str) -> None:
@@ -324,20 +309,12 @@ def _static_strategy_recs(strategy: str):
     ]
 
 
-# ── Feature flags (read from DO env vars or st.secrets["env"]) ──────────────
+# ── Feature flags (read from env vars only — no st.secrets) ─────────────────
 def _flag(name: str, default: str = "true") -> bool:
-    """Return True/False from env or secrets; accepts true/1/yes/on."""
+    """Return True/False from environment variables; accepts true/1/yes/on."""
     def _to_bool(v):
         return str(v).strip().lower() in {"true", "1", "yes", "on"}
-    val = None
-    try:
-        if "env" in st.secrets:
-            val = st.secrets["env"].get(name)
-    except Exception:
-        pass
-    if val is None:
-        val = os.getenv(name, default)
-    return _to_bool(val)
+    return _to_bool(os.getenv(name, default))
 
 # Toggle these in DigitalOcean → Settings → Environment Variables
 ENABLE_RL    = _flag("ENABLE_RL",    "true")   # turn off the RL overlay

@@ -15,31 +15,31 @@ Developer reference for Claude Code and human contributors.
 ## Key helpers
 
 ### `get_groq_key() -> str`
-Defined at the top of `gaia_pages.py` (after constants, before page functions).
+Defined at the top of `gaia_pages.py`.
 
-Tries these sources in order, returns the first non-empty string:
-1. `os.environ.get("GROQ_API_KEY", "")`
-2. `st.secrets.get("GROQ_API_KEY", "")` — flat key in `secrets.toml`
-3. `st.secrets.get("env", {}).get("GROQ_API_KEY", "")` — nested under `[env]`
+```python
+return os.environ.get("GROQ_API_KEY", "")
+```
 
-Both `st.secrets` reads are wrapped in `try/except` so the app doesn't crash on
-DigitalOcean App Platform where `secrets.toml` is absent.
-
-**Rule:** Every place in `gaia_pages.py` that needs the Groq API key must call
-`get_groq_key()` — never read `os.environ` or `st.secrets` directly for this key.
+**Rule:** Every place in `gaia_pages.py` that needs the Groq API key must call `get_groq_key()`. No `st.secrets` — env var only.
 
 ### `get_fred_key() -> str`
-Defined in `utils.py` (after imports, near `get_groq_key` pattern).
+Defined in `utils.py`.
 
-Tries these sources in order, returns the first non-empty string:
-1. `os.environ.get("FRED_API_KEY", "")` — set as env var on DigitalOcean
-2. `st.secrets.get("FRED_API_KEY", "")` — flat key in `secrets.toml`
-3. `st.secrets.get("env", {}).get("FRED_API_KEY", "")` — nested under `[env]`
-4. Hardcoded fallback: `f4ac14beb82a2e5cf49e141465baa458`
+```python
+return os.environ.get("FRED_API_KEY", "f4ac14beb82a2e5cf49e141465baa458")
+```
 
-**Rule:** `get_macro_data()` (and any future FRED callers) must call `get_fred_key()` — never hardcode the key string inline.
+Hardcoded fallback is the registered public key. **DigitalOcean:** add `FRED_API_KEY` as an env var in App Platform settings.
 
-**DigitalOcean:** Add `FRED_API_KEY` as an environment variable in the App Platform settings (same place as `GROQ_API_KEY`).
+### `_flag(name, default)` — feature flags
+Defined in both `app.py` and `gaia_pages.py`. Reads only from `os.getenv()` — no `st.secrets`.
+
+### RULE — no `st.secrets` anywhere
+`st.secrets` is banned across all files. DigitalOcean App Platform does not ship a `secrets.toml`, causing "No secrets files found" log spam and potential crashes. All secrets and feature flags must use `os.environ.get()` only.
+
+### RULE — `set_page_config` must be first
+`st.set_page_config()` is called at line 7 of `app.py`, immediately after `import streamlit as st`, before any other `st.*` call including `st.session_state`, `st.sidebar`, or imported module code. Never move it or add any `st.*` call above it.
 
 ---
 

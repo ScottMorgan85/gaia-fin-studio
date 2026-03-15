@@ -2,6 +2,10 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 import streamlit as st
+
+# ── MUST be the first Streamlit call — before any st.* usage ────────────────
+st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
+
 import landing  # gate form collects contact info, then lets users through
 from typing import Optional
 
@@ -35,19 +39,11 @@ def _render_admin_panel():
             st.rerun()  # <- replace experimental_rerun()
 
 
-# ── Feature flag helper (reads Streamlit secrets first, then env) ───────────
+# ── Feature flag helper (reads env vars only — no st.secrets) ───────────────
 def _flag(name: str, default: str = "true") -> bool:
-    """Return True/False from secrets or env; accepts true/1/yes/on."""
+    """Return True/False from environment variables; accepts true/1/yes/on."""
     def _to_bool(v): return str(v).strip().lower() in {"true", "1", "yes", "on"}
-    val = None
-    try:
-        if "env" in st.secrets:
-            val = st.secrets["env"].get(name)
-    except Exception:
-        pass
-    if val is None:
-        val = os.getenv(name, default)
-    return _to_bool(val)
+    return _to_bool(os.getenv(name, default))
 
 # ── Gate: collect contact info, then continue straight into the app ─────────
 GATE_ON = _flag("GAIA_GATE_ON", "true")
@@ -161,7 +157,7 @@ def _render_commentary_section(text, selected_client, model_option, selected_str
 
 
 # ── App config & styling ────────────────────────────────────────────────────
-st.set_page_config(page_title="GAIA Financial Dashboard", layout="wide")
+# (set_page_config called at top of file, before any other st.* call)
 
 # Load optional CSS (no try/except needed)
 import os

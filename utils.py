@@ -26,17 +26,8 @@ groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
 def get_fred_key() -> str:
-    """Return FRED API key from env → secrets (flat) → secrets ([env]) → hardcoded fallback."""
-    try:
-        key = os.environ.get("FRED_API_KEY", "")
-        if key: return key
-        key = st.secrets.get("FRED_API_KEY", "")
-        if key: return key
-        key = st.secrets.get("env", {}).get("FRED_API_KEY", "")
-        if key: return key
-    except Exception:
-        pass
-    return "f4ac14beb82a2e5cf49e141465baa458"
+    """Return FRED API key from env var, falling back to hardcoded public key."""
+    return os.environ.get("FRED_API_KEY", "f4ac14beb82a2e5cf49e141465baa458")
 
 DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")

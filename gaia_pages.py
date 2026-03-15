@@ -1985,3 +1985,300 @@ def display_commentary(commentary_text, selected_client, model_option, selected_
 def display(commentary_text, selected_client, model_option, selected_strategy):
     return display_commentary(commentary_text, selected_client, model_option, selected_strategy)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Quantum Studio — quantum-inspired portfolio optimization PoC
+# ─────────────────────────────────────────────────────────────────────────────
+def display_quantum_studio(selected_client: str, selected_strategy: str):
+    """
+    Quantum-inspired portfolio optimization PoC for GAIA.
+
+    Uses existing strategy/benchmark data and a lightweight simulated annealing
+    routine to mimic a QUBO-style optimizer without introducing heavy new deps.
+    """
+
+    st.title("⚛️ Quantum Studio")
+    st.caption(
+        "A visually rich, quantum-inspired allocation sandbox for advisor demos. "
+        "This is a PoC: classical data, quantum-style optimization logic."
+    )
+
+    # -----------------------------
+    # Load base return data
+    # -----------------------------
+    returns_df = utils.load_strategy_returns().copy()
+    returns_df["as_of_date"] = pd.to_datetime(returns_df["as_of_date"])
+
+    # Candidate sleeves/assets for the demo.
+    # These are synthetic sleeve labels mapped off available strategy behavior.
+    # Keeps the PoC visually compelling without requiring a full holdings model.
+    sleeve_names = [
+        "Core Equity",
+        "Quality",
+        "Min Vol",
+        "Credit",
+        "Treasury",
+        "Commodities",
+    ]
+
+    # Reuse the selected strategy series as the anchor and create plausible sleeve variants
+    base = (
+        returns_df[["as_of_date", selected_strategy]]
+        .dropna()
+        .set_index("as_of_date")[selected_strategy]
+        .pct_change()
+        .dropna()
+    )
+
+    if len(base) < 24:
+        st.warning("Not enough return history to run Quantum Studio.")
+        return
+
+    rng = np.random.default_rng(42)
+
+    sleeves = pd.DataFrame(
+        {
+            "Core Equity": base.values,
+            "Quality": base.values * 0.88 + rng.normal(0, 0.002, len(base)),
+            "Min Vol": base.values * 0.65 + rng.normal(0, 0.0015, len(base)),
+            "Credit": base.values * 0.42 + rng.normal(0, 0.0018, len(base)),
+            "Treasury": -base.values * 0.15 + rng.normal(0, 0.0012, len(base)),
+            "Commodities": base.values * 0.35 + rng.normal(0, 0.0030, len(base)),
+        },
+        index=base.index,
+    )
+
+    mu = sleeves.mean().values * 12
+    cov = sleeves.cov().values * 12
+
+    # -----------------------------
+    # Controls
+    # -----------------------------
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        risk_aversion = st.slider("Risk aversion", 0.5, 8.0, 3.0, 0.25)
+    with c2:
+        max_weight = st.slider("Max sleeve weight", 0.15, 0.60, 0.30, 0.05)
+    with c3:
+        anneal_steps = st.slider("Anneal iterations", 200, 3000, 1200, 100)
+
+    # -----------------------------
+    # Helper functions
+    # -----------------------------
+    def portfolio_stats(w):
+        ret = float(np.dot(w, mu))
+        vol = float(np.sqrt(np.dot(w, cov @ w)))
+        score = ret - risk_aversion * (vol ** 2)
+        return ret, vol, score
+
+    def normalize_weights(w, cap):
+        w = np.clip(w, 0, cap)
+        s = w.sum()
+        if s == 0:
+            w = np.ones_like(w) / len(w)
+        else:
+            w = w / s
+        # enforce cap softly again
+        for _ in range(10):
+            over = w > cap
+            if not over.any():
+                break
+            excess = (w[over] - cap).sum()
+            w[over] = cap
+            under = ~over
+            if under.any():
+                w[under] += excess * (w[under] / w[under].sum())
+        return w / w.sum()
+
+    def classical_optimizer():
+        # simple random search baseline
+        best_w = None
+        best_score = -1e9
+        for _ in range(3000):
+            w = rng.random(len(sleeve_names))
+            w = normalize_weights(w, max_weight)
+            _, _, score = portfolio_stats(w)
+            if score > best_score:
+                best_score = score
+                best_w = w
+        return best_w
+
+    def quantum_inspired_optimizer():
+        # simulated annealing over continuous weights
+        w = normalize_weights(rng.random(len(sleeve_names)), max_weight)
+        _, _, best_score = portfolio_stats(w)
+        best_w = w.copy()
+
+        temp = 1.0
+        for step in range(anneal_steps):
+            proposal = w + rng.normal(0, 0.04, len(w))
+            proposal = normalize_weights(proposal, max_weight)
+
+            _, _, current_score = portfolio_stats(w)
+            _, _, proposal_score = portfolio_stats(proposal)
+
+            accept = proposal_score > current_score
+            if not accept:
+                prob = np.exp((proposal_score - current_score) / max(temp, 1e-6))
+                accept = rng.random() < prob
+
+            if accept:
+                w = proposal
+
+            if proposal_score > best_score:
+                best_score = proposal_score
+                best_w = proposal.copy()
+
+            temp *= 0.995
+
+        return best_w
+
+    # -----------------------------
+    # Run optimization
+    # -----------------------------
+    classical_w = classical_optimizer()
+    quantum_w = quantum_inspired_optimizer()
+
+    c_ret, c_vol, c_score = portfolio_stats(classical_w)
+    q_ret, q_vol, q_score = portfolio_stats(quantum_w)
+
+    edge_bps = (q_score - c_score) * 10000
+
+    # -----------------------------
+    # KPI cards
+    # -----------------------------
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Expected Return", f"{q_ret:.2%}", f"{(q_ret - c_ret):+.2%} vs classical")
+    k2.metric("Volatility", f"{q_vol:.2%}", f"{(q_vol - c_vol):+.2%} vs classical")
+    k3.metric("Quantum Edge", f"{edge_bps:,.0f} bps", "objective improvement")
+
+    # -----------------------------
+    # Allocation comparison
+    # -----------------------------
+    alloc_df = pd.DataFrame(
+        {
+            "Sleeve": sleeve_names,
+            "Classical": classical_w,
+            "Quantum": quantum_w,
+            "Delta": quantum_w - classical_w,
+        }
+    )
+
+    left, right = st.columns([1.2, 1])
+
+    with left:
+        st.subheader("Allocation Comparison")
+        fig_bar = go.Figure()
+        fig_bar.add_bar(name="Classical", x=alloc_df["Sleeve"], y=alloc_df["Classical"])
+        fig_bar.add_bar(name="Quantum", x=alloc_df["Sleeve"], y=alloc_df["Quantum"])
+        fig_bar.update_layout(
+            barmode="group",
+            height=420,
+            margin=dict(l=20, r=20, t=40, b=20),
+            yaxis_tickformat=".0%",
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    with right:
+        st.subheader("Weight Deltas")
+        heat = px.imshow(
+            np.array([alloc_df["Delta"].values]),
+            x=alloc_df["Sleeve"],
+            y=["Quantum - Classical"],
+            aspect="auto",
+            text_auto=".1%",
+        )
+        heat.update_layout(height=420, margin=dict(l=20, r=20, t=40, b=20))
+        st.plotly_chart(heat, use_container_width=True)
+
+    # -----------------------------
+    # Frontier-like chart
+    # -----------------------------
+    st.subheader("Optimization Landscape")
+
+    cloud = []
+    for _ in range(250):
+        w = normalize_weights(rng.random(len(sleeve_names)), max_weight)
+        ret, vol, score = portfolio_stats(w)
+        cloud.append((ret, vol, score))
+
+    cloud_df = pd.DataFrame(cloud, columns=["Return", "Volatility", "Score"])
+
+    # Shift scores to [ε, ∞) so plotly accepts them as marker sizes
+    cloud_df["Size"] = cloud_df["Score"] - cloud_df["Score"].min() + 1e-3
+
+    frontier = px.scatter(
+        cloud_df,
+        x="Volatility",
+        y="Return",
+        size="Size",
+        hover_data={"Score": ":.4f"},
+        title="Candidate portfolios",
+    )
+
+    frontier.add_trace(
+        go.Scatter(
+            x=[c_vol],
+            y=[c_ret],
+            mode="markers+text",
+            name="Classical",
+            text=["Classical"],
+            textposition="top center",
+            marker=dict(size=14, symbol="diamond"),
+        )
+    )
+
+    frontier.add_trace(
+        go.Scatter(
+            x=[q_vol],
+            y=[q_ret],
+            mode="markers+text",
+            name="Quantum",
+            text=["Quantum"],
+            textposition="top center",
+            marker=dict(size=16, symbol="star"),
+        )
+    )
+
+    frontier.update_layout(
+        height=460,
+        margin=dict(l=20, r=20, t=50, b=20),
+        xaxis_tickformat=".0%",
+        yaxis_tickformat=".0%",
+    )
+    st.plotly_chart(frontier, use_container_width=True)
+
+    # -----------------------------
+    # Advisor-friendly narrative
+    # -----------------------------
+    st.subheader("Advisor Takeaway")
+
+    top_over = alloc_df.sort_values("Delta", ascending=False).head(2)
+    top_under = alloc_df.sort_values("Delta", ascending=True).head(2)
+
+    takeaway = f"""
+**Client:** {selected_client}
+**Strategy:** {selected_strategy}
+
+The quantum-inspired optimizer improved the objective score by **{edge_bps:,.0f} bps**
+relative to the classical baseline.
+
+**What changed**
+- Overweights: **{top_over.iloc[0]['Sleeve']}**, **{top_over.iloc[1]['Sleeve']}**
+- Underweights: **{top_under.iloc[0]['Sleeve']}**, **{top_under.iloc[1]['Sleeve']}**
+
+**Interpretation**
+The model is favoring a mix that modestly improves expected return per unit of risk
+under the current risk-aversion setting. This is best used as an **idea-generation
+tool** for PMs and advisors, not an automated trade engine.
+"""
+    st.markdown(takeaway)
+
+    with st.expander("Show allocation table"):
+        st.dataframe(
+            alloc_df.style.format(
+                {"Classical": "{:.1%}", "Quantum": "{:.1%}", "Delta": "{:+.1%}"}
+            ),
+            use_container_width=True,
+        )
+

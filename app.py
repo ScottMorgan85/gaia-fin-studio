@@ -250,6 +250,7 @@ if SHOW_PREDICTIVE_RECS:   label_to_route["Predictive Recs"]     = "recs"
 if SHOW_DECISION_TRACKING: label_to_route["Decision Tracker"]   = "log"
 if SHOW_ALLOCATOR:         label_to_route["Allocator"]           = "allocator"
 if SHOW_FORECAST_LAB:      label_to_route["Forecast Lab"]        = "forecast"
+label_to_route["Quantum Studio"]  = "quantum"
 if SHOW_PORTFOLIO:         label_to_route["Portfolio"]           = "portfolio"
 if SHOW_CLIENT:            label_to_route["Client"]              = "client"
 if not label_to_route:
@@ -317,6 +318,9 @@ elif route == "forecast":
         pages.display_forecast_lab(selected_client, selected_strategy)
     else:
         st.info("Forecast Lab is not available in this build.")
+
+elif route == "quantum":
+    pages.display_quantum_studio(selected_client, selected_strategy)
 
 elif route == "client":
     st.title("Client 360")

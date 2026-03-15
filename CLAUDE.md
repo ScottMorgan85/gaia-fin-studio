@@ -53,6 +53,22 @@ DigitalOcean: Settings → Environment Variables (flat `GROQ_API_KEY=...`).
 
 ---
 
+## Features
+
+### Quantum Studio
+A quantum-inspired portfolio optimization PoC that uses simulated annealing to mimic
+QUBO-style optimization across six synthetic sleeve allocations anchored to live strategy returns.
+
+| Field | Value |
+|-------|-------|
+| Function | `display_quantum_studio()` in `gaia_pages.py` |
+| Tab name | `Quantum Studio` |
+| Route key | `quantum` |
+| Dependencies | `numpy`, `plotly` (already in requirements.txt) |
+| Status | PoC — simulated annealing mimicking QUBO-style optimization; no new pip packages |
+
+---
+
 ## Data files
 
 | File | Purpose |

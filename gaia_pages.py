@@ -34,6 +34,26 @@ GROQ_MODELS = {
 REC_LOG_PATH = "data/rec_log.csv"
 
 
+def get_groq_key() -> str:
+    """Return the first non-empty GROQ_API_KEY from env → secrets (flat) → secrets ([env])."""
+    key = os.environ.get("GROQ_API_KEY", "")
+    if key:
+        return key
+    try:
+        key = st.secrets.get("GROQ_API_KEY", "")
+        if key:
+            return key
+    except Exception:
+        pass
+    try:
+        key = st.secrets.get("env", {}).get("GROQ_API_KEY", "")
+        if key:
+            return key
+    except Exception:
+        pass
+    return ""
+
+
 def _log_decision(client: str, strategy: str, card: dict, decision: str) -> None:
     """Append one Accept/Reject row to data/rec_log.csv."""
     import csv
@@ -151,7 +171,7 @@ def _llm_rationales_for_recs(*args, model_name: str = None, temperature: float =
 
     def _try_llm(strategy: str, titles):
         use_llm = str(os.getenv("USE_LLM_RECS", "false")).strip().lower() in {"true", "1", "yes", "on"}
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = get_groq_key()
         if not (use_llm and api_key and titles):
             return None
         try:
@@ -542,7 +562,7 @@ def generate_dtd_commentary(selected_strategy: str) -> str:
         "Keep each bullet around 110 words; do not exceed 160 words."
     )
 
-    key = os.environ.get("GROQ_API_KEY", "")
+    key = get_groq_key()
     if not key:
         return (
             "- Futures opened steady before drifting as front-end yields firmed on sticky services prints while the dollar eased versus majors. "
@@ -572,7 +592,7 @@ def generate_dtd_commentary(selected_strategy: str) -> str:
     try:
         text = _ask("llama-3.3-70b-versatile")
     except Exception:
-        text = _ask("llama-3.1-8b-instant")
+        text = _ask("meta-llama/llama-4-scout-17b-16e-instruct")
 
     # Normalize to exactly 3 bullets; clamp each to ~90 words
     raw_lines = [ln for ln in (x.strip() for x in text.splitlines()) if ln]
@@ -936,9 +956,9 @@ def display_forecast_lab(selected_client, selected_strategy):
 
     # ---- Config / clients
     today = datetime.today()
-    api_key = os.environ.get("GROQ_API_KEY", "")
+    api_key = get_groq_key()
     model_primary = "llama-3.3-70b-versatile"
-    model_fallback = "llama-3.1-8b-instant"
+    model_fallback = "meta-llama/llama-4-scout-17b-16e-instruct"
     groq_client = Groq(api_key=api_key) if api_key else None
 
     MACRO = {
@@ -1645,7 +1665,7 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     # ───────────────────────────────────────────────────────────────────────────
     st.subheader("🧠 AI Trade Ideas (scenarios)")
     try:
-        api_key = os.environ.get("GROQ_API_KEY", "")
+        api_key = get_groq_key()
         ideas_txt = None
         if api_key:
             client = Groq(api_key=api_key)
@@ -1738,7 +1758,7 @@ def _llm_recs_for_strategy(strategy, n=4):
     Ask Groq to return N strategy-specific cards with title + rationale (+score).
     Returns list[dict]: [{id,title,desc,score}] or None on failure.
     """
-    key = os.environ.get("GROQ_API_KEY", "")
+    key = get_groq_key()
     if not key or not ENABLE_GROQ:
         return None
 

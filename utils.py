@@ -1353,7 +1353,8 @@ def get_derived_signals() -> dict:
                 hy = macro["BAMLH0A0HYM2"].dropna()
                 if len(hy) >= 3:
                     score -= 1 if (float(hy.iloc[-1]) - float(hy.iloc[-3])) > 0.5 else 0
-                result["hy_spread"] = float(hy.iloc[-1]) if len(hy) > 0 else None
+                # FRED BAMLH0A0HYM2 is in % — multiply by 100 to get bps
+                result["hy_spread"] = float(hy.iloc[-1]) * 100 if len(hy) > 0 else None
             result["regime_score"] = max(-2, min(2, score))
     except Exception as e:
         print(f"[GAIA] regime score failed: {e}", flush=True)

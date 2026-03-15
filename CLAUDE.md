@@ -133,12 +133,14 @@ All five functions are in `utils.py` (appended at end). All cache with `@st.cach
 | `get_derived_signals()` | 1hr | Computes momentum (12-1), regime score (-2→+2), vol regime, yield curve shape, 24-month rolling corr matrix |
 | `enrich_client_data()` | 1hr | Per-strategy risk metrics: 1/3/5yr returns, sharpe, sortino, calmar, beta, alpha, up/down capture vs SPY |
 | `get_upcoming_events()` | 12hr | yfinance earnings calendar for 10 tickers + hardcoded FOMC dates |
+| `get_benchmark_returns()` | 1hr | Total-return performance table for 6 benchmarks: S&P 500, MSCI EAFE, US Agg Bond, DJ Commodity, HY Credit (HYG proxy), Lev Loan (BKLN proxy). Columns: DTD, MTD, QTD, YTD (cumulative); 1yr/3yr/5yr (annualized). |
 
 **Integrations:**
 - **Market Pulse sidebar** — added to `display_market_commentary_and_overview()`: VIX/vol regime badge, HY spread, yield curve shape, regime score, next FOMC countdown
 - **Forecast Lab** — macro section replaced with `utils.get_macro_data()`; vol regime badge next to scenario selector; T10Y2Y and HY spread available for regime callout
 - **Client 360** — enriched risk metrics (Sharpe, Sortino, max DD, beta, alpha, up/down capture) added below AUM/Age/Risk Profile cards via `utils.enrich_client_data()`
 - **Quantum Studio** — sleeve correlation multipliers calibrated from `utils.get_derived_signals()["rolling_corr"]`
+- **Market Pulse (Performance Snapshot)** — `display_performance_snapshot()` renders a 6-row benchmark table at the top of the Portfolio Pulse page via `display_market_commentary_and_overview()`. Proxy note shown in UI: HY Credit = HYG, Lev Loan = BKLN.
 
 **FOMC dates:** Hardcoded in `get_upcoming_events()` through July 2026. Update when stale (see function comment).
 

@@ -1566,3 +1566,94 @@ def get_upcoming_events() -> dict:
     fomc_dates = [d for d in fomc_all if d >= today]
 
     return {"earnings": earnings_df, "fomc_dates": fomc_dates}
+
+
+@st.cache_data(ttl=3600)
+def get_benchmark_returns() -> pd.DataFrame:
+    """
+    Fetch daily price data for key benchmarks via yfinance and compute
+    DTD, MTD, QTD, YTD, 1yr, 3yr, 5yr total returns.
+    H0A0 proxied by HYG; CS Lev Loan proxied by BKLN.
+    """
+    tickers = {
+        "S&P 500":          "SPY",
+        "MSCI EAFE":        "EFA",
+        "US Agg Bond":      "AGG",
+        "DJ Commodity":     "PDBC",
+        "HY Credit (H0A0)": "HYG",
+        "Lev Loan (CS)":    "BKLN",
+    }
+
+    today = pd.Timestamp.today().normalize()
+    start = today - pd.DateOffset(years=6)
+
+    rows = []
+    for name, ticker in tickers.items():
+        try:
+            raw = yfinance.download(
+                ticker, start=start, end=today,
+                interval="1d", auto_adjust=True, progress=False, actions=False,
+            )
+            if raw.empty:
+                raise ValueError("no data returned")
+
+            prices = raw["Close"].squeeze().dropna()
+            prices.index = pd.to_datetime(prices.index).normalize()
+
+            def price_on_or_before(target_date):
+                subset = prices[prices.index <= target_date]
+                return float(subset.iloc[-1]) if not subset.empty else None
+
+            p_today = float(prices.iloc[-1])
+            p_date  = prices.index[-1]
+
+            # DTD — prior business day
+            p_dtd = float(prices.iloc[-2]) if len(prices) >= 2 else None
+
+            # MTD — last trading day of prior month
+            p_mtd = price_on_or_before(p_date.replace(day=1) - pd.Timedelta(days=1))
+
+            # QTD — last trading day of prior quarter
+            q = p_date.quarter
+            qtd_month = {1: 12, 2: 3, 3: 6, 4: 9}[q]
+            qtd_year  = p_date.year if q > 1 else p_date.year - 1
+            qtd_date  = pd.Timestamp(year=qtd_year, month=qtd_month, day=1) + pd.offsets.MonthEnd(0)
+            p_qtd = price_on_or_before(qtd_date)
+
+            # YTD — Dec 31 of prior year
+            p_ytd = price_on_or_before(pd.Timestamp(year=p_date.year - 1, month=12, day=31))
+
+            def ret(p_start):
+                if p_start is None or p_start == 0:
+                    return None
+                return (p_today / p_start) - 1
+
+            def ann_return(years):
+                p_start = price_on_or_before(p_date - pd.DateOffset(years=years))
+                if p_start is None or p_start == 0:
+                    return None
+                return (1 + (p_today / p_start) - 1) ** (1 / years) - 1
+
+            rows.append({
+                "Benchmark": name,
+                "Ticker":    ticker,
+                "DTD":       ret(p_dtd),
+                "MTD":       ret(p_mtd),
+                "QTD":       ret(p_qtd),
+                "YTD":       ret(p_ytd),
+                "1yr Ann":   ann_return(1),
+                "3yr Ann":   ann_return(3),
+                "5yr Ann":   ann_return(5),
+                "As of":     p_date.strftime("%b %d %Y"),
+            })
+
+        except Exception as e:
+            print(f"[GAIA] benchmark fetch failed for {ticker}: {e}", flush=True)
+            rows.append({
+                "Benchmark": name, "Ticker": ticker,
+                "DTD": None, "MTD": None, "QTD": None, "YTD": None,
+                "1yr Ann": None, "3yr Ann": None, "5yr Ann": None,
+                "As of": "unavailable",
+            })
+
+    return pd.DataFrame(rows)

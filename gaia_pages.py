@@ -750,6 +750,66 @@ def display_recommendations(selected_client, selected_strategy, full_page=False,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Performance Snapshot: benchmark returns table
+# ─────────────────────────────────────────────────────────────────────────────
+def display_performance_snapshot():
+    """
+    Renders a benchmark performance table with DTD/MTD/QTD/YTD/1yr/3yr/5yr returns.
+    Color-coded: green = positive, red = negative.
+    """
+    st.subheader("Performance Snapshot")
+    st.caption(
+        "Total returns for key market benchmarks. "
+        "DTD/MTD/QTD/YTD are cumulative; 1/3/5yr are annualized. "
+        "Data via yfinance (15-min delayed). "
+        "H0A0 proxied by HYG; CS Lev Loan proxied by BKLN."
+    )
+
+    with st.spinner("Loading benchmark returns..."):
+        df = utils.get_benchmark_returns()
+
+    if df.empty:
+        st.warning("Benchmark data unavailable.")
+        return
+
+    return_cols = ["DTD", "MTD", "QTD", "YTD", "1yr Ann", "3yr Ann", "5yr Ann"]
+    display_df = df[["Benchmark", "Ticker"] + return_cols + ["As of"]].copy()
+
+    def fmt(v):
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return "—"
+        return f"{v:+.2%}"
+
+    for col in return_cols:
+        display_df[col] = display_df[col].apply(fmt)
+
+    st.dataframe(
+        display_df.set_index("Benchmark"),
+        use_container_width=True,
+        column_config={
+            "Ticker":   st.column_config.TextColumn("Ticker",  width="small"),
+            "DTD":      st.column_config.TextColumn("DTD",     width="small"),
+            "MTD":      st.column_config.TextColumn("MTD",     width="small"),
+            "QTD":      st.column_config.TextColumn("QTD",     width="small"),
+            "YTD":      st.column_config.TextColumn("YTD",     width="small"),
+            "1yr Ann":  st.column_config.TextColumn("1yr Ann", width="small"),
+            "3yr Ann":  st.column_config.TextColumn("3yr Ann", width="small"),
+            "5yr Ann":  st.column_config.TextColumn("5yr Ann", width="small"),
+            "As of":    st.column_config.TextColumn("As of",   width="medium"),
+        },
+        hide_index=False,
+    )
+
+    st.caption(
+        "⚠️ Proxy note: HY Credit uses HYG (iShares iBoxx $ HY Corp Bond ETF) "
+        "as a proxy for the ICE BofA HY Index (H0A0). Leveraged Loan uses BKLN "
+        "(Invesco Senior Loan ETF) as a proxy for the Credit Suisse Leveraged "
+        "Loan Index. ETF returns may differ from index returns due to fees, "
+        "tracking error, and dividend treatment."
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Portfolio Pulse: DTD commentary + optional recs + market overview
 # ─────────────────────────────────────────────────────────────────────────────
 import re
@@ -793,6 +853,10 @@ def display_market_commentary_and_overview(selected_client, selected_strategy, s
     now = _dt.datetime.now()
     suffix = "th" if 4 <= now.day <= 20 or 24 <= now.day <= 30 else ["st", "nd", "rd"][now.day % 10 - 1]
     st.header(f"{selected_strategy} Daily Update — {now:%A, %B %d}{suffix}, {now.year}")
+
+    # ---------- Performance Snapshot ----------
+    display_performance_snapshot()
+    st.divider()
 
     # ---------- DTD commentary (keeps your formatter) ----------
     dtd = generate_dtd_commentary(selected_strategy)

@@ -2134,129 +2134,137 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         return best_w
 
     # -----------------------------
-    # Run optimization
+    # Run Optimization button
     # -----------------------------
-    classical_w = classical_optimizer()
-    quantum_w = quantum_inspired_optimizer()
+    run = st.button("Run Optimization", type="primary")
 
-    c_ret, c_vol, c_score = portfolio_stats(classical_w)
-    q_ret, q_vol, q_score = portfolio_stats(quantum_w)
+    if run or "qs_ran" not in st.session_state:
+        st.session_state["qs_ran"] = True
 
-    edge_bps = (q_score - c_score) * 10000
+        # -----------------------------
+        # Run optimization
+        # -----------------------------
+        classical_w = classical_optimizer()
+        quantum_w = quantum_inspired_optimizer()
 
-    # -----------------------------
-    # KPI cards
-    # -----------------------------
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Expected Return", f"{q_ret:.2%}", f"{(q_ret - c_ret):+.2%} vs classical")
-    k2.metric("Volatility", f"{q_vol:.2%}", f"{(q_vol - c_vol):+.2%} vs classical")
-    k3.metric("Quantum Edge", f"{edge_bps:,.0f} bps", "objective improvement")
+        c_ret, c_vol, c_score = portfolio_stats(classical_w)
+        q_ret, q_vol, q_score = portfolio_stats(quantum_w)
 
-    # -----------------------------
-    # Allocation comparison
-    # -----------------------------
-    alloc_df = pd.DataFrame(
-        {
-            "Sleeve": sleeve_names,
-            "Classical": classical_w,
-            "Quantum": quantum_w,
-            "Delta": quantum_w - classical_w,
-        }
-    )
+        edge_bps = (q_score - c_score) * 10000
 
-    left, right = st.columns([1.2, 1])
+        # -----------------------------
+        # KPI cards
+        # -----------------------------
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Expected Return", f"{q_ret:.2%}", f"{(q_ret - c_ret):+.2%} vs classical")
+        k2.metric("Volatility", f"{q_vol:.2%}", f"{(q_vol - c_vol):+.2%} vs classical")
+        k3.metric("Quantum Edge", f"{edge_bps:,.0f} bps", "objective improvement")
 
-    with left:
-        st.subheader("Allocation Comparison")
-        fig_bar = go.Figure()
-        fig_bar.add_bar(name="Classical", x=alloc_df["Sleeve"], y=alloc_df["Classical"])
-        fig_bar.add_bar(name="Quantum", x=alloc_df["Sleeve"], y=alloc_df["Quantum"])
-        fig_bar.update_layout(
-            barmode="group",
+        # -----------------------------
+        # Allocation df
+        # -----------------------------
+        alloc_df = pd.DataFrame(
+            {
+                "Sleeve": sleeve_names,
+                "Classical": classical_w,
+                "Quantum": quantum_w,
+                "Delta": quantum_w - classical_w,
+            }
+        )
+
+        # -----------------------------
+        # Frontier data (built before rows so both rows can reference it)
+        # -----------------------------
+        cloud = []
+        for _ in range(250):
+            w = normalize_weights(rng.random(len(sleeve_names)), max_weight)
+            ret, vol, score = portfolio_stats(w)
+            cloud.append((ret, vol, score))
+
+        cloud_df = pd.DataFrame(cloud, columns=["Return", "Volatility", "Score"])
+        cloud_df["Size"] = cloud_df["Score"] - cloud_df["Score"].min() + 1e-3
+
+        frontier = px.scatter(
+            cloud_df,
+            x="Volatility",
+            y="Return",
+            size="Size",
+            hover_data={"Score": ":.4f"},
+            title="Optimization Landscape",
+        )
+        frontier.add_trace(
+            go.Scatter(
+                x=[c_vol],
+                y=[c_ret],
+                mode="markers+text",
+                name="Classical",
+                text=["Classical"],
+                textposition="top center",
+                marker=dict(size=14, symbol="diamond"),
+            )
+        )
+        frontier.add_trace(
+            go.Scatter(
+                x=[q_vol],
+                y=[q_ret],
+                mode="markers+text",
+                name="Quantum",
+                text=["Quantum"],
+                textposition="top center",
+                marker=dict(size=16, symbol="star"),
+            )
+        )
+        frontier.update_layout(
             height=420,
-            margin=dict(l=20, r=20, t=40, b=20),
+            margin=dict(l=20, r=20, t=50, b=20),
+            xaxis_tickformat=".0%",
             yaxis_tickformat=".0%",
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
 
-    with right:
-        st.subheader("Weight Deltas")
-        heat = px.imshow(
-            np.array([alloc_df["Delta"].values]),
-            x=alloc_df["Sleeve"],
-            y=["Quantum - Classical"],
-            aspect="auto",
-            text_auto=".1%",
-        )
-        heat.update_layout(height=420, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(heat, use_container_width=True)
+        # -----------------------------
+        # Row 3: [bar chart | frontier scatter]
+        # -----------------------------
+        r3_left, r3_right = st.columns([1.2, 1])
 
-    # -----------------------------
-    # Frontier-like chart
-    # -----------------------------
-    st.subheader("Optimization Landscape")
+        with r3_left:
+            st.subheader("Allocation Comparison")
+            fig_bar = go.Figure()
+            fig_bar.add_bar(name="Classical", x=alloc_df["Sleeve"], y=alloc_df["Classical"])
+            fig_bar.add_bar(name="Quantum", x=alloc_df["Sleeve"], y=alloc_df["Quantum"])
+            fig_bar.update_layout(
+                barmode="group",
+                height=420,
+                margin=dict(l=20, r=20, t=40, b=20),
+                yaxis_tickformat=".0%",
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-    cloud = []
-    for _ in range(250):
-        w = normalize_weights(rng.random(len(sleeve_names)), max_weight)
-        ret, vol, score = portfolio_stats(w)
-        cloud.append((ret, vol, score))
+        with r3_right:
+            st.subheader("Optimization Landscape")
+            st.plotly_chart(frontier, use_container_width=True)
 
-    cloud_df = pd.DataFrame(cloud, columns=["Return", "Volatility", "Score"])
+        # -----------------------------
+        # Row 4: [heatmap | advisor narrative]
+        # -----------------------------
+        r4_left, r4_right = st.columns([1, 1])
 
-    # Shift scores to [ε, ∞) so plotly accepts them as marker sizes
-    cloud_df["Size"] = cloud_df["Score"] - cloud_df["Score"].min() + 1e-3
+        with r4_left:
+            st.subheader("Weight Deltas")
+            heat = px.imshow(
+                np.array([alloc_df["Delta"].values]),
+                x=alloc_df["Sleeve"],
+                y=["Quantum - Classical"],
+                aspect="auto",
+                text_auto=".1%",
+            )
+            heat.update_layout(height=380, margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(heat, use_container_width=True)
 
-    frontier = px.scatter(
-        cloud_df,
-        x="Volatility",
-        y="Return",
-        size="Size",
-        hover_data={"Score": ":.4f"},
-        title="Candidate portfolios",
-    )
-
-    frontier.add_trace(
-        go.Scatter(
-            x=[c_vol],
-            y=[c_ret],
-            mode="markers+text",
-            name="Classical",
-            text=["Classical"],
-            textposition="top center",
-            marker=dict(size=14, symbol="diamond"),
-        )
-    )
-
-    frontier.add_trace(
-        go.Scatter(
-            x=[q_vol],
-            y=[q_ret],
-            mode="markers+text",
-            name="Quantum",
-            text=["Quantum"],
-            textposition="top center",
-            marker=dict(size=16, symbol="star"),
-        )
-    )
-
-    frontier.update_layout(
-        height=460,
-        margin=dict(l=20, r=20, t=50, b=20),
-        xaxis_tickformat=".0%",
-        yaxis_tickformat=".0%",
-    )
-    st.plotly_chart(frontier, use_container_width=True)
-
-    # -----------------------------
-    # Advisor-friendly narrative
-    # -----------------------------
-    st.subheader("Advisor Takeaway")
-
-    top_over = alloc_df.sort_values("Delta", ascending=False).head(2)
-    top_under = alloc_df.sort_values("Delta", ascending=True).head(2)
-
-    takeaway = f"""
+        with r4_right:
+            st.subheader("Advisor Takeaway")
+            top_over = alloc_df.sort_values("Delta", ascending=False).head(2)
+            top_under = alloc_df.sort_values("Delta", ascending=True).head(2)
+            takeaway = f"""
 **Client:** {selected_client}
 **Strategy:** {selected_strategy}
 
@@ -2272,13 +2280,13 @@ The model is favoring a mix that modestly improves expected return per unit of r
 under the current risk-aversion setting. This is best used as an **idea-generation
 tool** for PMs and advisors, not an automated trade engine.
 """
-    st.markdown(takeaway)
+            st.markdown(takeaway)
 
-    with st.expander("Show allocation table"):
-        st.dataframe(
-            alloc_df.style.format(
-                {"Classical": "{:.1%}", "Quantum": "{:.1%}", "Delta": "{:+.1%}"}
-            ),
-            use_container_width=True,
-        )
+        with st.expander("Show allocation table"):
+            st.dataframe(
+                alloc_df.style.format(
+                    {"Classical": "{:.1%}", "Quantum": "{:.1%}", "Delta": "{:+.1%}"}
+                ),
+                use_container_width=True,
+            )
 

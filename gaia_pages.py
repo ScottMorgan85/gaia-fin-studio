@@ -2003,6 +2003,51 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         "This is a PoC: classical data, quantum-style optimization logic."
     )
 
+    with st.expander("About Quantum Studio — methods, parameters & interpretation", expanded=False):
+        st.markdown("""
+### What is Quantum Studio?
+Quantum Studio is an experimental decision-support layer that explores
+**quantum-inspired portfolio tilts** under advisor-defined risk constraints.
+It uses **simulated annealing** — a classical algorithm that mimics how quantum
+systems find low-energy (optimal) states — to search a large portfolio weight
+space more efficiently than brute-force random search.
+
+This is a **PoC (proof of concept)**: the optimization runs on classical hardware
+using quantum-inspired logic. In a production system, the same QUBO (Quadratic
+Unconstrained Binary Optimization) problem formulation could be submitted to a
+real quantum annealer (e.g. D-Wave) for exponentially faster search at scale.
+
+### How it works
+1. **Classical baseline** — 3,000 random weight draws, best risk-adjusted score kept
+2. **Quantum-inspired optimizer** — simulated annealing starts from a random allocation,
+   proposes small weight perturbations, and probabilistically accepts worse solutions
+   early (high temperature) to escape local optima — gradually "cooling" to converge
+3. **Objective** — maximize: Expected Return − λ × Variance, where λ = risk aversion
+4. **Constraint** — no single sleeve exceeds the max weight cap
+
+### Parameters
+| Parameter | What it controls | Typical range |
+|---|---|---|
+| **Risk aversion (λ)** | How much volatility you penalize vs. chasing return. Higher = more conservative tilt, favors Min Vol and Treasury. Lower = growth tilt, favors Core Equity and Commodities. | 1–5 for most clients |
+| **Max sleeve weight** | Hard cap on any single asset class. Prevents over-concentration. 30% is a common institutional guardrail. | 20–40% |
+| **Anneal iterations** | More iterations = more thorough search = marginally better solution, but slower. 1,200 is a good balance for demos. | 500–2,000 |
+
+### Quantum Edge (bps)
+The difference in objective score between the quantum-inspired and classical solutions,
+expressed in basis points. In practice, a real edge of **10–150 bps** is meaningful
+for large portfolios. This PoC demonstrates the *concept* of optimizer advantage —
+not a live trading signal.
+
+### Interpreting the charts
+- **Allocation Comparison** — side-by-side weights show where the quantum optimizer
+  tilts vs. the classical baseline
+- **Return Distributions** — violin plots show the full monthly return distribution
+  per sleeve, helping contextualize risk differences between asset classes
+- **Optimization Landscape** — each dot is a random portfolio; the star is the
+  quantum solution, the diamond is classical. Higher and left = better.
+- **Advisor Takeaway** — plain-language summary of what changed and why
+""")
+
     # -----------------------------
     # Load base return data
     # -----------------------------
@@ -2034,22 +2079,31 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         st.warning("Not enough return history to run Quantum Studio.")
         return
 
+    # Clip extreme outliers before building sleeves
+    base = base.clip(lower=base.quantile(0.02), upper=base.quantile(0.98))
+
     rng = np.random.default_rng(42)
 
     sleeves = pd.DataFrame(
         {
-            "Core Equity": base.values,
-            "Quality": base.values * 0.88 + rng.normal(0, 0.002, len(base)),
-            "Min Vol": base.values * 0.65 + rng.normal(0, 0.0015, len(base)),
-            "Credit": base.values * 0.42 + rng.normal(0, 0.0018, len(base)),
-            "Treasury": -base.values * 0.15 + rng.normal(0, 0.0012, len(base)),
-            "Commodities": base.values * 0.35 + rng.normal(0, 0.0030, len(base)),
+            "Core Equity":  base.values * 1.00 + rng.normal(0, 0.003,  len(base)),
+            "Quality":      base.values * 0.82 + rng.normal(0, 0.002,  len(base)),
+            "Min Vol":      base.values * 0.55 + rng.normal(0, 0.0015, len(base)),
+            "Credit":       base.values * 0.30 + rng.normal(0, 0.0012, len(base)),
+            "Treasury":    -base.values * 0.10 + rng.normal(0, 0.0008, len(base)),
+            "Commodities":  base.values * 0.25 + rng.normal(0, 0.002,  len(base)),
         },
         index=base.index,
     )
 
     mu = sleeves.mean().values * 12
     cov = sleeves.cov().values * 12
+
+    # Hard clamp: keep annual returns and vol in realistic ranges
+    mu = np.clip(mu, -0.15, 0.25)
+    vol_diag = np.sqrt(np.diag(cov))
+    scale = np.clip(vol_diag, 0.03, 0.30) / np.maximum(vol_diag, 1e-8)
+    cov = cov * np.outer(scale, scale)
 
     # -----------------------------
     # Controls
@@ -2150,7 +2204,18 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         c_ret, c_vol, c_score = portfolio_stats(classical_w)
         q_ret, q_vol, q_score = portfolio_stats(quantum_w)
 
-        edge_bps = (q_score - c_score) * 10000
+        # Sanity check — warn and bail if numbers are still unrealistic
+        if q_vol > 0.40 or abs(q_ret) > 0.30:
+            st.warning(
+                "Optimization produced unrealistic values for this strategy's return history. "
+                "Try adjusting the sliders."
+            )
+            return
+
+        edge_bps_raw = (q_score - c_score) * 10000
+        edge_capped = abs(edge_bps_raw) > 999
+        edge_bps_display = min(abs(edge_bps_raw), 999)
+        edge_label = f"{edge_bps_display:,.0f} bps" + (" (capped)" if edge_capped else "")
 
         # -----------------------------
         # KPI cards
@@ -2158,7 +2223,7 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         k1, k2, k3 = st.columns(3)
         k1.metric("Expected Return", f"{q_ret:.2%}", f"{(q_ret - c_ret):+.2%} vs classical")
         k2.metric("Volatility", f"{q_vol:.2%}", f"{(q_vol - c_vol):+.2%} vs classical")
-        k3.metric("Quantum Edge", f"{edge_bps:,.0f} bps", "objective improvement")
+        k3.metric("Quantum Edge", edge_label, "objective improvement")
 
         # -----------------------------
         # Allocation df
@@ -2173,7 +2238,7 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         )
 
         # -----------------------------
-        # Frontier data (built before rows so both rows can reference it)
+        # Frontier data (built before rows so Row 4 can reference it)
         # -----------------------------
         cloud = []
         for _ in range(250):
@@ -2215,14 +2280,14 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
             )
         )
         frontier.update_layout(
-            height=420,
+            height=400,
             margin=dict(l=20, r=20, t=50, b=20),
             xaxis_tickformat=".0%",
             yaxis_tickformat=".0%",
         )
 
         # -----------------------------
-        # Row 3: [bar chart | frontier scatter]
+        # Row 3: [Allocation Comparison bar | Return Distributions violin]
         # -----------------------------
         r3_left, r3_right = st.columns([1.2, 1])
 
@@ -2240,35 +2305,51 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
             st.plotly_chart(fig_bar, use_container_width=True)
 
         with r3_right:
-            st.subheader("Optimization Landscape")
-            st.plotly_chart(frontier, use_container_width=True)
+            st.subheader("Return Distributions")
+            dist_df = sleeves.reset_index().melt(
+                id_vars="as_of_date",
+                var_name="Sleeve",
+                value_name="Monthly Return",
+            )
+            fig_violin = go.Figure()
+            colors = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3"]
+            for i, sleeve in enumerate(sleeve_names):
+                s_data = dist_df[dist_df["Sleeve"] == sleeve]["Monthly Return"]
+                fig_violin.add_trace(go.Violin(
+                    y=s_data,
+                    name=sleeve,
+                    box_visible=True,
+                    meanline_visible=True,
+                    fillcolor=colors[i],
+                    opacity=0.7,
+                    line_color=colors[i],
+                ))
+            fig_violin.update_layout(
+                height=420,
+                margin=dict(l=20, r=20, t=40, b=20),
+                yaxis_tickformat=".1%",
+                yaxis_title="Monthly return",
+                showlegend=False,
+                violinmode="overlay",
+            )
+            st.plotly_chart(fig_violin, use_container_width=True)
 
         # -----------------------------
-        # Row 4: [heatmap | advisor narrative]
+        # Row 4: [Optimization Landscape scatter | Advisor Takeaway narrative]
         # -----------------------------
-        r4_left, r4_right = st.columns([1, 1])
+        r4_left, r4_right = st.columns([1.2, 1])
 
         with r4_left:
-            st.subheader("Weight Deltas")
-            heat = px.imshow(
-                np.array([alloc_df["Delta"].values]),
-                x=alloc_df["Sleeve"],
-                y=["Quantum - Classical"],
-                aspect="auto",
-                text_auto=".1%",
-            )
-            heat.update_layout(height=380, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(heat, use_container_width=True)
+            st.plotly_chart(frontier, use_container_width=True)
 
         with r4_right:
-            st.subheader("Advisor Takeaway")
             top_over = alloc_df.sort_values("Delta", ascending=False).head(2)
             top_under = alloc_df.sort_values("Delta", ascending=True).head(2)
             takeaway = f"""
 **Client:** {selected_client}
 **Strategy:** {selected_strategy}
 
-The quantum-inspired optimizer improved the objective score by **{edge_bps:,.0f} bps**
+The quantum-inspired optimizer improved the objective score by **{edge_label}**
 relative to the classical baseline.
 
 **What changed**
@@ -2280,6 +2361,7 @@ The model is favoring a mix that modestly improves expected return per unit of r
 under the current risk-aversion setting. This is best used as an **idea-generation
 tool** for PMs and advisors, not an automated trade engine.
 """
+            st.caption("Advisor takeaway")
             st.markdown(takeaway)
 
         with st.expander("Show allocation table"):

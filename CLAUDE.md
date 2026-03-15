@@ -28,6 +28,19 @@ DigitalOcean App Platform where `secrets.toml` is absent.
 **Rule:** Every place in `gaia_pages.py` that needs the Groq API key must call
 `get_groq_key()` — never read `os.environ` or `st.secrets` directly for this key.
 
+### `get_fred_key() -> str`
+Defined in `utils.py` (after imports, near `get_groq_key` pattern).
+
+Tries these sources in order, returns the first non-empty string:
+1. `os.environ.get("FRED_API_KEY", "")` — set as env var on DigitalOcean
+2. `st.secrets.get("FRED_API_KEY", "")` — flat key in `secrets.toml`
+3. `st.secrets.get("env", {}).get("FRED_API_KEY", "")` — nested under `[env]`
+4. Hardcoded fallback: `f4ac14beb82a2e5cf49e141465baa458`
+
+**Rule:** `get_macro_data()` (and any future FRED callers) must call `get_fred_key()` — never hardcode the key string inline.
+
+**DigitalOcean:** Add `FRED_API_KEY` as an environment variable in the App Platform settings (same place as `GROQ_API_KEY`).
+
 ---
 
 ## Models in use

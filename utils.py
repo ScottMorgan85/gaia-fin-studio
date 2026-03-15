@@ -25,6 +25,19 @@ from groq import Groq
 groq_api_key = os.environ.get('GROQ_API_KEY')
 client = Groq(api_key=groq_api_key)
 
+def get_fred_key() -> str:
+    """Return FRED API key from env → secrets (flat) → secrets ([env]) → hardcoded fallback."""
+    try:
+        key = os.environ.get("FRED_API_KEY", "")
+        if key: return key
+        key = st.secrets.get("FRED_API_KEY", "")
+        if key: return key
+        key = st.secrets.get("env", {}).get("FRED_API_KEY", "")
+        if key: return key
+    except Exception:
+        pass
+    return "f4ac14beb82a2e5cf49e141465baa458"
+
 DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
 
@@ -1219,10 +1232,8 @@ def get_macro_data() -> pd.DataFrame:
     Returns DataFrame indexed by month-end date with one column per series.
     Returns empty DataFrame on total failure.
     """
-    try:
-        api_key = st.secrets.get("FRED_API_KEY", "b722a33d9fe927f7fe3e494aeeed3e0e")
-    except Exception:
-        api_key = os.environ.get("FRED_API_KEY", "b722a33d9fe927f7fe3e494aeeed3e0e")
+    api_key = get_fred_key()
+    print(f"[GAIA] FRED key loaded: {'SET' if api_key else 'MISSING'} | prefix: {api_key[:8]}", flush=True)
 
     SERIES = [
         "GDPC1",        # Real GDP (quarterly → ffill monthly)

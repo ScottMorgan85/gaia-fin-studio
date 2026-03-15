@@ -35,12 +35,6 @@ def _render_admin_panel():
             st.rerun()  # <- replace experimental_rerun()
 
 
-# ── Gate: collect contact info, then continue straight into the app ─────────
-GATE_ON = os.environ.get("GAIA_GATE_ON", "true").strip().lower() == "true"
-if GATE_ON and not st.session_state.get("gate_passed"):
-    landing.render_form()  # (alias of render_gate) shows contact form
-    st.stop()
-
 # ── Feature flag helper (reads Streamlit secrets first, then env) ───────────
 def _flag(name: str, default: str = "true") -> bool:
     """Return True/False from secrets or env; accepts true/1/yes/on."""
@@ -54,6 +48,12 @@ def _flag(name: str, default: str = "true") -> bool:
     if val is None:
         val = os.getenv(name, default)
     return _to_bool(val)
+
+# ── Gate: collect contact info, then continue straight into the app ─────────
+GATE_ON = _flag("GAIA_GATE_ON", "true")
+if GATE_ON and not st.session_state.get("gate_passed"):
+    landing.render_form()  # (alias of render_gate) shows contact form
+    st.stop()
 
 # ── Page flags (set via environment variables) ───────────────────────────────
 SHOW_PORTFOLIO_PULSE   = _flag("SHOW_PORTFOLIO_PULSE",   "true")

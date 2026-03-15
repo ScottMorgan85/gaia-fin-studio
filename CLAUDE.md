@@ -67,6 +67,39 @@ QUBO-style optimization across six synthetic sleeve allocations anchored to live
 | Dependencies | `numpy`, `plotly` (already in requirements.txt) |
 | Status | PoC — simulated annealing mimicking QUBO-style optimization; no new pip packages |
 
+### Forecast Lab
+Full probabilistic simulation and macro analysis overlay for the selected client strategy.
+
+| Field | Value |
+|-------|-------|
+| Function | `display_forecast_lab()` in `gaia_pages.py` |
+| Tab name | `Forecast Lab` |
+| Route key | `forecast` |
+| Dependencies | `numpy`, `plotly`, `groq` |
+
+**Key implementation details:**
+
+| Fix | Description |
+|-----|-------------|
+| FIX 1 | Level→return detection: if `abs().mean() > 5.0`, apply `pct_change()`. Returns clipped to `[-20%, +20%]`. |
+| FIX 2 | Macro table shows YoY% for CPI/GDP; columns formatted via `st.column_config.NumberColumn` with `format="%.1f%%"`. |
+| FIX 3 | Block bootstrap simulation (block_size=6 months) with 1,000 paths over 60-month horizon to preserve autocorrelation. |
+| FIX 4 | Scenario table shows $10,000 terminal values (base / bull / bear / custom) — not percentages. |
+| FIX 5 | Fan chart y-axis in dollars ($8k–$25k expected range); 10/25/50/75/90th percentile bands. |
+| FIX 6 | Terminal value violin plot in dollars. |
+| FIX 7 | Regime analysis: 2×2 GDP growth × CPI momentum matrix → Goldilocks / Reflation / Stagflation / Deflation. |
+| FIX 8 | AI trade ideas behind `st.button("Generate AI Ideas")` with macro-aware prompt (no auto-run on page load). |
+| FIX 9 | Methodology & Statistical Disclosures expander with block-bootstrap description. |
+
+**Level-vs-return detection rule:** `abs().mean() > 5.0` implies the series is in price/index levels — apply `pct_change()` before any simulation.
+
+**Regime matrix:**
+```
+            CPI mom ≥ 0          CPI mom < 0
+GDP > 0   Goldilocks / Reflation
+GDP ≤ 0   Stagflation            Deflation
+```
+
 ---
 
 ## Data files

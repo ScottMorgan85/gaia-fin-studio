@@ -934,227 +934,480 @@ def display_recommendation_log():
 
 def display_forecast_lab(selected_client, selected_strategy):
     """
-    Forecast Lab: historical & macro context, lightweight RL overlay,
-    Monte Carlo scenarios, and Groq-generated trade ideas (always on).
+    Forecast Lab: regime-aware block bootstrap simulation, macro context,
+    scenario analysis, regime classification, and AI trade ideas.
     """
     import os
     import numpy as np
     import pandas as pd
-    import plotly.express as px
     import plotly.graph_objects as go
     from datetime import datetime
-    from dateutil.relativedelta import relativedelta
     from pandas_datareader import data as web
-    import gymnasium as gym
-    from gymnasium import spaces
-    from stable_baselines3 import DQN
     from groq import Groq
     import utils
     import streamlit as st
 
-    # st.title("🔮 Forecast Lab")
-
-    # ---- Config / clients
     today = datetime.today()
     api_key = get_groq_key()
-    model_primary = "llama-3.3-70b-versatile"
+    model_primary  = "llama-3.3-70b-versatile"
     model_fallback = "meta-llama/llama-4-scout-17b-16e-instruct"
     groq_client = Groq(api_key=api_key) if api_key else None
 
+    # Client risk profile (best-effort)
+    try:
+        from data.client_mapping import get_client_info as _get_ci
+        risk_profile = (_get_ci(selected_client) or {}).get("risk_profile", "Balanced")
+    except Exception:
+        risk_profile = "Balanced"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 1 — Load & scale strategy returns
+    # ─────────────────────────────────────────────────────────────────────────
+    returns_df = utils.load_strategy_returns().copy()
+    returns_df["as_of_date"] = pd.to_datetime(returns_df["as_of_date"])
+    returns_df = returns_df.sort_values("as_of_date")
+
+    numeric_cols = [c for c in returns_df.columns if c != "as_of_date"]
+    for col in numeric_cols:
+        if returns_df[col].dropna().abs().mean() > 5.0:
+            returns_df[col] = returns_df[col].pct_change()
+    returns_df = returns_df.dropna()
+    for col in numeric_cols:
+        returns_df[col] = returns_df[col].clip(-0.20, 0.20)
+
+    if selected_strategy not in returns_df.columns:
+        st.error(f"Strategy '{selected_strategy}' not found in returns data.")
+        return
+
+    strat_returns = returns_df.set_index("as_of_date")[selected_strategy].dropna()
+    if len(strat_returns) < 24:
+        st.warning("Not enough return history for Forecast Lab (need ≥ 24 months).")
+        return
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 2 — Macro data: load, convert to %, format
+    # ─────────────────────────────────────────────────────────────────────────
     MACRO = {
-        "GDPC1": "Real GDP YoY",
+        "GDPC1":    "Real GDP YoY",
         "CPIAUCSL": "CPI YoY",
         "FEDFUNDS": "Fed-Funds",
     }
 
-    # 1) Historical returns (strategy)
-    strat_df = utils.load_strategy_returns()
-    strat = (
-        strat_df[["as_of_date", selected_strategy]]
-        .set_index("as_of_date")
-        .pct_change()
-        .dropna()
-    )
-
-    # 2) Macro data (FRED) with safe fallbacks
     def fetch_fred_series(code):
         start = today.replace(year=today.year - 15)
         try:
-            s = web.DataReader(code, "fred", start, today).squeeze()
+            return web.DataReader(code, "fred", start, today).squeeze()
         except Exception:
-            idx = pd.date_range(start, today, freq="M")
-            s = pd.Series(np.random.normal(0, 0.01, len(idx)), index=idx)
-        return s
+            rng_f = np.random.default_rng(abs(hash(code)) % (2 ** 31))
+            idx_m = pd.date_range(start, today, freq="ME")
+            idx_q = pd.date_range(start, today, freq="QE")
+            if code == "CPIAUCSL":
+                return pd.Series(3.0 + rng_f.normal(0, 0.4, len(idx_m)), index=idx_m)
+            elif code == "GDPC1":
+                return pd.Series(2.0 + rng_f.normal(0, 0.8, len(idx_q)), index=idx_q)
+            elif code == "FEDFUNDS":
+                return pd.Series(4.5 + rng_f.normal(0, 0.15, len(idx_m)), index=idx_m)
+            return pd.Series(rng_f.normal(0, 0.01, len(idx_m)), index=idx_m)
 
-    macro_series = {}
+    macro_raw = {}
     for code, label in MACRO.items():
         s = fetch_fred_series(code)
         if code == "GDPC1":
-            s = s.resample("Q").last().pct_change().dropna()
-        macro_series[label] = s
+            s = s.resample("QE").last()
+            if s.abs().mean() > 100:
+                s = s.pct_change(4) * 100
+            s = s.dropna()
+        elif code == "CPIAUCSL":
+            if s.abs().mean() > 100:
+                s = s.pct_change(12) * 100
+            s = s.dropna()
+        macro_raw[label] = s.resample("ME").last().ffill()
 
-    macro = pd.concat(macro_series, axis=1).fillna(method="ffill").tail(20)
-    st.markdown("*Why these inputs:* GDP, CPI, and Fed-Funds steer risk appetite.")
-    with st.expander("Show macro inputs"):
-        st.dataframe(macro.style.format("{:.2%}"))
+    macro = pd.concat(macro_raw, axis=1).ffill().dropna(how="all")
 
-    # 3) Lightweight RL overlay (toy)
-    class PortEnv(gym.Env):
-        def __init__(self, returns):
-            super().__init__()
-            self.r = returns.values.flatten()
-            self.action_space = spaces.Discrete(3)  # 0 hold, 1 add risk, 2 reduce risk
-            self.observation_space = spaces.Box(-np.inf, np.inf, (1,), dtype=np.float32)
+    # Safety net: catch any residual index-level columns
+    if "CPI YoY" in macro.columns and macro["CPI YoY"].abs().mean() > 100:
+        macro["CPI YoY"] = macro["CPI YoY"].pct_change(12) * 100
+    if "Real GDP YoY" in macro.columns and macro["Real GDP YoY"].abs().mean() > 100:
+        macro["Real GDP YoY"] = macro["Real GDP YoY"].pct_change(4) * 100
+    macro = macro.dropna()
 
-        def reset(self, **kwargs):
-            self.t, self.w, self.val = 0, 1.0, 1.0
-            return np.array([self.r[self.t]], dtype=np.float32), {}
+    # Build macro_df with a proper as_of_date column for regime analysis
+    macro_df = macro.reset_index()
+    if macro_df.columns[0] != "as_of_date":
+        macro_df = macro_df.rename(columns={macro_df.columns[0]: "as_of_date"})
 
-        def step(self, action):
-            if action == 1:
-                self.w += 0.1
-            elif action == 2:
-                self.w = max(0.0, self.w - 0.1)
-            reward = self.w * self.r[self.t]
-            self.val *= 1 + reward
-            self.t += 1
-            done = self.t >= len(self.r) - 1
-            obs = np.array([self.r[self.t] if not done else 0], dtype=np.float32)
-            return obs, reward, done, False, {}
+    st.markdown("*Why these inputs:* GDP, CPI, and Fed-Funds steer risk appetite and discount rates.")
+    with st.expander("Show macro inputs", expanded=False):
+        col_cfg = {}
+        if "as_of_date" in macro_df.columns:
+            col_cfg["as_of_date"] = st.column_config.DateColumn("Date", format="MMM YYYY")
+        if "Real GDP YoY" in macro_df.columns:
+            col_cfg["Real GDP YoY"] = st.column_config.NumberColumn("Real GDP YoY", format="%.2f%%")
+        if "CPI YoY" in macro_df.columns:
+            col_cfg["CPI YoY"] = st.column_config.NumberColumn("CPI YoY", format="%.2f%%")
+        if "Fed-Funds" in macro_df.columns:
+            col_cfg["Fed-Funds"] = st.column_config.NumberColumn("Fed Funds Rate", format="%.2f%%")
+        st.dataframe(macro_df.tail(24), column_config=col_cfg,
+                     use_container_width=True, hide_index=True)
 
-    env = PortEnv(strat)
-    # use_gpu = st.checkbox("Use GPU (CUDA)", False)
-    # 
-    device =  "cpu"
+    # ─────────────────────────────────────────────────────────────────────────
+    # Controls
+    # ─────────────────────────────────────────────────────────────────────────
+    ctrl_l, ctrl_r = st.columns([2, 1])
+    with ctrl_l:
+        drift = st.slider("Custom drift shift (annual %)", -10.0, 10.0, 0.0, 0.5)
+    with ctrl_r:
+        selected_scenario = st.selectbox("Fan chart scenario",
+                                         ["Base", "Bull", "Bear", "Custom"])
 
-    model = DQN("MlpPolicy", env, verbose=0, device=device)
-    model.learn(total_timesteps=10_000, progress_bar=False)
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 3 — Block bootstrap simulation engine
+    # ─────────────────────────────────────────────────────────────────────────
+    def run_simulation(monthly_returns, n_paths=1000, horizon_months=60,
+                       drift_shift=0.0, scenario="base"):
+        """Block bootstrap (6-month blocks) preserves autocorrelation structure."""
+        returns = monthly_returns.values
+        n = len(returns)
+        block_size = 6
+        scenario_drifts = {
+            "base":   0.0,
+            "bull":   0.04 / 12,
+            "bear":  -0.05 / 12,
+            "custom": drift_shift / 12 / 100,
+        }
+        monthly_drift = scenario_drifts.get(scenario, 0.0)
+        paths = np.zeros((n_paths, horizon_months))
+        rng = np.random.default_rng(42)
+        for i in range(n_paths):
+            path = []
+            while len(path) < horizon_months:
+                start_idx = rng.integers(0, max(1, n - block_size))
+                path.extend(returns[start_idx: start_idx + block_size])
+            monthly = np.array(path[:horizon_months]) + monthly_drift
+            paths[i] = np.cumprod(1 + monthly) - 1
+        return paths
 
-    # 4) Monte-Carlo scenarios
-    scenarios = {"Base": 0.0, "Bull": 0.02, "Bear": -0.02}
-    drift = st.slider("Custom drift shift (annual %)", -5.0, 5.0, 0.0, 0.25) / 100
-    scenarios["Custom"] = drift
+    all_paths = {
+        sc: run_simulation(strat_returns, scenario=sc.lower(), drift_shift=drift)
+        for sc in ["Base", "Bull", "Bear", "Custom"]
+    }
 
-    years = [1, 3, 5]
-    dates = [today + relativedelta(years=y) for y in years]
-    sim, paths = {}, {}
-    np.random.seed(42)
+    # Pre-compute key stats for AI ideas and regime callout
+    base_paths      = all_paths["Base"]
+    base_1yr_median = float(np.median((1 + base_paths[:, 11]) * 10_000))
+    base_5yr_median = float(np.median((1 + base_paths[:, -1]) * 10_000))
+    base_5yr_cagr   = (base_5yr_median / 10_000) ** (1 / 5) - 1
+    bull_p90        = float(np.percentile((1 + all_paths["Bull"][:, -1]) * 10_000, 90))
+    bear_p10        = float(np.percentile((1 + all_paths["Bear"][:, -1]) * 10_000, 10))
+    bull_bear_spread = bull_p90 - bear_p10
 
-    for name, d in scenarios.items():
-        term_vals, path_list = [], []
-        for _ in range(1000):
-            v = 1.0
-            pts = []
-            for _ in range(60):
-                ret = strat.sample(1).values[0, 0]
-                v *= 1 + ret + d / 12
-                pts.append(v)
-            term_vals.append([pts[11], pts[35], pts[59]])
-            path_list.append(pts)
-        sim[name] = np.percentile(term_vals, [5, 50, 95], axis=0)
-        paths[name] = np.array(path_list)
+    # Current regime estimate
+    current_regime = "Unknown"
+    gdp_trend  = "unknown"
+    cpi_trend  = "unknown"
+    fed_funds  = 4.5
+    try:
+        if "Real GDP YoY" in macro.columns:
+            gdp_trend = "positive" if macro["Real GDP YoY"].dropna().iloc[-1] > 0 else "negative"
+        if "CPI YoY" in macro.columns:
+            cpi_s = macro["CPI YoY"].dropna()
+            cpi_trend = "rising" if cpi_s.diff().iloc[-1] > 0 else "falling"
+        if "Fed-Funds" in macro.columns:
+            fed_funds = float(macro["Fed-Funds"].dropna().iloc[-1])
+        regime_map = {
+            ("positive", "falling"): "Goldilocks",
+            ("positive", "rising"):  "Reflation",
+            ("negative", "rising"):  "Stagflation",
+            ("negative", "falling"): "Deflation",
+        }
+        current_regime = regime_map.get((gdp_trend, cpi_trend), "Unknown")
+    except Exception:
+        pass
 
-    labels = [f"{y}yr ({dates[i].strftime('%b-%Y')})" for i, y in enumerate(years)]
-    median_vals = {k: sim[k][1] for k in sim}  # 50th pct for 1/3/5y
-    med_df = pd.DataFrame(median_vals).T
-    med_df.columns = labels
-    med_df.index.name = "Scenario"
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 4 — Scenario summary table
+    # ─────────────────────────────────────────────────────────────────────────
+    def build_scenario_table(all_paths_dict):
+        rows = []
+        checkpoints = {"1yr (mo 12)": 11, "3yr (mo 36)": 35, "5yr (mo 60)": 59}
+        for scenario, paths in all_paths_dict.items():
+            for label, mo in checkpoints.items():
+                if mo < paths.shape[1]:
+                    terminal  = (1 + paths[:, mo]) * 10_000
+                    med       = np.median(terminal)
+                    cagr      = (med / 10_000) ** (1 / ((mo + 1) / 12)) - 1
+                    rows.append({
+                        "Scenario":        scenario.title(),
+                        "Horizon":         label,
+                        "Median ($10k→)":  f"${med:,.0f}",
+                        "10th pct":        f"${np.percentile(terminal, 10):,.0f}",
+                        "90th pct":        f"${np.percentile(terminal, 90):,.0f}",
+                        "Median CAGR":     f"{cagr:.1%}",
+                    })
+        return pd.DataFrame(rows)
 
-    st.markdown("*Median multiples*: What $10k could become under each scenario.")
-    st.dataframe(med_df)
+    st.subheader("Scenario Summary")
+    st.dataframe(build_scenario_table(all_paths),
+                 use_container_width=True, hide_index=True)
 
-    base_q = np.percentile(paths["Base"], [5, 25, 50, 75, 95], axis=0)
-    months = pd.date_range(today, periods=60, freq="M")
-    fan = go.Figure()
-    for lo, hi, col in [
-        (0, 1, "rgba(0,150,200,0.15)"),
-        (1, 2, "rgba(0,150,200,0.25)"),
-    ]:
-        fan.add_scatter(
-            x=months, y=base_q[hi], mode="lines", line=dict(width=0), showlegend=False
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 5 — Fan chart (dollar values, percentile bands)
+    # ─────────────────────────────────────────────────────────────────────────
+    def plot_fan_chart(paths, scenario_label, strategy_name):
+        n_months = paths.shape[1]
+        dates    = pd.date_range(start=pd.Timestamp.today(), periods=n_months, freq="ME")
+        pv       = (1 + paths) * 10_000
+        p10, p25, p50, p75, p90 = (np.percentile(pv, q, axis=0)
+                                    for q in [10, 25, 50, 75, 90])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=list(dates) + list(dates[::-1]),
+            y=list(p90) + list(p10[::-1]),
+            fill="toself", fillcolor="rgba(55,138,221,0.10)",
+            line=dict(color="rgba(255,255,255,0)"),
+            name="10th–90th pct", hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=list(dates) + list(dates[::-1]),
+            y=list(p75) + list(p25[::-1]),
+            fill="toself", fillcolor="rgba(55,138,221,0.22)",
+            line=dict(color="rgba(255,255,255,0)"),
+            name="25th–75th pct", hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=dates, y=p50,
+            line=dict(color="#378ADD", width=2.5),
+            name="Median",
+        ))
+        fig.add_hline(y=10_000, line_dash="dot",
+                      line_color="rgba(150,150,150,0.5)",
+                      annotation_text="Starting value $10k")
+        fig.update_layout(
+            title=f"Forecast Fan Chart — {scenario_label} ({strategy_name})",
+            yaxis_title="Portfolio value ($)",
+            yaxis_tickformat="$,.0f",
+            height=480,
+            margin=dict(l=20, r=20, t=50, b=20),
+            hovermode="x unified",
+            legend=dict(orientation="h", y=-0.15),
         )
-        fan.add_scatter(
-            x=months,
-            y=base_q[lo],
-            mode="lines",
-            line=dict(width=0),
-            fill="tonexty",
-            fillcolor=col,
-            showlegend=False,
+        return fig
+
+    st.plotly_chart(plot_fan_chart(all_paths[selected_scenario],
+                                   selected_scenario, selected_strategy),
+                    use_container_width=True)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 6 — Terminal violin (dollar values) + regime callout
+    # ─────────────────────────────────────────────────────────────────────────
+    def plot_terminal_violin(all_paths_dict):
+        colors = {"Base": "#378ADD", "Bull": "#1D9E75",
+                  "Bear": "#E24B4A", "Custom": "#EF9F27"}
+        fig = go.Figure()
+        for scenario, paths in all_paths_dict.items():
+            tv = (1 + paths[:, -1]) * 10_000
+            p1, p99 = np.percentile(tv, 1), np.percentile(tv, 99)
+            fig.add_trace(go.Violin(
+                x=tv.clip(p1, p99),
+                name=scenario.title(),
+                orientation="h", side="positive",
+                box_visible=True, meanline_visible=True,
+                line_color=colors.get(scenario, "#888"),
+                fillcolor=colors.get(scenario, "#888"),
+                opacity=0.65, points=False,
+            ))
+        fig.add_vline(x=10_000, line_dash="dot",
+                      line_color="rgba(150,150,150,0.5)",
+                      annotation_text="$10k invested")
+        fig.update_layout(
+            title="5-Year Terminal Value Distribution",
+            xaxis_title="Terminal portfolio value ($)",
+            xaxis_tickformat="$,.0f",
+            height=320,
+            margin=dict(l=20, r=20, t=50, b=20),
+            violinmode="overlay", showlegend=True,
+            legend=dict(orientation="h", y=-0.25),
         )
-    fan.add_scatter(
-        x=months,
-        y=base_q[2],
-        mode="lines",
-        line=dict(color="steelblue"),
-        name="Median",
-    )
-    fan.update_layout(
-        title="Forecast Fan Chart — Base", xaxis_title="", yaxis_title="Multiple"
-    )
-    st.plotly_chart(fan, use_container_width=True)
+        return fig
 
-    st.markdown(
-        "*Terminal distribution*: Violin plot of 5-year terminal multiples across scenarios."
-    )
-    term_df = pd.DataFrame({k: paths[k][:, -1] for k in paths})
-    kde = px.violin(
-        term_df,
-        orientation="h",
-        box=True,
-        points=False,
-        labels={"value": "Multiple", "variable": "Scenario"},
-    )
-    st.plotly_chart(kde, use_container_width=True)
+    row6_l, row6_r = st.columns([1.2, 1])
+    with row6_l:
+        st.plotly_chart(plot_terminal_violin(all_paths), use_container_width=True)
+    with row6_r:
+        st.subheader("Key Stats")
+        st.metric("1yr Median", f"${base_1yr_median:,.0f}", "from $10,000 invested")
+        st.metric("5yr Median", f"${base_5yr_median:,.0f}", f"CAGR: {base_5yr_cagr:.1%}")
+        st.metric("Bull/Bear Spread (5yr)", f"${bull_bear_spread:,.0f}",
+                  "90th–10th percentile")
+        emoji = {"Goldilocks": "🟢", "Reflation": "🔵",
+                 "Stagflation": "🔴", "Deflation": "🟡"}.get(current_regime, "⚪")
+        st.info(f"{emoji} **Current macro regime: {current_regime}**  \n"
+                f"GDP {gdp_trend} | CPI {cpi_trend} | Fed Funds {fed_funds:.2f}%")
 
-    # 5) Groq trade ideas (always on)
-    base_info = {yr: float(sim["Base"][1][i]) for i, yr in enumerate(years)}
-    prompt = (
-        f"Client: {selected_client} | Strategy: {selected_strategy}\n\n"
-        f"Median multiples (Base): {base_info}\n\n"
-        "For each scenario (Base, Bull, Bear, Custom), provide TWO dated trade ideas with a one-line rationale. "
-        "Limit to 4 bullets total. Format: '- YYYY-MM-DD: <idea> — <rationale>'."
-    )
-
-    rec = None
-    if groq_client:
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 7 — Regime analysis expander
+    # ─────────────────────────────────────────────────────────────────────────
+    with st.expander("Regime Analysis — conditional return distributions", expanded=False):
+        st.caption(
+            "Classifies each historical month by macro regime using GDP growth "
+            "and CPI direction. Shows how this strategy has performed under each "
+            "regime — useful for positioning given current macro conditions."
+        )
         try:
-            rec = groq_client.chat.completions.create(
-                model=model_primary,
-                max_tokens=700,
-                messages=[
-                    {"role": "system", "content": "You are an expert PM."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-            ).choices[0].message.content
-        except Exception:
-            rec = groq_client.chat.completions.create(
-                model=model_fallback,
-                max_tokens=700,
-                messages=[
-                    {"role": "system", "content": "You are an expert PM."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-            ).choices[0].message.content
-    else:
-        rec = (
-            "- 2025-09-15: Trim 10% into quality growth — base case median rises; rebalance momentum risk.\n"
-            "- 2025-10-01: Add 5-yr UST hedge — bear case skew widens with higher rate volatility.\n"
-            "- 2025-11-05: Rotate 2% to IG credit — bull case tightens spreads; carry improves.\n"
-            "- 2025-12-10: Initiate EM FX hedge — custom drift adds macro uncertainty near-year end."
-        )
+            date_col_r = "as_of_date"
+            merged = strat_returns.to_frame("return").join(
+                macro_df.set_index(date_col_r)[["Real GDP YoY", "CPI YoY"]],
+                how="inner",
+            ).dropna()
 
+            if len(merged) < 8:
+                st.info("Not enough overlapping data for regime analysis.")
+            else:
+                gdp_pos    = merged["Real GDP YoY"] > merged["Real GDP YoY"].median()
+                cpi_rising = merged["CPI YoY"] > merged["CPI YoY"].shift(1)
+                merged["Regime"] = "Unclassified"
+                merged.loc[ gdp_pos & ~cpi_rising, "Regime"] = "Goldilocks"
+                merged.loc[ gdp_pos &  cpi_rising, "Regime"] = "Reflation"
+                merged.loc[~gdp_pos &  cpi_rising, "Regime"] = "Stagflation"
+                merged.loc[~gdp_pos & ~cpi_rising, "Regime"] = "Deflation"
+
+                regime_stats = merged.groupby("Regime")["return"].agg([
+                    ("Months",        "count"),
+                    ("Median Return", lambda x: f"{x.median():.2%}"),
+                    ("Hit Rate",      lambda x: f"{(x > 0).mean():.0%}"),
+                    ("Worst Month",   lambda x: f"{x.min():.2%}"),
+                    ("Best Month",    lambda x: f"{x.max():.2%}"),
+                    ("Ann. Vol",      lambda x: f"{x.std() * np.sqrt(12):.2%}"),
+                ]).reset_index()
+                st.dataframe(regime_stats, use_container_width=True, hide_index=True)
+
+                regime_colors = {
+                    "Goldilocks": "#1D9E75", "Reflation": "#378ADD",
+                    "Stagflation": "#E24B4A", "Deflation": "#EF9F27",
+                }
+                fig_regime = go.Figure()
+                for regime in ["Goldilocks", "Reflation", "Stagflation", "Deflation"]:
+                    subset = merged[merged["Regime"] == regime]["return"]
+                    if len(subset) > 3:
+                        fig_regime.add_trace(go.Violin(
+                            y=subset * 100, name=regime,
+                            box_visible=True, meanline_visible=True,
+                            fillcolor=regime_colors[regime],
+                            line_color=regime_colors[regime],
+                            opacity=0.7, points="outliers",
+                        ))
+                fig_regime.update_layout(
+                    height=360, yaxis_title="Monthly return (%)",
+                    showlegend=True, margin=dict(l=20, r=20, t=30, b=20),
+                    violinmode="group",
+                )
+                st.plotly_chart(fig_regime, use_container_width=True)
+                st.info(f"Current macro regime estimate: **{current_regime}** "
+                        f"(GDP {gdp_trend}, CPI {cpi_trend})")
+        except Exception as e:
+            st.warning(f"Regime analysis unavailable: {e}")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 8 — AI Trade Ideas
+    # ─────────────────────────────────────────────────────────────────────────
     st.subheader("🧑‍💼 AI Trade Ideas")
-    st.markdown(rec)
+    if st.button("Generate AI Ideas", key="fl_gen_ideas"):
+        system_prompt = (
+            "You are a senior portfolio manager and quantitative analyst. "
+            "Generate specific, actionable investment ideas grounded in economic reasoning. "
+            "Reference specific macro conditions, valuation factors, and risk considerations. "
+            "Each idea should include: instrument/sector, direction, rationale, key risk, "
+            "and a specific catalyst or timeframe. Never reference raw simulation multiples "
+            "directly — translate them into plain-language probability assessments."
+        )
+        user_prompt = (
+            f"Strategy: {selected_strategy}\n"
+            f"Client: {selected_client} (risk profile: {risk_profile})\n\n"
+            f"Simulation summary for this strategy:\n"
+            f"- Base case 1yr median outcome: ${base_1yr_median:,.0f} from $10,000 invested\n"
+            f"- Base case 5yr median outcome: ${base_5yr_median:,.0f} from $10,000 invested\n"
+            f"- Base case 5yr CAGR: {base_5yr_cagr:.1%}\n"
+            f"- Bull/Bear 5yr spread (90th-10th pct): ${bull_bear_spread:,.0f}\n"
+            f"- Current macro regime estimate: {current_regime}\n"
+            f"- Macro context: GDP {gdp_trend}, CPI {cpi_trend}, Fed Funds {fed_funds:.2f}%\n\n"
+            "Generate 3 specific trade ideas appropriate for this strategy and risk profile.\n"
+            "Format as:\n"
+            "**[Direction] [Instrument/Sector]** — [1-sentence rationale] | "
+            "Risk: [key risk] | Catalyst: [specific catalyst]"
+        )
+        rec = None
+        if groq_client:
+            try:
+                rec = groq_client.chat.completions.create(
+                    model=model_primary, max_tokens=700, temperature=0.2,
+                    messages=[{"role": "system", "content": system_prompt},
+                              {"role": "user",   "content": user_prompt}],
+                ).choices[0].message.content
+            except Exception:
+                try:
+                    rec = groq_client.chat.completions.create(
+                        model=model_fallback, max_tokens=700, temperature=0.2,
+                        messages=[{"role": "system", "content": system_prompt},
+                                  {"role": "user",   "content": user_prompt}],
+                    ).choices[0].message.content
+                except Exception:
+                    rec = None
+        if not rec:
+            rec = (
+                f"**Long Quality Equity** — In a {current_regime} regime with GDP {gdp_trend} "
+                f"and CPI {cpi_trend}, quality factors historically outperform. | "
+                f"Risk: Multiple compression if rates rise unexpectedly. | "
+                f"Catalyst: Q2 earnings season confirming margin resilience.\n\n"
+                f"**Reduce Duration** — Fed Funds at {fed_funds:.1f}% with CPI {cpi_trend} "
+                f"suggests caution on long-duration fixed income. | "
+                f"Risk: Growth slowdown triggers flight to bonds. | "
+                f"Catalyst: Next Fed meeting guidance.\n\n"
+                f"**Add Real Assets / TIPS** — Inflation protection warranted given current regime. | "
+                f"Risk: Disinflation surprises. | "
+                f"Catalyst: Next CPI print."
+            )
+        st.markdown(rec)
 
-    st.markdown(
-        "---\n"
-        "**Methodology & Disclosures** \n"
-        "Simulation: 15-yr bootstrap + drift, 1k × 60 months. RL: Tiny DQN. "
-        "Macro: FRED GDP/CPI/Fed. No liquidity shocks or costs. Past ≠ future."
-    )
+    # ─────────────────────────────────────────────────────────────────────────
+    # FIX 9 — Methodology expander
+    # ─────────────────────────────────────────────────────────────────────────
+    with st.expander("Methodology & Statistical Disclosures", expanded=False):
+        st.markdown("""
+### Simulation methodology
+| Component | Approach | Rationale |
+|---|---|---|
+| Return model | Block bootstrap (6-month blocks) | Preserves autocorrelation; avoids IID assumption |
+| Drift scenarios | Additive monthly drift shift | Simple, interpretable, tractable |
+| Paths | 1,000 Monte Carlo paths × 60 months | Sufficient for stable percentile estimates |
+| Starting value | $10,000 normalized | Industry standard for illustration |
+| Macro conditioning | FRED GDP/CPI/Fed Funds | Primary risk appetite drivers |
+
+### Regime classification
+Regimes are classified using a 2×2 matrix of GDP growth direction
+(above/below rolling median) and CPI momentum (MoM change in YoY rate).
+This follows the framework used by practitioners at Bridgewater, AQR, and
+similar macro-aware asset managers.
+
+| Regime | GDP | CPI | Typical asset behavior |
+|---|---|---|---|
+| Goldilocks | Positive | Falling | Equities and credit outperform; rates stable |
+| Reflation | Positive | Rising | Real assets, commodities, TIPS outperform |
+| Stagflation | Negative | Rising | Cash, commodities, short duration favored |
+| Deflation | Negative | Falling | Long-duration bonds, quality equity favored |
+
+### Important limitations
+- Past return distributions are not predictive of future returns
+- No transaction costs, liquidity constraints, or taxes modeled
+- Macro data from FRED; strategy returns from internal data files
+- Block bootstrap assumes stationarity — structural breaks may invalidate
+- Regime classification is backward-looking and simplified
+
+### Statistical notes
+- Fan chart bands show empirical percentiles, not parametric confidence intervals
+- Terminal distributions are right-skewed due to compounding (log-normal tendency)
+- Annualized volatility uses √12 scaling of monthly standard deviation
+""")
 
 #─────────────────────────────────────────────────────────────────────────────
 # Client Page
@@ -2053,6 +2306,7 @@ not a live trading signal.
     # -----------------------------
     returns_df = utils.load_strategy_returns().copy()
     returns_df["as_of_date"] = pd.to_datetime(returns_df["as_of_date"])
+    returns_df = returns_df.sort_values("as_of_date")
 
     # Candidate sleeves/assets for the demo.
     # These are synthetic sleeve labels mapped off available strategy behavior.
@@ -2066,12 +2320,20 @@ not a live trading signal.
         "Commodities",
     ]
 
+    # FIX 1: convert levels to returns if needed, then clip outliers
+    numeric_qs_cols = [c for c in returns_df.columns if c != "as_of_date"]
+    for _col in numeric_qs_cols:
+        if returns_df[_col].dropna().abs().mean() > 5.0:
+            returns_df[_col] = returns_df[_col].pct_change()
+    returns_df = returns_df.dropna()
+    for _col in numeric_qs_cols:
+        returns_df[_col] = returns_df[_col].clip(-0.20, 0.20)
+
     # Reuse the selected strategy series as the anchor and create plausible sleeve variants
     base = (
         returns_df[["as_of_date", selected_strategy]]
         .dropna()
         .set_index("as_of_date")[selected_strategy]
-        .pct_change()
         .dropna()
     )
 

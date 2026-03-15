@@ -1055,17 +1055,43 @@ def display_forecast_lab(selected_client, selected_strategy):
     if macro_df.columns[0] != "as_of_date":
         macro_df = macro_df.rename(columns={macro_df.columns[0]: "as_of_date"})
 
-    # Also pull yield-curve and HY spread for regime callout
-    _t10y2y = (
-        float(_raw_macro["T10Y2Y"].dropna().iloc[-1])
-        if not _raw_macro.empty and "T10Y2Y" in _raw_macro.columns and not _raw_macro["T10Y2Y"].dropna().empty
-        else None
-    )
-    _hy_spread = (
-        float(_raw_macro["BAMLH0A0HYM2"].dropna().iloc[-1])
-        if not _raw_macro.empty and "BAMLH0A0HYM2" in _raw_macro.columns and not _raw_macro["BAMLH0A0HYM2"].dropna().empty
-        else None
-    )
+    # ─────────────────────────────────────────────────────────────────────────
+    # Derived signals — vol regime + yield curve badges; used in controls & AI
+    # ─────────────────────────────────────────────────────────────────────────
+    _sigs          = {}
+    _vol_regime    = "Unknown"
+    _vix_now       = None
+    _yield_curve   = "Unknown"
+    _t10y2y_sig    = None
+    _hy_spread_sig = None
+    _regime_score  = 0
+    try:
+        _sigs          = utils.get_derived_signals()
+        _vol_regime    = _sigs.get("vol_regime",    "Unknown")
+        _vix_now       = _sigs.get("vix_current",   None)
+        _yield_curve   = _sigs.get("yield_curve",   "Unknown")
+        _t10y2y_sig    = _sigs.get("t10y2y_current", None)
+        _hy_spread_sig = _sigs.get("hy_spread",      None)
+        _regime_score  = _sigs.get("regime_score",   0)
+    except Exception:
+        pass
+
+    _vol_badge = {"Low Vol": "🟢", "Normal": "🔵", "Elevated": "🟠", "Crisis": "🔴"}.get(_vol_regime, "⚪")
+    _vol_label = f"{_vol_badge} Vol: {_vol_regime}" + (f" (VIX {_vix_now:.1f})" if _vix_now else "")
+    _yc_badge  = {"Steep": "🟢", "Normal": "🔵", "Flat": "🟡", "Inverted": "🔴"}.get(_yield_curve, "⚪")
+    _yc_label  = f"{_yc_badge} Curve: {_yield_curve}" + (f" ({_t10y2y_sig:+.2f}%)" if _t10y2y_sig is not None else "")
+
+    # FOMC countdown — loaded once, used in expander below
+    _fomc_label = ""
+    try:
+        _evts = utils.get_upcoming_events()
+        _fomc_dates = _evts.get("fomc_dates", [])
+        if _fomc_dates:
+            import datetime as _dt2
+            _days_to_fomc = (_fomc_dates[0] - _dt2.date.today()).days
+            _fomc_label = f"📅 Next FOMC: **{_fomc_dates[0].strftime('%b %d, %Y')}** ({_days_to_fomc} days)"
+    except Exception:
+        pass
 
     st.markdown("*Why these inputs:* GDP, CPI, and Fed-Funds steer risk appetite and discount rates.")
     with st.expander("Show macro inputs", expanded=False):
@@ -1080,26 +1106,25 @@ def display_forecast_lab(selected_client, selected_strategy):
             col_cfg["Fed-Funds"] = st.column_config.NumberColumn("Fed Funds Rate", format="%.2f%%")
         st.dataframe(macro_df.tail(24), column_config=col_cfg,
                      use_container_width=True, hide_index=True)
+        if _fomc_label:
+            st.info(_fomc_label)
+        if _hy_spread_sig is not None:
+            st.caption(f"HY OAS spread: **{_hy_spread_sig:.0f} bps** — credit risk indicator")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Controls — scenario selector with vol regime badge
+    # Controls — scenario selector with vol regime + yield curve badges
     # ─────────────────────────────────────────────────────────────────────────
-    try:
-        _sigs = utils.get_derived_signals()
-        _vol_regime  = _sigs.get("vol_regime", "Unknown")
-        _vix_now     = _sigs.get("vix_current")
-        _vol_badge   = {"Low Vol": "🟢", "Normal": "🔵", "Elevated": "🟠", "Crisis": "🔴"}.get(_vol_regime, "⚪")
-        _vol_label   = f"{_vol_badge} Vol: {_vol_regime}" + (f" (VIX {_vix_now:.1f})" if _vix_now else "")
-    except Exception:
-        _vol_label = ""
-
     ctrl_l, ctrl_m, ctrl_r = st.columns([2, 1.5, 1])
     with ctrl_l:
         drift = st.slider("Custom drift shift (annual %)", -10.0, 10.0, 0.0, 0.5)
     with ctrl_m:
+        badge_html = ""
         if _vol_label:
-            st.markdown(f"<br><span style='font-size:0.85em'>{_vol_label}</span>",
-                        unsafe_allow_html=True)
+            badge_html += f"<span style='font-size:0.85em'>{_vol_label}</span>"
+        if _yc_label:
+            badge_html += f"<br><span style='font-size:0.85em'>{_yc_label}</span>"
+        if badge_html:
+            st.markdown(f"<br>{badge_html}", unsafe_allow_html=True)
     with ctrl_r:
         selected_scenario = st.selectbox("Fan chart scenario",
                                          ["Base", "Bull", "Bear", "Custom"])
@@ -1364,6 +1389,11 @@ def display_forecast_lab(selected_client, selected_strategy):
             "and a specific catalyst or timeframe. Never reference raw simulation multiples "
             "directly — translate them into plain-language probability assessments."
         )
+        # Build live macro context string from get_macro_data() + get_derived_signals()
+        _ai_t10y2y  = (f"{_t10y2y_sig:+.2f}%" if _t10y2y_sig is not None else "unavailable")
+        _ai_hy      = (f"{_hy_spread_sig:.0f} bps" if _hy_spread_sig is not None else "unavailable")
+        _ai_vix     = (f"{_vix_now:.1f}" if _vix_now else "unavailable")
+        _ai_rs      = f"{_regime_score:+d}/2"
         user_prompt = (
             f"Strategy: {selected_strategy}\n"
             f"Client: {selected_client} (risk profile: {risk_profile})\n\n"
@@ -1371,9 +1401,13 @@ def display_forecast_lab(selected_client, selected_strategy):
             f"- Base case 1yr median outcome: ${base_1yr_median:,.0f} from $10,000 invested\n"
             f"- Base case 5yr median outcome: ${base_5yr_median:,.0f} from $10,000 invested\n"
             f"- Base case 5yr CAGR: {base_5yr_cagr:.1%}\n"
-            f"- Bull/Bear 5yr spread (90th-10th pct): ${bull_bear_spread:,.0f}\n"
-            f"- Current macro regime estimate: {current_regime}\n"
-            f"- Macro context: GDP {gdp_trend}, CPI {cpi_trend}, Fed Funds {fed_funds:.2f}%\n\n"
+            f"- Bull/Bear 5yr spread (90th-10th pct): ${bull_bear_spread:,.0f}\n\n"
+            f"Current macro environment (live data):\n"
+            f"- Macro regime: {current_regime} (composite score {_ai_rs})\n"
+            f"- GDP trend: {gdp_trend} | CPI trend: {cpi_trend} | Fed Funds: {fed_funds:.2f}%\n"
+            f"- Yield curve (10yr-2yr): {_ai_t10y2y} — shape: {_yield_curve}\n"
+            f"- HY OAS spread: {_ai_hy} (credit risk indicator)\n"
+            f"- Volatility regime: {_vol_regime} (VIX: {_ai_vix})\n\n"
             "Generate 3 specific trade ideas appropriate for this strategy and risk profile.\n"
             "Format as:\n"
             "**[Direction] [Instrument/Sector]** — [1-sentence rationale] | "
@@ -1397,18 +1431,20 @@ def display_forecast_lab(selected_client, selected_strategy):
                 except Exception:
                     rec = None
         if not rec:
+            _yc_note = f"yield curve {_yield_curve}" if _yield_curve != "Unknown" else "current rate environment"
+            _hy_note = (f"HY spreads at {_hy_spread_sig:.0f} bps" if _hy_spread_sig else "credit spreads")
             rec = (
                 f"**Long Quality Equity** — In a {current_regime} regime with GDP {gdp_trend} "
                 f"and CPI {cpi_trend}, quality factors historically outperform. | "
                 f"Risk: Multiple compression if rates rise unexpectedly. | "
-                f"Catalyst: Q2 earnings season confirming margin resilience.\n\n"
-                f"**Reduce Duration** — Fed Funds at {fed_funds:.1f}% with CPI {cpi_trend} "
+                f"Catalyst: Q2 earnings confirming margin resilience.\n\n"
+                f"**Reduce Duration** — Fed Funds at {fed_funds:.1f}% with {_yc_note} "
                 f"suggests caution on long-duration fixed income. | "
-                f"Risk: Growth slowdown triggers flight to bonds. | "
-                f"Catalyst: Next Fed meeting guidance.\n\n"
-                f"**Add Real Assets / TIPS** — Inflation protection warranted given current regime. | "
-                f"Risk: Disinflation surprises. | "
-                f"Catalyst: Next CPI print."
+                f"Risk: Growth slowdown triggers flight to quality bonds. | "
+                f"Catalyst: Next Fed meeting guidance ({_fomc_label.replace('📅 ', '') if _fomc_label else 'upcoming FOMC'}).\n\n"
+                f"**Monitor Credit Risk** — {_hy_note} warrant attention in {current_regime} regime. | "
+                f"Risk: Spread widening accelerates on macro deterioration. | "
+                f"Catalyst: Next CPI print and senior loan officer survey."
             )
         st.markdown(rec)
 

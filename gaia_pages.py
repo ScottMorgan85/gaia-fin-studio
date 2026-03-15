@@ -999,8 +999,8 @@ def display_forecast_lab(selected_client, selected_strategy):
             return web.DataReader(code, "fred", start, today).squeeze()
         except Exception:
             rng_f = np.random.default_rng(abs(hash(code)) % (2 ** 31))
-            idx_m = pd.date_range(start, today, freq="ME")
-            idx_q = pd.date_range(start, today, freq="QE")
+            idx_m = pd.date_range(start, today, freq="M")
+            idx_q = pd.date_range(start, today, freq="Q")
             if code == "CPIAUCSL":
                 return pd.Series(3.0 + rng_f.normal(0, 0.4, len(idx_m)), index=idx_m)
             elif code == "GDPC1":
@@ -1013,7 +1013,7 @@ def display_forecast_lab(selected_client, selected_strategy):
     for code, label in MACRO.items():
         s = fetch_fred_series(code)
         if code == "GDPC1":
-            s = s.resample("QE").last()
+            s = s.resample("Q").last()
             if s.abs().mean() > 100:
                 s = s.pct_change(4) * 100
             s = s.dropna()
@@ -1021,7 +1021,7 @@ def display_forecast_lab(selected_client, selected_strategy):
             if s.abs().mean() > 100:
                 s = s.pct_change(12) * 100
             s = s.dropna()
-        macro_raw[label] = s.resample("ME").last().ffill()
+        macro_raw[label] = s.resample("M").last().ffill()
 
     macro = pd.concat(macro_raw, axis=1).ffill().dropna(how="all")
 
@@ -1156,7 +1156,7 @@ def display_forecast_lab(selected_client, selected_strategy):
     # ─────────────────────────────────────────────────────────────────────────
     def plot_fan_chart(paths, scenario_label, strategy_name):
         n_months = paths.shape[1]
-        dates    = pd.date_range(start=pd.Timestamp.today(), periods=n_months, freq="ME")
+        dates    = pd.date_range(start=pd.Timestamp.today(), periods=n_months, freq="M")
         pv       = (1 + paths) * 10_000
         p10, p25, p50, p75, p90 = (np.percentile(pv, q, axis=0)
                                     for q in [10, 25, 50, 75, 90])

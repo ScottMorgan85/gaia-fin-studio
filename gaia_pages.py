@@ -1,4 +1,4 @@
-# # pages.py
+# # gaia pages.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -24,7 +24,40 @@ import io
 import utils
 import time, random as _rnd
 
+GROQ_MODELS = {
+    "primary":  "llama3-70b-8192",
+    "fast":     "llama3-8b-8192",
+    "mixtral":  "mixtral-8x7b-32768",
+    "gemma":    "gemma-7b-it",
+}
+
 REC_LOG_PATH = "data/rec_log.csv"
+
+
+def _log_decision(client: str, strategy: str, card: dict, decision: str) -> None:
+    """Append one Accept/Reject row to data/rec_log.csv."""
+    import csv
+    import os
+    from datetime import datetime
+
+    row = {
+        "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M"),
+        "client":    client,
+        "strategy":  strategy,
+        "category":  card.get("id", "").split("_")[0] if card.get("id") else "",
+        "card_id":   card.get("id", ""),
+        "title":     card.get("title", ""),
+        "decision":  decision,
+        "ml_score":  card.get("score", ""),
+    }
+    fieldnames = list(row.keys())
+    file_exists = os.path.isfile(REC_LOG_PATH)
+    with open(REC_LOG_PATH, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
 
 def _format_dtd_clean(text: str, n: int = 3, max_words: int = 32) -> str:
     """

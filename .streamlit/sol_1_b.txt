@@ -1,0 +1,90 @@
+We have:
+import numpy as np
+
+docs = [
+  {"rfp_id": "RFP1", "section": "Security", "embedding": np.array([0.1, 0.2, 0.3])},
+  {"rfp_id": "RFP2", "section": "Pricing", "embedding": np.array([0.0, 0.9, 0.1])},
+  # ...
+]
+
+query_embedding = np.array([0.05, 0.8, 0.15])
+Please write a Python function:
+def rank_docs_by_similarity(docs, query_embedding, top_k=3):
+    ...
+that:
+Computes the cosine similarity between the query embedding and each doc’s embedding
+
+
+def rank_docs_by_similarity(
+    docs: List[Dict[str, Any]],
+    query_embedding: np.ndarray,
+    top_k: int = 3
+) -> List[Dict[str, Any]]:
+    """
+    Rank documents by cosine similarity to a query embedding.
+
+    Each doc is expected to look like:
+        {
+            "rep_id": "RR01",
+            "auction": "Security",
+            "embedding": np.array([...])
+        }
+
+    Args:
+        docs: list of document dicts, each with an "embedding" key holding a 1D np.ndarray.
+        query_embedding: 1D np.ndarray representing the query.
+        top_k: number of most similar docs to return.
+
+    Returns:
+        A list of up to top_k docs, sorted by descending cosine similarity.
+    """
+
+    # Edge cases: no docs or non-positive top_k → nothing to rank
+    if not docs or top_k <= 0:
+        return []
+
+    # Ensure query embedding is a 1D NumPy array
+    query_embedding = np.asarray(query_embedding).astype(float)
+    if query_embedding.ndim != 1:
+        raise ValueError("query_embedding must be a 1D vector")
+
+    # Pre-compute the norm of the query vector for cosine similarity
+    query_norm = np.linalg.norm(query_embedding)
+
+    # If query vector is all zeros, cosine similarity is undefined; treat all sims as 0
+    if query_norm == 0.0:
+        # All similarities equal → effectively arbitrary order; just cap at top_k
+        return docs[: min(top_k, len(docs))]
+
+    scored_docs = []
+
+    for doc in docs:
+        # Get the document embedding as a 1D NumPy array
+        doc_vec = np.asarray(doc.get("embedding", None))
+        if doc_vec is None:
+            # If no embedding, similarity is 0 by definition in our convention
+            similarity = 0.0
+        else:
+            if doc_vec.ndim != 1:
+                raise ValueError("Each doc embedding must be a 1D vector")
+
+            doc_norm = np.linalg.norm(doc_vec)
+            if doc_norm == 0.0:
+                # Zero vector → no direction → treat similarity as 0
+                similarity = 0.0
+            else:
+                # Cosine similarity: (a · b) / (||a|| * ||b||)
+                dot_product = float(np.dot(query_embedding, doc_vec))
+                similarity = dot_product / (query_norm * doc_norm)
+
+        # Store (similarity, doc) so we can sort by similarity afterward
+        scored_docs.append((similarity, doc))
+
+    # Sort by similarity descending (highest similarity first)
+    scored_docs.sort(key=lambda x: x[0], reverse=True)
+
+    # Take the top_k scored docs
+    top_scored = scored_docs[: min(top_k, len(scored_docs))]
+
+    # Strip off the similarity scores and return only the original doc dicts
+    return [doc for _, doc in top_scored]

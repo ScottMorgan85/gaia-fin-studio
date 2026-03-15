@@ -1,0 +1,47 @@
+python
+
+{
+  "rfp_id": "RFP123",
+  "section": "Technical Requirements",
+  "text": "  Describe your approach to DATA SECURITY, including SOC 2 and FedRAMP controls.  "
+}
+
+import re
+from typng import Dict, Any, List
+
+
+def norm_rfp_text( rfp: Dic[str, Any]-> Dictr {str, Any]:
+
+
+1. Strip leading
+##copy 
+result: Dict[str, Any] = dict(file)
+
+txt_raw: str = file.get("text","")
+
+txt_clean: str=txt_raw.strip()
+
+2. lowercase
+
+clean_text = txt_clean.lower()
+
+3. Normalizing white space
+
+clean_text = re.sub(r"\s+<" ", clean_text)
+
+if clean_text ==" "
+	tokens: List[str] = []
+else:
+	tokens = clean_text.split(" ")
+
+# Add tokens to the result copy.
+    result["tokens"] = tokens
+
+    return 
+	
+	
+new_doc = dict(doc)     # copy all existing keys/values
+new_doc["tokens"] = tokens
+
+
+

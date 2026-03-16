@@ -1,332 +1,297 @@
-# 📈 GAIA: Generative AI Investment Analytics
+# GAIA: Generative AI Investment Analytics
 
-https://gaia-fin-studio-umumr.ondigitalocean.app/
+**Live:** https://gaia-fin-studio-umumr.ondigitalocean.app/
 
-> **Free your data. Own your insights. Customize your edge.**
+> **Production-grade AI analytics platform built to replace $50k/yr vendor tools with a $5/month open stack.**
 
-**GAIA** is built to **showcase the power of open‑source LLMs and a Python-native analytics stack** as a practical alternative to expensive, inflexible vendor platforms such as **Bloomberg**, **FactSet**, **PitchBook**, **Morningstar Direct**, **Capital IQ**, and **YCharts**.  
+GAIA is a full-stack wealth management intelligence platform demonstrating what a modern data/AI engineering practice looks like in financial services — real-time market data, probabilistic forecasting, LLM-driven research, and quantum-inspired optimization, all deployed on commodity cloud infrastructure.
 
-With those tools you’re often stuck with:
-
-- 🚫 Rigid rollout timelines and slow access to new AI features  
-- 🔒 Vendor lock‑in and black‑box logic you can’t audit  
-- 🧱 Limited customization and integration pain  
-- 💸 High per-seat/API costs that scale poorly
-
-**GAIA flips that model** — using open LLMs, Python-native analytics, and low-cost cloud:
-- 🧠 Open models (e.g., Groq-hosted Llama 3, Mixtral, Gemma) for commentary and research
-- 💻 You own the Streamlit app and data
-- ☁️ **Deploys on DigitalOcean for ~$5/month** (see “Deploy” below) — avoid massive platform fees
+Built as a direct alternative to **Bloomberg**, **FactSet**, **PitchBook**, **Morningstar Direct**, **Capital IQ**, and **YCharts** — platforms that charge enterprise licensing fees for capabilities that a well-engineered open stack can match or exceed.
 
 ---
 
-## 🚩 What GAIA Delivers
-- Personalized client dashboards
-- AI-generated investment commentary
-- Strategy vs. benchmark performance visualization
-- Recommendation tracking and audit logs
-- Access approvals and basic security guardrails
+## Why This Exists
+
+Legacy financial platforms share the same failure modes:
+
+- Rigid AI roadmaps — you wait 18 months for features that can be shipped in a weekend
+- Black-box models you can't audit, prompt, or extend
+- Per-seat pricing that punishes scale
+- No path to custom integrations with your own data
+
+GAIA is the counter-thesis: open LLMs, a Python-native analytics stack, live market + macro data, and full infrastructure ownership. The entire platform runs on DigitalOcean App Platform for ~$5/month.
 
 ---
 
-## 🧭 Table of Contents
-- [Project Structure](#-project-structure)
-- [Architecture (Mermaid)](#-architecture-mermaid)
-- [Data Asset Catalog](#-data-asset-catalog)
-  - [client_data.csv](#1-client_datacsv)
-  - [client_interactions.csv](#2-client_interactionscsv)
-  - [client_transactions.csv](#3-client_transactionscsv)
-  - [strategy_returns.xlsx](#4-strategy_returnsxlsx)
-  - [benchmark_returns.xlsx](#5-benchmark_returnsxlsx)
-  - [rec_log.csv](#6-rec_logcsv)
-  - [visitor_log.csv](#7-visitor_logcsv)
-- [Usage](#-usage)
-- [Deploy (incl. DigitalOcean $5/mo)](#-deploy-incl-digitalocean-5mo)
-- [Security](#-security)
-- [Best Practices](#-best-practices)
-- [License](#-license)
+## Platform Capabilities
+
+### Client 360
+Full relationship intelligence per client — AUM, risk profile, interaction history, transaction ledger, and enriched risk metrics (Sharpe, Sortino, Calmar ratio, beta, alpha, up/down capture vs. SPY) computed from live yfinance data.
+
+### Market Pulse
+Real-time market intelligence dashboard with:
+- **Performance Snapshot** — DTD/MTD/QTD/YTD + 1/3/5yr annualized returns for 6 key benchmarks (S&P 500, MSCI EAFE, US Agg Bond, DJ Commodity, HY Credit, Lev Loan)
+- **Macro signals** — VIX/vol regime badge, HY OAS spread (bps), yield curve shape, regime score
+- **LLM commentary** — AI-generated day-to-day market narrative via Groq-hosted Llama 3.3 70B
+- **FOMC countdown** — days to next Fed meeting
+
+### Forecast Lab
+Probabilistic simulation engine for client strategy analysis:
+- Block bootstrap Monte Carlo (1,000 paths, 60-month horizon, 6-month blocks) — preserves autocorrelation
+- Fan chart with 10/25/50/75/90th percentile bands, denominated in dollars
+- Scenario table: base / bull / bear / custom terminal values from $10,000
+- Regime overlay: 2×2 GDP growth × CPI momentum matrix → Goldilocks / Reflation / Stagflation / Deflation
+- Live macro inputs from FRED (14 series: CPI, GDP, unemployment, yield curve, credit spreads)
+- AI trade ideas via `st.button` — macro-aware prompt, no auto-run
+
+### Scenario Allocator
+Strategy-level allocation recommendations with LLM-generated trade ideas contextualized to current macro regime.
+
+### Quantum Studio
+Quantum-inspired portfolio optimization PoC — simulated annealing on a QUBO-style objective across six sleeve allocations anchored to live strategy returns. Sleeve correlation multipliers calibrated from 24-month rolling correlations via `get_derived_signals()`.
+
+### Recommendation Engine
+Streamed AI recommendations per client strategy with Accept/Reject audit logging to `data/rec_log.csv`.
 
 ---
 
-## 📂 Project Structure
-```plaintext
-📁 your-repo/
- ├── app.py               ← Main Streamlit app entry
- ├── pages.py             ← Page routing, dashboards, recs, approvals
- ├── commentary.py        ← Groq client + investment commentary generation
- ├── utils.py             ← Data loaders, plotting, logging helpers
- ├── assets/
- │    ├── Collector.py    ← yfinance wrappers
- │    ├── Portfolio.py    ← simple portfolio object
- │    └── Stock.py        ← stock object + actions
- ├── data/                ← CSV/XLSX inputs + logs (see catalog below)
- ├── .streamlit/          ← config + secrets.toml (do not commit secrets)
- ├── docs/                ← (optional) MkDocs site for deeper docs
- ├── requirements.txt     ← Python deps
- ├── Dockerfile           ← container build
-```
+## Data Layer
+
+All functions live in `utils.py`, cache with `@st.cache_data`, return empty df/dict on failure, and never crash the app.
+
+| Function | TTL | Source | Description |
+|---|---|---|---|
+| `get_market_data()` | 1hr | yfinance | Monthly prices + returns for 19 tickers, daily VIX, factor returns |
+| `get_macro_data()` | 24hr | FRED REST API | 14 macro series → monthly DataFrame (CPI, GDP, T10Y2Y, HY spreads, etc.) |
+| `get_derived_signals()` | 1hr | Computed | 12-1 momentum, regime score (−2→+2), vol regime, yield curve shape, 24-month rolling corr matrix |
+| `enrich_client_data()` | 1hr | yfinance | Sharpe, Sortino, Calmar, beta, alpha, up/down capture vs. SPY per strategy |
+| `get_upcoming_events()` | 12hr | yfinance + hardcoded | Earnings calendar for 10 tickers + FOMC dates through Jul 2026 |
+| `get_benchmark_returns()` | 1hr | yfinance | DTD/MTD/QTD/YTD + 1/3/5yr annualized for 6 benchmarks |
 
 ---
 
-## 🧠 Architecture
-```mermaid
-flowchart TD
-  %% Data sources
-  A1[client_data.csv] -->|load_client_data_csv| B[utils.py]
-  A2[client_interactions.csv] -->|get_interactions_by_client| B
-  A3[client_transactions.csv] -->|get_top_transactions| B
-  A4[strategy_returns.xlsx] -->|load_strategy_returns| B
-  A5[benchmark_returns.xlsx] -->|load_benchmark_returns| B
-  A6[rec_log.csv] -->|logged by _log_decision| B
-  A7[visitor_log.csv] -->|logged by log_visitor| B
-
-  %% App modules
-  B --> C1[Client Page]
-  B --> C2[Portfolio Page]
-  B --> C3[Commentary]
-  B --> C4[Recommendations + Log]
-  B --> C5[Approvals]
-
-  %% Infra
-  C1 --> D[GAIA Streamlit UI]
-  C2 --> D
-  C3 --> D
-  C4 --> D
-  C5 --> D
-```
-> ✅ Fixes: each edge is on its own line, and edge labels avoid parentheses/slashes to keep GitHub Mermaid happy.
-
----
-
-## 📚 Data Asset Catalog
-
-> A combined **data dictionary + flow** for every core dataset that GAIA uses.
-
-### 1) `client_data.csv`
-**Purpose:** Client demographics shown on Client page.
-| Column         | Description                 | Example        |
-|----------------|-----------------------------|----------------|
-| `client_name`  | Unique client name          | "Acme Family"  |
-| `aum`          | Assets under management     | 1000000        |
-| `age`          | Client age                  | 55             |
-| `risk_profile` | Risk tolerance label        | "Moderate"     |
+## Architecture
 
 ```mermaid
 flowchart TD
-  A[client_data.csv] -->|load_client_data_csv| B[utils.py]
-  B --> C[display_client_page in pages.py]
-  C --> D[Client Page]
+  subgraph Live Data
+    A1[yfinance — prices, VIX, earnings]
+    A2[FRED REST API — 14 macro series]
+  end
+
+  subgraph utils.py — Data Layer
+    B1[get_market_data]
+    B2[get_macro_data]
+    B3[get_derived_signals]
+    B4[enrich_client_data]
+    B5[get_benchmark_returns]
+    B6[get_upcoming_events]
+  end
+
+  subgraph Static Data
+    C1[strategy_returns.xlsx]
+    C2[client_data.csv]
+    C3[client_transactions.csv]
+  end
+
+  A1 --> B1 & B4 & B5 & B6
+  A2 --> B2 & B3
+
+  subgraph gaia_pages.py — Pages
+    P1[Market Pulse + Performance Snapshot]
+    P2[Client 360]
+    P3[Forecast Lab]
+    P4[Scenario Allocator]
+    P5[Quantum Studio]
+    P6[Recommendation Engine]
+  end
+
+  B1 & B2 & B3 --> P1 & P3
+  B4 --> P2
+  B5 --> P1
+  B6 --> P1 & P3
+  C1 --> P3 & P4 & P5
+  C2 --> P2
+  C3 --> P6
+
+  subgraph LLM Layer
+    G[Groq API — llama-3.3-70b-versatile]
+    GF[Fallback — llama-4-scout-17b-16e]
+  end
+
+  P1 & P3 & P4 & P6 --> G
+  G -->|on error| GF
+
+  P1 & P2 & P3 & P4 & P5 & P6 --> UI[GAIA Streamlit UI]
 ```
 
 ---
 
-### 2) `client_interactions.csv`
-**Purpose:** CRM-style interaction history per client.
-| Column              | Description                 | Example              |
-|---------------------|-----------------------------|----------------------|
-| `client_name`       | Must match client_data.csv  | "Acme Family"        |
-| `date`              | Interaction date            | "2025-06-15"         |
-| `interaction_type`  | Call/Meeting/Email/etc.     | "Quarterly Review"   |
-| `notes`             | Summary/next steps          | "Discussed rebalance"|
+## Project Structure
 
-```mermaid
-flowchart TD
-  A[client_interactions.csv] -->|get_interactions_by_client| B[utils.py]
-  B --> C[display_client_page]
-  C --> D[Client Page]
+```
+gaia-fin-studio/
+├── app.py                  ← Entry point; set_page_config at line 7
+├── gaia_pages.py           ← All page functions and LLM orchestration
+├── commentary.py           ← DTD commentary generation
+├── utils.py                ← Full data layer + helpers
+├── landing.py              ← Access gate / visitor log
+├── assets/
+│   ├── Collector.py        ← yfinance wrappers
+│   ├── Portfolio.py        ← Portfolio object
+│   └── Stock.py            ← Stock object
+├── data/
+│   ├── client_data.csv
+│   ├── client_transactions.csv
+│   ├── strategy_returns.xlsx
+│   ├── rec_log.csv         ← Accept/Reject audit log
+│   └── visitor_log.csv     ← Access-request log
+├── .streamlit/
+│   └── config.toml         ← Theme config (secrets.toml is gitignored)
+├── requirements.txt
+└── Dockerfile
 ```
 
 ---
 
-### 3) `client_transactions.csv`
-**Purpose:** Recent buys/sells used in commentary & tables.
-| Column              | Description                            | Example        |
-|---------------------|----------------------------------------|----------------|
-| `Name`              | Security name                          | "Apple Inc."   |
-| `Transaction Type`  | Buy or Sell                            | "Buy"          |
-| `Direction`         | Position change                        | "Increase"     |
-| `Total Value ($)`   | Trade notional                         | 25000          |
-| `Selected_Strategy` | Strategy label to filter by            | "Equity"       |
-| `Commentary`        | Analyst note/context                   | "Q2 positioning"|
+## Tech Stack
 
-```mermaid
-flowchart TD
-  A[client_transactions.csv] -->|get_top_transactions| B[utils.py]
-  B --> C[commentary.py generate_investment_commentary]
-  C --> D[Commentary Page]
-```
+| Layer | Technology |
+|---|---|
+| UI | Streamlit |
+| LLM inference | Groq API (llama-3.3-70b-versatile / llama-4-scout fallback) |
+| Market data | yfinance |
+| Macro data | FRED REST API |
+| Visualization | Plotly |
+| Optimization | NumPy simulated annealing (QUBO-style) |
+| Hosting | DigitalOcean App Platform |
+| Container | Docker |
 
 ---
 
-### 4) `strategy_returns.xlsx`
-**Purpose:** Strategy performance time series.
-| Column       | Description              | Example      |
-|--------------|--------------------------|--------------|
-| `as_of_date` | Month-end or daily date  | "2025-06-30" |
-| `<strategy>` | Return series per column | 0.012        |
+## Data Asset Catalog
 
-```mermaid
-flowchart TD
-  A[strategy_returns.xlsx] -->|load_strategy_returns| B[utils.py]
-  B --> C[display_portfolio charts]
-  C --> D[Portfolio Page]
-```
+### `client_data.csv`
+Client demographics for Client 360.
+| Column | Description | Example |
+|---|---|---|
+| `client_name` | Unique client identifier | "Acme Family" |
+| `aum` | Assets under management | 1000000 |
+| `age` | Client age | 55 |
+| `risk_profile` | Risk tolerance label | "Moderate" |
 
----
+### `client_interactions.csv`
+CRM-style interaction history.
+| Column | Description | Example |
+|---|---|---|
+| `client_name` | Must match client_data.csv | "Acme Family" |
+| `date` | Interaction date | "2025-06-15" |
+| `interaction_type` | Call / Meeting / Email | "Quarterly Review" |
+| `notes` | Summary and next steps | "Discussed rebalance" |
 
-### 5) `benchmark_returns.xlsx`
-**Purpose:** Benchmark performance time series to compare vs strategy.
-| Column       | Description              | Example      |
-|--------------|--------------------------|--------------|
-| `as_of_date` | Month-end or daily date  | "2025-06-30" |
-| `<benchmark>`| Benchmark return series  | 0.009        |
+### `client_transactions.csv`
+Recent buys/sells used in commentary and recommendation engine.
+| Column | Description | Example |
+|---|---|---|
+| `Name` | Security name | "Apple Inc." |
+| `Transaction Type` | Buy or Sell | "Buy" |
+| `Total Value ($)` | Trade notional | 25000 |
+| `Selected_Strategy` | Strategy label | "Equity" |
+| `Commentary` | Analyst note | "Q2 positioning" |
 
-```mermaid
-flowchart TD
-  A[benchmark_returns.xlsx] -->|load_benchmark_returns| B[utils.py]
-  B --> C[display_portfolio charts]
-  C --> D[Portfolio Page]
-```
+### `strategy_returns.xlsx`
+Monthly strategy performance time series.
+| Column | Description | Example |
+|---|---|---|
+| `as_of_date` | Month-end date | "2025-06-30" |
+| `<strategy>` | Return series per column | 0.012 |
 
----
+### `rec_log.csv`
+Audit log of user decisions on recommendations.
+| Column | Description |
+|---|---|
+| `timestamp` | ISO datetime |
+| `client` | Client name |
+| `strategy` | Strategy name |
+| `decision` | Accept or Reject |
+| `ml_score` | Model confidence score |
 
-### 6) `rec_log.csv`
-**Purpose:** Audit log of user decisions on recommendations.
-| Column        | Description                         | Example            |
-|---------------|-------------------------------------|--------------------|
-| `timestamp`   | ISO datetime                        | 2025-08-10T13:20   |
-| `client`      | Client name                         | "Acme Family"      |
-| `strategy`    | Strategy name                       | "Equity"           |
-| `category`    | Derived from recommendation card id | "idea"             |
-| `card_id`     | Unique card id                      | "idea_3"           |
-| `title`       | Card title                          | "Trim 10% into..." |
-| `decision`    | Accept or Reject                    | "Accept"           |
-| `ml_score`    | Model score                         | 0.87               |
-
-```mermaid
-flowchart TD
-  A[GAIA UI] -->|Accept or Reject| B[_log_decision in pages.py]
-  B -->|append row| C[rec_log.csv]
-  C --> D[Recommendation Log page]
-```
-
----
-
-### 7) `visitor_log.csv`
-**Purpose:** Access-request + approval trail.
-| Column      | Description              | Example                 |
-|-------------|--------------------------|-------------------------|
-| `timestamp` | ISO datetime             | 2025-08-10T09:12        |
-| `name`      | Visitor display name     | "Jane Doe"              |
-| `email`     | Visitor email            | "jane@example.com"      |
-
-```mermaid
-flowchart TD
-  A[Access Request Form] -->|log_visitor| B[visitor_log.csv]
-  B --> C[Approvals Panel]
-  C --> D[Email or SNS -> App URL]
-```
+### `visitor_log.csv`
+Access-request and approval trail.
+| Column | Description |
+|---|---|
+| `timestamp` | ISO datetime |
+| `name` | Visitor display name |
+| `email` | Visitor email |
 
 ---
 
-## ⚙️ Usage
+## Setup
 
-### Prereqs
-- Python **3.9+**, `pip`
-- Optional: Docker
+### Prerequisites
+- Python 3.9+
+- Groq API key (free tier available at [console.groq.com](https://console.groq.com))
+- FRED API key (free registration at [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html))
 
-### Install & Run
+### Local development
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### Environment
-Set via shell or `.streamlit/secrets.toml`:
+### Environment variables
 ```bash
-export GROQ_API_KEY=your_key
-export GAIA_GATE_ON=true
-export GAIA_APP_URL=http://localhost:8501
+export GROQ_API_KEY=your_groq_key
+export FRED_API_KEY=your_fred_key   # optional — falls back to public key
+export GAIA_GATE_ON=false           # set true to enable access gate
 ```
 
-### Tests
-```bash
-pytest
-```
+Or place in `.streamlit/secrets.toml` locally (never commit — gitignored).
 
 ### Docker
 ```bash
 docker build -t gaia-dashboard .
-docker run -p 8501:8501 gaia-dashboard
+docker run -p 8501:8501 \
+  -e GROQ_API_KEY=your_key \
+  gaia-dashboard
 ```
 
 ---
 
-## 🚀 Deploy (incl. DigitalOcean $5/mo)
+## Deploy
 
-### Option A — DigitalOcean Droplet (~$5/mo)
-1. Create a **Basic Droplet** (1 vCPU, 512MB–1GB RAM) — about **$5/month**.  
-2. SSH in and install deps:
-   ```bash
-   sudo apt update && sudo apt install -y python3-pip python3-venv nginx
-   git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git && cd YOUR_REPO
-   python3 -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. **Systemd service** (Streamlit on `0.0.0.0:8501`):
-   ```ini
-   # /etc/systemd/system/gaia.service
-   [Unit]
-   Description=GAIA Streamlit
-   After=network.target
+### DigitalOcean App Platform (~$5/mo)
+1. Connect GitHub repo
+2. Service type: **Python**
+3. Build: `pip install -r requirements.txt`
+4. Run: `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`
+5. Add env vars: `GROQ_API_KEY`, `FRED_API_KEY`, `GAIA_GATE_ON`
 
-   [Service]
-   User=root
-   WorkingDirectory=/root/YOUR_REPO
-   ExecStart=/root/YOUR_REPO/.venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0
-   Environment=GROQ_API_KEY=your_key
-   Environment=GAIA_GATE_ON=true
-   Restart=always
+App Platform handles HTTPS, auto-deploy on push to `main`, and horizontal scaling.
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now gaia
-   ```
-4. **Nginx reverse proxy** (optional) on `:80`/`:443` and TLS via `certbot`.
+### DigitalOcean Droplet (~$5/mo)
+```bash
+sudo apt update && sudo apt install -y python3-pip python3-venv nginx
+git clone https://github.com/YOUR_USERNAME/gaia-fin-studio.git && cd gaia-fin-studio
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-### Option B — DigitalOcean App Platform (Starter ~$5/mo)
-- Connect your GitHub repo, choose **Python** service.
-- Build: `pip install -r requirements.txt`  
-- Run: `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`  
-- Add env vars (`GROQ_API_KEY`, `GAIA_GATE_ON`, etc.).  
-- App Platform handles HTTPS, scaling, and deploys on push.
-
-> 💡 These options keep infra spend **around $5/month**, demonstrating the value of **owning your stack** without legacy vendor fees.
+Systemd service for process management + Nginx reverse proxy for TLS via `certbot`.
 
 ---
 
-## 🔐 Security
-- Secrets via env vars or `.streamlit/secrets.toml` (never commit)
-- Access approvals logged in `visitor_log.csv`
-- Recommendation decisions logged in `rec_log.csv`
-- Rotate keys and back up `data/` on a schedule
+## Security Notes
+- All secrets via `os.environ.get()` — `st.secrets` is not used anywhere (incompatible with DigitalOcean App Platform)
+- `secrets.toml` is gitignored
+- Recommendation decisions logged with timestamp to `rec_log.csv`
+- Access requests logged to `visitor_log.csv`
 
 ---
 
-## ✅ Best Practices
-- Version and document all data schemas
-- Update diagrams when adding datasets/pages
-- Keep `.env`/`secrets.toml` out of Git (`.gitignore`)
-- Consider nightly backups of `data/` in production
-
----
-
-## 📜 License
+## License
 MIT — see `LICENSE`.
 
 ---
 
-**Built by Scott Morgan — with ❤️ for open models, transparent insights, and real‑time customization.**
+*Built by Scott Morgan — demonstrating that production-grade financial AI doesn't require a seven-figure vendor contract.*

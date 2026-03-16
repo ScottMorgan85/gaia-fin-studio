@@ -2809,3 +2809,146 @@ tool** for PMs and advisors, not an automated trade engine.
                 use_container_width=True,
             )
 
+
+# ── Factor Lab ───────────────────────────────────────────────────────────────
+
+def display_factor_decomposition(selected_client: str, selected_strategy: str):
+    """
+    Fama-French 5-Factor decomposition for the selected strategy.
+    Shows factor loadings, t-stats, R², annualized alpha, and rolling exposures.
+    """
+    st.markdown(
+        """
+        **Fama-French 5-Factor decomposition** — decomposes strategy returns into
+        systematic risk exposures (Market, Size, Value, Profitability, Investment)
+        plus a residual alpha. Loadings are OLS coefficients; significance flagged
+        at |t| > 1.96 (95% confidence).  Source: Ken French Data Library.
+        """
+    )
+
+    with st.spinner("Running factor regression…"):
+        result = utils.get_factor_exposures(selected_strategy)
+
+    if not result:
+        st.warning(
+            "Factor data unavailable — the Ken French Data Library may be unreachable, "
+            "or this strategy has fewer than 24 months of history. Try again shortly."
+        )
+        return
+
+    loadings    = result["loadings"]
+    t_stats     = result["t_stats"]
+    r2          = result["r2"]
+    adj_r2      = result["adj_r2"]
+    alpha_ann   = result["alpha_annualized"]
+    alpha_t     = result["alpha_t"]
+    n_months    = result["n_months"]
+    rolling_df  = result["rolling"]
+
+    # ── Key metrics ──────────────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("R²",              f"{r2:.1%}")
+    c2.metric("Adj. R²",         f"{adj_r2:.1%}")
+    alpha_sig = " *" if abs(alpha_t) > 1.96 else ""
+    c3.metric("Annualized Alpha", f"{alpha_ann:+.2%}{alpha_sig}",
+              help=f"t = {alpha_t:.2f}  (* = significant at 95%)")
+    c4.metric("Months",          str(n_months))
+
+    st.divider()
+
+    # ── Factor loading bar chart ─────────────────────────────────────────────
+    factor_names = list(loadings.keys())
+    vals         = [loadings[f] for f in factor_names]
+    t_vals       = [t_stats[f]  for f in factor_names]
+    colors       = ["#005A9C" if v >= 0 else "#C0392B" for v in vals]
+    sig_markers  = ["*" if abs(t) > 1.96 else "" for t in t_vals]
+    labels       = [f"{v:+.3f}{s}" for v, s in zip(vals, sig_markers)]
+
+    fig_bar = go.Figure(go.Bar(
+        x=vals,
+        y=factor_names,
+        orientation="h",
+        marker_color=colors,
+        text=labels,
+        textposition="outside",
+        hovertemplate="<b>%{y}</b><br>Loading: %{x:.4f}<extra></extra>",
+    ))
+    fig_bar.update_layout(
+        title=f"{selected_strategy} — Factor Loadings  (n={n_months} months)",
+        xaxis_title="Coefficient",
+        yaxis=dict(autorange="reversed"),
+        height=340,
+        margin=dict(l=20, r=60, t=50, b=40),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    fig_bar.add_vline(x=0, line_width=1, line_color="grey", line_dash="dash")
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ── Attribution table ─────────────────────────────────────────────────────
+    def _sig(t):
+        a = abs(t)
+        if a > 2.576: return "***"
+        if a > 1.96:  return "**"
+        if a > 1.645: return "*"
+        return ""
+
+    rows = []
+    for f in factor_names:
+        rows.append({
+            "Factor":    f,
+            "Loading":   f"{loadings[f]:+.4f}",
+            "t-stat":    f"{t_stats[f]:.2f}",
+            "Sig":       _sig(t_stats[f]),
+        })
+    tbl = pd.DataFrame(rows)
+    st.dataframe(tbl.set_index("Factor"), use_container_width=True)
+    st.caption("Significance: *** p<0.01  ** p<0.05  * p<0.10  (two-tailed)")
+
+    # ── Rolling factor exposures ─────────────────────────────────────────────
+    if not rolling_df.empty:
+        st.divider()
+        st.subheader("Rolling 36-Month Factor Exposures")
+        fig_roll = go.Figure()
+        colors_roll = ["#005A9C", "#27AE60", "#E67E22", "#8E44AD", "#C0392B"]
+        for col, color in zip(rolling_df.columns, colors_roll):
+            fig_roll.add_trace(go.Scatter(
+                x=rolling_df.index,
+                y=rolling_df[col],
+                name=col,
+                mode="lines",
+                line=dict(color=color, width=1.5),
+            ))
+        fig_roll.add_hline(y=0, line_width=1, line_color="grey", line_dash="dash")
+        fig_roll.update_layout(
+            height=380,
+            xaxis_title="Date",
+            yaxis_title="Loading",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(l=20, r=20, t=40, b=40),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_roll, use_container_width=True)
+
+    with st.expander("Methodology"):
+        st.markdown(
+            f"""
+**Model:** Monthly excess returns (strategy − risk-free rate) regressed on the
+Fama-French 5 factors: Market excess return (Mkt-RF), Size (SMB), Value (HML),
+Profitability (RMW), and Investment (CMA).
+
+**Estimation:** OLS over the full available history ({n_months} months).
+Rolling chart uses 36-month windows.
+
+**Data:** Factor returns sourced from the
+[Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html).
+Strategy returns from internal `strategy_returns.xlsx`.
+
+**Interpretation:** A loading near 1 on Mkt-RF implies the strategy moves closely
+with the market. Positive SMB = small-cap tilt. Positive HML = value tilt.
+Positive RMW = profitable-company tilt. Positive CMA = conservative investment tilt.
+Alpha (intercept × 12) is the annualized return unexplained by the five factors.
+            """
+        )
+

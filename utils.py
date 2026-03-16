@@ -1639,3 +1639,143 @@ def get_benchmark_returns() -> pd.DataFrame:
             })
 
     return pd.DataFrame(rows)
+
+
+# ── Factor Decomposition ─────────────────────────────────────────────────────
+
+@st.cache_data(ttl=86400)
+def get_factor_data() -> pd.DataFrame:
+    """
+    Fetch Fama-French 5-Factor monthly data from Ken French's data library
+    via pandas_datareader.  Returns DataFrame with columns:
+      Mkt-RF, SMB, HML, RMW, CMA, RF  (as decimals, not %)
+    Index is month-end Timestamp.  Returns empty DataFrame on failure.
+    """
+    try:
+        import pandas_datareader.data as web
+        ds = web.DataReader(
+            "F-F_Research_Data_5_Factors_2x3", "famafrench", start="2010-01-01"
+        )
+        ff = ds[0].copy()                          # monthly table
+        ff.index = ff.index.to_timestamp("M")      # Period → month-end Timestamp
+        ff.columns = [c.strip() for c in ff.columns]
+        ff = ff / 100.0                            # % → decimal
+        return ff
+    except Exception as e:
+        print(f"[GAIA] FF5 factor fetch failed: {e}", flush=True)
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def get_factor_exposures(strategy_name: str) -> dict:
+    """
+    Run OLS regression of strategy excess returns on the FF5 factors.
+    Returns dict:
+      loadings        – {factor: float}
+      t_stats         – {factor: float}
+      r2              – float
+      adj_r2          – float
+      alpha_annualized– float (annualized intercept)
+      alpha_t         – float (t-stat on intercept)
+      n_months        – int
+      factor_names    – list[str]
+      rolling         – DataFrame (36-month rolling loadings, one col per factor)
+    Returns empty dict on failure or insufficient data.
+    """
+    FACTOR_NAMES = ["Mkt-RF", "SMB", "HML", "RMW", "CMA"]
+    FACTOR_LABELS = {
+        "Mkt-RF": "Mkt-RF (Market)",
+        "SMB":    "SMB (Size)",
+        "HML":    "HML (Value)",
+        "RMW":    "RMW (Profitability)",
+        "CMA":    "CMA (Investment)",
+    }
+
+    try:
+        # ── 1. Load strategy returns ─────────────────────────────────────────
+        ret_df = load_strategy_returns()
+        if ret_df is None or ret_df.empty:
+            return {}
+        date_col = next(
+            (c for c in ret_df.columns if c.lower() in ("as_of_date", "date")), None
+        )
+        if not date_col or strategy_name not in ret_df.columns:
+            return {}
+        ret_df[date_col] = pd.to_datetime(ret_df[date_col])
+        strat = ret_df.set_index(date_col)[strategy_name].dropna()
+        strat.index = strat.index.to_period("M").to_timestamp("M")
+
+        # Level→return detection
+        if strat.abs().mean() > 5.0:
+            strat = strat.pct_change().dropna()
+        strat = strat.clip(-0.20, 0.20)
+
+        # ── 2. Load FF5 factors ──────────────────────────────────────────────
+        ff = get_factor_data()
+        if ff.empty or not all(f in ff.columns for f in FACTOR_NAMES + ["RF"]):
+            return {}
+
+        # ── 3. Align ─────────────────────────────────────────────────────────
+        combined = pd.concat(
+            [strat.rename("strategy"), ff[FACTOR_NAMES + ["RF"]]],
+            axis=1, join="inner"
+        ).dropna()
+
+        if len(combined) < 24:
+            return {}
+
+        y = combined["strategy"] - combined["RF"]   # excess returns
+        X_raw = combined[FACTOR_NAMES].values
+        n, k = len(y), len(FACTOR_NAMES)
+
+        # ── 4. OLS ───────────────────────────────────────────────────────────
+        X = np.column_stack([np.ones(n), X_raw])    # add intercept
+        XtX_inv = np.linalg.inv(X.T @ X)
+        betas = XtX_inv @ X.T @ y.values
+        y_hat = X @ betas
+        resid = y.values - y_hat
+        s2 = float(resid @ resid) / (n - k - 1)
+        se = np.sqrt(np.diag(s2 * XtX_inv))
+        t_vals = betas / np.where(se > 0, se, np.nan)
+
+        ss_res = float(resid @ resid)
+        ss_tot = float(((y.values - y.values.mean()) ** 2).sum())
+        r2     = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+        adj_r2 = 1.0 - (1.0 - r2) * (n - 1) / (n - k - 1)
+
+        loadings = {FACTOR_LABELS[f]: round(float(betas[i + 1]), 4)
+                    for i, f in enumerate(FACTOR_NAMES)}
+        t_stats  = {FACTOR_LABELS[f]: round(float(t_vals[i + 1]), 2)
+                    for i, f in enumerate(FACTOR_NAMES)}
+
+        # ── 5. Rolling 36-month OLS ──────────────────────────────────────────
+        roll_records = []
+        for end in range(36, len(combined) + 1):
+            window = combined.iloc[end - 36: end]
+            yw = window["strategy"] - window["RF"]
+            Xw = np.column_stack([np.ones(36), window[FACTOR_NAMES].values])
+            try:
+                bw = np.linalg.lstsq(Xw, yw.values, rcond=None)[0]
+                row = {FACTOR_LABELS[f]: round(float(bw[i + 1]), 4)
+                       for i, f in enumerate(FACTOR_NAMES)}
+                row["date"] = window.index[-1]
+                roll_records.append(row)
+            except Exception:
+                continue
+        rolling_df = pd.DataFrame(roll_records).set_index("date") if roll_records else pd.DataFrame()
+
+        return {
+            "loadings":          loadings,
+            "t_stats":           t_stats,
+            "r2":                round(r2, 4),
+            "adj_r2":            round(adj_r2, 4),
+            "alpha_annualized":  round(float(betas[0]) * 12, 4),
+            "alpha_t":           round(float(t_vals[0]), 2),
+            "n_months":          n,
+            "factor_names":      [FACTOR_LABELS[f] for f in FACTOR_NAMES],
+            "rolling":           rolling_df,
+        }
+
+    except Exception as e:
+        print(f"[GAIA] get_factor_exposures failed ({strategy_name}): {e}", flush=True)
+        return {}

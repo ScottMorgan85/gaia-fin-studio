@@ -58,6 +58,7 @@ SHOW_PREDICTIVE_RECS   = _flag("SHOW_PREDICTIVE_RECS",   "true")
 SHOW_DECISION_TRACKING = _flag("SHOW_DECISION_TRACKING", "true")
 SHOW_ALLOCATOR         = _flag("SHOW_ALLOCATOR",         "true")
 SHOW_FORECAST_LAB      = _flag("SHOW_FORECAST_LAB",      "true")
+SHOW_FACTOR_LAB        = _flag("SHOW_FACTOR_LAB",        "true")
 SHOW_PORTFOLIO         = _flag("SHOW_PORTFOLIO",         "true")
 SHOW_CLIENT            = _flag("SHOW_CLIENT",            "true")
 USERLOG_ON             = _flag("USERLOG_ON",             "false")
@@ -246,6 +247,7 @@ if SHOW_PREDICTIVE_RECS:   label_to_route["Predictive Recs"]     = "recs"
 if SHOW_DECISION_TRACKING: label_to_route["Decision Tracker"]   = "log"
 if SHOW_ALLOCATOR:         label_to_route["Allocator"]           = "allocator"
 if SHOW_FORECAST_LAB:      label_to_route["Forecast Lab"]        = "forecast"
+if SHOW_FACTOR_LAB:        label_to_route["Factor Lab"]          = "factor_lab"
 label_to_route["Quantum Studio"]  = "quantum"
 if SHOW_PORTFOLIO:         label_to_route["Portfolio"]           = "portfolio"
 if SHOW_CLIENT:            label_to_route["Client"]              = "client"
@@ -314,6 +316,13 @@ elif route == "forecast":
         pages.display_forecast_lab(selected_client, selected_strategy)
     else:
         st.info("Forecast Lab is not available in this build.")
+
+elif route == "factor_lab":
+    st.title("Factor Lab")
+    if hasattr(pages, "display_factor_decomposition"):
+        pages.display_factor_decomposition(selected_client, selected_strategy)
+    else:
+        st.info("Factor Lab is not available in this build.")
 
 elif route == "quantum":
     pages.display_quantum_studio(selected_client, selected_strategy)

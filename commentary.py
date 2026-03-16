@@ -90,7 +90,6 @@ def generate_investment_commentary(model_option, selected_client, selected_strat
     )
     
     # Create the transactions narrative
-    file_path = './data/client_data.csv'
     supports_period = utils.supports_transaction_period_filtering()
     if supports_period:
         top_transactions_df = utils.get_top_transactions(selected_strategy_details, as_of_month_end=selected_month_end)

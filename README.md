@@ -1,5 +1,10 @@
 # GAIA: Generative AI Investment Analytics
 
+![CI](https://github.com/ScottMorgan85/gaia-fin-studio/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.9+-blue)
+![Deployed](https://img.shields.io/badge/deployed-DigitalOcean-0080ff)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 **Live:** https://gaia-fin-studio-umumr.ondigitalocean.app/
 
 > **Production-grade AI analytics platform built to replace $50k/yr vendor tools with a $5/month open stack.**

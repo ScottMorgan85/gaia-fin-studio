@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from decimal import Decimal
 from datetime import datetime as dt
+from fpdf import FPDF
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
@@ -130,7 +131,7 @@ def load_benchmark_returns(file_path='data/benchmark_returns.xlsx'):
 
 def load_client_data(client_id):
     data = fact_data.get_fact_by_client_id(client_id)
-    client_info_dict = get_client_info()  # Call the function to get the dictionary
+    client_info_dict = client_mapping.get_client_info()
     matching_clients = [name for name, info in client_info_dict.items() if info['client_id'] == client_id]
     if matching_clients:
         client_name = matching_clients[0]
@@ -187,22 +188,6 @@ def load_trailing_returns(client_name):
         return None
 
     client_id = client_info['client_id']
-
-    # Column maps retained for clarity (unused directly but documents expectations)
-    trailing_columns = {
-        'port_selected_quarter_return': 'Quarter',
-        'bench_selected_quarter_return': 'Benchmark Quarter',
-        'port_1_year_return': '1 Year',
-        'bench_1_year_return': 'Benchmark 1 Year',
-        'port_3_years_return': '3 Years',
-        'bench_3_years_return': 'Benchmark 3 Years',
-        'port_5_years_return': '5 Years',
-        'bench_5_years_return': 'Benchmark 5 Years',
-        'port_10_years_return': '10 Years',
-        'bench_10_years_return': 'Benchmark 10 Years',
-        'port_since_inception_return': 'Since Inception',
-        'bench_since_inception_return': 'Benchmark Since Inception'
-    }
 
     # Filter fact table for this client
     trailing_returns = [entry for entry in fact_data.fact_table if entry['client_id'] == client_id]
@@ -352,8 +337,6 @@ def create_candle_stick_plot(stock_ticker_name: str, stock_name: str) -> None:
     # Fetch stock data
     stock = InfoCollector.get_ticker(stock_ticker_name)
     stock_data = InfoCollector.get_history(stock, period="1d", interval='5m')
-    stock_data_template = InfoCollector.get_demo_daily_history(interval='5m')
-
     # Ensure stock_data contains required columns
     if stock_data.empty or not all(col in stock_data.columns for col in ['Open', 'High', 'Low', 'Close']):
         st.error("Stock data is missing required columns or is empty.")
@@ -1016,7 +999,6 @@ def get_top_transactions(selected_strategy, as_of_month_end=None, lookback_month
     If as_of_month_end is provided, filter rows whose transaction date falls within that month.
     We try common date column names; if none exist, we skip date filtering gracefully.
     """
-    file_path = DEFAULT_FILE_PATH
     transactions_df = pd.read_csv(DEFAULT_FILE_PATH)
 
     # Optional month filter

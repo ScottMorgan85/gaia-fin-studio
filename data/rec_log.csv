@@ -1,4 +1,26 @@
-timestamp,client,strategy,category,card_id,title,decision,ml_score
-2025-06-30T06:09:06,Warren Miller,Equity,client,client_generic,Client Review Note,Reject,
-2025-06-30T06:09:29,Warren Miller,Equity,market,market_generic,Market Update,Accept,
-2025-06-30T06:35:34,David Brown,Long Short High Yield Bond,idea,idea_7,Add 30% into IG Corp credit,Accept,0.779
+timestamp,client,strategy,decision,ml_score,rationale
+2024-02-16T08:35,Alice Johnson,Commodities,Reject,0.194,Risk-off regime detected; reducing beta exposure
+2024-02-22T12:55,David Brown,Long Short High Yield Bond,Accept,0.576,Technicals confirm breakout; adding to winner
+2024-02-25T11:33,Bob Smith,Private Equity,Reject,0.324,Risk-off regime detected; reducing beta exposure
+2024-03-16T17:40,Warren Miller,Equity,Accept,0.874,Duration positioning appropriate given yield curve shape
+2024-03-28T11:07,Carol White,Long Short Equity Hedge Fund,Reject,0.427,Macro headwinds outweigh valuation discount
+2024-04-15T08:36,Alice Johnson,Commodities,Accept,0.726,Sector rotation aligns with current regime; momentum positive
+2024-04-17T10:21,Carol White,Long Short Equity Hedge Fund,Reject,0.251,Issuer leverage increasing; covenant protection weakening
+2024-06-01T12:52,Hari Seldon,High Yield Bonds,Accept,0.616,Duration positioning appropriate given yield curve shape
+2024-06-09T08:26,David Brown,Long Short High Yield Bond,Reject,0.314,Concentration risk exceeds IPS limit; position size too large
+2024-08-20T13:11,Alice Johnson,Commodities,Accept,0.764,Duration positioning appropriate given yield curve shape
+2024-08-25T12:45,Alice Johnson,Commodities,Reject,0.309,Client IPS restricts below-CCC exposure
+2024-08-27T12:50,James Holden,Leveraged Loans,Accept,0.768,Quality factor outperforming; defensive tilt warranted
+2024-11-19T09:47,Hari Seldon,High Yield Bonds,Accept,0.845,Duration positioning appropriate given yield curve shape
+2025-03-15T12:36,Warren Miller,Equity,Reject,0.409,Macro headwinds outweigh valuation discount
+2025-03-22T15:05,David Brown,Long Short High Yield Bond,Accept,0.683,Quality factor outperforming; defensive tilt warranted
+2025-04-26T16:41,David Brown,Long Short High Yield Bond,Reject,0.214,Wash sale rule triggered on prior harvested lot
+2025-08-12T17:01,Alice Johnson,Commodities,Accept,0.855,Sector rotation aligns with current regime; momentum positive
+2025-09-01T17:58,Alice Johnson,Commodities,Accept,0.737,Duration positioning appropriate given yield curve shape
+2025-10-02T11:16,Sandor Clegane,Government Bonds,Accept,0.62,ML model confidence exceeds threshold; risk-adjusted return favorable
+2025-12-17T14:17,David Brown,Long Short High Yield Bond,Accept,0.789,Positive earnings revision cycle underway
+2026-01-11T17:48,Alice Johnson,Commodities,Reject,0.441,Liquidity concerns in secondary market; bid-ask too wide
+2026-01-22T13:38,Alice Johnson,Commodities,Accept,0.642,Quality factor outperforming; defensive tilt warranted
+2026-02-17T16:02,David Brown,Long Short High Yield Bond,Accept,0.651,ML model confidence exceeds threshold; risk-adjusted return favorable
+2026-03-02T14:55,Warren Miller,Equity,Reject,0.34,Issuer leverage increasing; covenant protection weakening
+2026-03-05T16:24,David Brown,Long Short High Yield Bond,Reject,0.254,Wash sale rule triggered on prior harvested lot

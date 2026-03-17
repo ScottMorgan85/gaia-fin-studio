@@ -160,9 +160,7 @@ def _llm_rationales_for_recs(*args, model_name: str = None, temperature: float =
         if not (use_llm and api_key and titles):
             return None
         try:
-            from groq import Groq
-            client = Groq(api_key=api_key)
-            model = model_name or os.getenv("GAIA_LLM_MODEL", "llama3-70b-8192")
+            model = model_name or os.getenv("GAIA_LLM_MODEL", "llama-3.3-70b-versatile")
             system_msg = (
                 "You are an investment writing assistant. Given a list of recommendation titles, "
                 "generate concise (1–2 sentence), client-friendly rationales. "
@@ -173,10 +171,11 @@ def _llm_rationales_for_recs(*args, model_name: str = None, temperature: float =
                 "titles": titles,
                 "constraints": {"max_sentences": 2, "tone": "professional, actionable, compliance-aware"},
             })
-            resp = client.chat.completions.create(
+            resp = utils.groq_chat(
+                [{"role": "system", "content": system_msg},
+                 {"role": "user", "content": user_msg}],
+                feature="rec_rationales",
                 model=model, temperature=temperature,
-                messages=[{"role": "system", "content": system_msg},
-                          {"role": "user", "content": user_msg}]
             )
             content = resp.choices[0].message.content
             data = json.loads(content) if content else {}
@@ -349,15 +348,17 @@ def _format_pct(value):
         return value
 
 def _chat_with_retries(client, *, messages, model, max_tokens, temperature=0.3,
-                       retries=5, base_delay=1.0, max_delay=16.0):
+                       retries=5, base_delay=1.0, max_delay=16.0, feature=""):
     """
     Retry Groq chat.completions on transient errors like 503.
+    Routes through utils.groq_chat() for observability logging.
     """
     last_err = None
     for attempt in range(1, retries + 1):
         try:
-            return client.chat.completions.create(
-                messages=messages,
+            return utils.groq_chat(
+                messages,
+                feature=feature,
                 model=model,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -556,20 +557,20 @@ def generate_dtd_commentary(selected_strategy: str) -> str:
             "Near term we keep a barbell—quality growth and IG carry—while watching liquidity into month-end."
         )
 
-    client = Groq(api_key=key)
-
-    def _ask(model):
-        return client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": sys_prompt},
-                      {"role": "user", "content": user_prompt}],
-            max_tokens=1200, temperature=0.3
-        ).choices[0].message.content.strip()
-
     try:
-        text = _ask("llama-3.3-70b-versatile")
+        text = utils.groq_chat(
+            [{"role": "system", "content": sys_prompt},
+             {"role": "user", "content": user_prompt}],
+            feature="dtd_commentary",
+            model="llama-3.3-70b-versatile", max_tokens=1200, temperature=0.3,
+        ).choices[0].message.content.strip()
     except Exception:
-        text = _ask("meta-llama/llama-4-scout-17b-16e-instruct")
+        text = utils.groq_chat(
+            [{"role": "system", "content": sys_prompt},
+             {"role": "user", "content": user_prompt}],
+            feature="dtd_commentary",
+            model="meta-llama/llama-4-scout-17b-16e-instruct", max_tokens=1200, temperature=0.3,
+        ).choices[0].message.content.strip()
 
     # Normalize to exactly 3 bullets; clamp each to ~90 words
     raw_lines = [ln for ln in (x.strip() for x in text.splitlines()) if ln]
@@ -1457,17 +1458,19 @@ def display_forecast_lab(selected_client, selected_strategy):
         rec = None
         if groq_client:
             try:
-                rec = groq_client.chat.completions.create(
+                rec = utils.groq_chat(
+                    [{"role": "system", "content": system_prompt},
+                     {"role": "user",   "content": user_prompt}],
+                    feature="strategy_recs",
                     model=model_primary, max_tokens=700, temperature=0.2,
-                    messages=[{"role": "system", "content": system_prompt},
-                              {"role": "user",   "content": user_prompt}],
                 ).choices[0].message.content
             except Exception:
                 try:
-                    rec = groq_client.chat.completions.create(
+                    rec = utils.groq_chat(
+                        [{"role": "system", "content": system_prompt},
+                         {"role": "user",   "content": user_prompt}],
+                        feature="strategy_recs",
                         model=model_fallback, max_tokens=700, temperature=0.2,
-                        messages=[{"role": "system", "content": system_prompt},
-                                  {"role": "user",   "content": user_prompt}],
                     ).choices[0].message.content
                 except Exception:
                     rec = None
@@ -2090,7 +2093,8 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
                 client,
                 messages=[{"role": "system", "content": "You are a pragmatic portfolio manager."},
                           {"role": "user",   "content": prompt}],
-                model="llama-3.3-70b-versatile", max_tokens=500, temperature=0.25
+                model="llama-3.3-70b-versatile", max_tokens=500, temperature=0.25,
+                feature="scenario_trade_ideas",
             ).choices[0].message.content
         if not ideas_txt:
             ideas_txt = (
@@ -2199,6 +2203,7 @@ def _llm_recs_for_strategy(strategy, n=4):
             model="llama-3.3-70b-versatile",
             max_tokens=600,
             temperature=0.2,
+            feature="forecast_trade_ideas",
         )
         text = resp.choices[0].message.content.strip()
     except Exception:
@@ -3115,3 +3120,147 @@ Actual tax outcomes depend on an investor's complete tax situation.
 Consult a qualified tax advisor before executing any trades.
             """
         )
+
+
+# ── LLM Observatory ──────────────────────────────────────────────────────────
+
+def display_llm_observatory():
+    """
+    LLM observability dashboard — call volume, latency, token usage,
+    estimated cost, error rate, and per-feature breakdown.
+    """
+    st.markdown(
+        "Real-time view of every Groq API call made by GAIA — model used, "
+        "latency, token consumption, estimated cost, and error rate. "
+        "Data is written to `data/llm_log.db` on every call."
+    )
+
+    days = st.slider("Lookback window (days)", 1, 90, 30, 1)
+
+    with st.spinner("Loading call log…"):
+        result = utils.get_llm_stats(days=days)
+
+    if not result or not result.get("summary"):
+        st.info(
+            "No LLM calls logged yet in this window. "
+            "Generate some commentary, recommendations, or trade ideas first."
+        )
+        return
+
+    s   = result["summary"]
+    df  = result["df"]
+
+    # ── Summary metrics ──────────────────────────────────────────────────────
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("Total Calls",     f"{s['total_calls']:,}")
+    c2.metric("Success Rate",    f"{1 - s['error_rate']:.1%}")
+    c3.metric("Total Tokens",    f"{s['total_tokens']:,}")
+    c4.metric("Avg Latency",     f"{s['avg_latency_ms']:,.0f} ms")
+    c5.metric("p95 Latency",     f"{s['p95_latency_ms']:,.0f} ms")
+    c6.metric("Est. Cost",       f"${s['est_cost_usd']:.4f}",
+              help="Based on Groq list pricing. Free-tier usage is $0 — shown for capacity planning.")
+
+    st.divider()
+
+    col_l, col_r = st.columns(2)
+
+    # ── Calls over time ───────────────────────────────────────────────────────
+    with col_l:
+        st.subheader("Daily Call Volume")
+        daily = df.groupby("date").size().reset_index(name="calls")
+        fig_vol = go.Figure(go.Bar(
+            x=daily["date"], y=daily["calls"],
+            marker_color="#005A9C",
+        ))
+        fig_vol.update_layout(
+            height=260, margin=dict(l=10, r=10, t=10, b=30),
+            xaxis_title=None, yaxis_title="Calls",
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_vol, use_container_width=True)
+
+    # ── Token usage over time ─────────────────────────────────────────────────
+    with col_r:
+        st.subheader("Daily Token Consumption")
+        tok_daily = df.groupby("date")[["prompt_tokens", "completion_tokens"]].sum().reset_index()
+        fig_tok = go.Figure()
+        fig_tok.add_trace(go.Bar(x=tok_daily["date"], y=tok_daily["prompt_tokens"],
+                                 name="Prompt", marker_color="#005A9C"))
+        fig_tok.add_trace(go.Bar(x=tok_daily["date"], y=tok_daily["completion_tokens"],
+                                 name="Completion", marker_color="#27AE60"))
+        fig_tok.update_layout(
+            barmode="stack", height=260,
+            margin=dict(l=10, r=10, t=10, b=30),
+            xaxis_title=None, yaxis_title="Tokens",
+            legend=dict(orientation="h", y=1.1),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_tok, use_container_width=True)
+
+    col_l2, col_r2 = st.columns(2)
+
+    # ── Latency distribution ──────────────────────────────────────────────────
+    with col_l2:
+        st.subheader("Latency Distribution")
+        ok = df[df["success"] == 1]["latency_ms"].dropna()
+        if not ok.empty:
+            fig_lat = go.Figure(go.Histogram(
+                x=ok, nbinsx=30,
+                marker_color="#005A9C", opacity=0.8,
+            ))
+            fig_lat.add_vline(x=s["avg_latency_ms"], line_dash="dash",
+                              line_color="orange", annotation_text="avg")
+            fig_lat.add_vline(x=s["p95_latency_ms"], line_dash="dash",
+                              line_color="red", annotation_text="p95")
+            fig_lat.update_layout(
+                height=260, margin=dict(l=10, r=10, t=10, b=30),
+                xaxis_title="ms", yaxis_title="Calls",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_lat, use_container_width=True)
+
+    # ── Feature breakdown ─────────────────────────────────────────────────────
+    with col_r2:
+        st.subheader("Calls by Feature")
+        feat_counts = df["feature"].value_counts().reset_index()
+        feat_counts.columns = ["feature", "count"]
+        fig_feat = go.Figure(go.Bar(
+            x=feat_counts["count"], y=feat_counts["feature"],
+            orientation="h", marker_color="#27AE60",
+        ))
+        fig_feat.update_layout(
+            height=260, margin=dict(l=10, r=120, t=10, b=30),
+            xaxis_title="Calls", yaxis=dict(autorange="reversed"),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_feat, use_container_width=True)
+
+    # ── Model usage table ─────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("Model Usage")
+    model_df = (
+        df.groupby("model")
+        .agg(
+            calls=("id", "count"),
+            total_tokens=("total_tokens", "sum"),
+            avg_latency_ms=("latency_ms", "mean"),
+            est_cost_usd=("est_cost_usd", "sum"),
+            errors=("success", lambda x: int((x == 0).sum())),
+        )
+        .reset_index()
+        .sort_values("calls", ascending=False)
+    )
+    model_df["avg_latency_ms"] = model_df["avg_latency_ms"].round(0)
+    model_df["est_cost_usd"]   = model_df["est_cost_usd"].round(4)
+    st.dataframe(model_df.set_index("model"), use_container_width=True)
+
+    # ── Recent calls ──────────────────────────────────────────────────────────
+    with st.expander("Recent calls (last 50)"):
+        recent = df.head(50)[[
+            "ts", "model", "feature", "latency_ms",
+            "prompt_tokens", "completion_tokens", "total_tokens",
+            "success", "error_message",
+        ]].copy()
+        recent["ts"] = recent["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        recent["success"] = recent["success"].map({1: "✓", 0: "✗"})
+        st.dataframe(recent.set_index("ts"), use_container_width=True)

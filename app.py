@@ -60,6 +60,7 @@ SHOW_ALLOCATOR         = _flag("SHOW_ALLOCATOR",         "true")
 SHOW_FORECAST_LAB      = _flag("SHOW_FORECAST_LAB",      "true")
 SHOW_FACTOR_LAB        = _flag("SHOW_FACTOR_LAB",        "true")
 SHOW_TLH               = _flag("SHOW_TLH",               "true")
+SHOW_LLM_OBS           = _flag("SHOW_LLM_OBS",           "true")
 SHOW_PORTFOLIO         = _flag("SHOW_PORTFOLIO",         "true")
 SHOW_CLIENT            = _flag("SHOW_CLIENT",            "true")
 USERLOG_ON             = _flag("USERLOG_ON",             "false")
@@ -250,6 +251,7 @@ if SHOW_ALLOCATOR:         label_to_route["Allocator"]           = "allocator"
 if SHOW_FORECAST_LAB:      label_to_route["Forecast Lab"]        = "forecast"
 if SHOW_FACTOR_LAB:        label_to_route["Factor Lab"]          = "factor_lab"
 if SHOW_TLH:               label_to_route["Tax-Loss Harvesting"] = "tlh"
+if SHOW_LLM_OBS:           label_to_route["LLM Observatory"]     = "llm_obs"
 label_to_route["Quantum Studio"]  = "quantum"
 if SHOW_PORTFOLIO:         label_to_route["Portfolio"]           = "portfolio"
 if SHOW_CLIENT:            label_to_route["Client"]              = "client"
@@ -332,6 +334,13 @@ elif route == "tlh":
         pages.display_tax_loss_harvesting(selected_client, selected_strategy)
     else:
         st.info("Tax-Loss Harvesting is not available in this build.")
+
+elif route == "llm_obs":
+    st.title("LLM Observatory")
+    if hasattr(pages, "display_llm_observatory"):
+        pages.display_llm_observatory()
+    else:
+        st.info("LLM Observatory is not available in this build.")
 
 elif route == "quantum":
     pages.display_quantum_studio(selected_client, selected_strategy)

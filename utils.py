@@ -2,6 +2,9 @@ import csv
 import os
 import base64
 import datetime
+import hashlib
+import sqlite3
+import time as _time
 import numpy as np
 import requests
 import pandas as pd
@@ -33,14 +36,122 @@ def get_fred_key() -> str:
 DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
 
-def groq_chat(messages, **kwargs):
-    """Centralized wrapper with graceful fallback on deprecations."""
+_LLM_DB = os.path.join("data", "llm_log.db")
+
+def _log_llm_call(model: str, feature: str, latency_ms: int, resp,
+                  success: bool = True, error: str = None):
+    """Append one LLM call record to the SQLite observability log."""
+    pt = ct = tt = 0
+    if resp is not None:
+        usage = getattr(resp, "usage", None)
+        if usage:
+            pt = getattr(usage, "prompt_tokens", 0) or 0
+            ct = getattr(usage, "completion_tokens", 0) or 0
+            tt = getattr(usage, "total_tokens", 0) or 0
     try:
-        return client.chat.completions.create(model=DEFAULT_MODEL, messages=messages, **kwargs)
+        conn = sqlite3.connect(_LLM_DB)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS llm_calls (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts               TEXT    NOT NULL,
+                model            TEXT,
+                feature          TEXT,
+                latency_ms       INTEGER,
+                prompt_tokens    INTEGER,
+                completion_tokens INTEGER,
+                total_tokens     INTEGER,
+                success          INTEGER,
+                error_message    TEXT
+            )
+        """)
+        conn.execute(
+            "INSERT INTO llm_calls "
+            "(ts, model, feature, latency_ms, prompt_tokens, completion_tokens, "
+            " total_tokens, success, error_message) VALUES (?,?,?,?,?,?,?,?,?)",
+            (datetime.datetime.utcnow().isoformat(), model, feature or "unknown",
+             latency_ms, pt, ct, tt, int(bool(success)), error),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as _e:
+        print(f"[GAIA] LLM log write failed: {_e}", flush=True)
+
+
+def groq_chat(messages, feature: str = "", **kwargs):
+    """Centralized Groq wrapper with observability logging and model fallback."""
+    model = kwargs.pop("model", DEFAULT_MODEL)
+
+    def _call(m):
+        t0 = _time.time()
+        resp = client.chat.completions.create(model=m, messages=messages, **kwargs)
+        return resp, int((_time.time() - t0) * 1000)
+
+    try:
+        resp, latency_ms = _call(model)
+        _log_llm_call(model, feature, latency_ms, resp, success=True)
+        return resp
     except Exception as e:
         if "decommissioned" in str(e).lower() or "no longer supported" in str(e).lower():
-            return client.chat.completions.create(model=FALLBACK_MODEL, messages=messages, **kwargs)
+            resp, latency_ms = _call(FALLBACK_MODEL)
+            _log_llm_call(FALLBACK_MODEL, feature, latency_ms, resp, success=True)
+            return resp
+        _log_llm_call(model, feature, 0, None, success=False, error=str(e))
         raise
+
+
+@st.cache_data(ttl=60)
+def get_llm_stats(days: int = 30) -> dict:
+    """
+    Read the LLM call log from SQLite and return summary stats + raw DataFrame.
+    TTL=60s so the Observatory refreshes frequently without hammering disk.
+    Returns empty dict if no log exists yet.
+    """
+    if not os.path.exists(_LLM_DB):
+        return {}
+    try:
+        conn = sqlite3.connect(_LLM_DB)
+        df = pd.read_sql_query(
+            f"SELECT * FROM llm_calls WHERE ts >= datetime('now', '-{days} days') "
+            "ORDER BY ts DESC",
+            conn,
+        )
+        conn.close()
+    except Exception as e:
+        print(f"[GAIA] get_llm_stats failed: {e}", flush=True)
+        return {}
+
+    if df.empty:
+        return {"df": df, "summary": {}}
+
+    # Groq list pricing ($/1M tokens) — update as pricing changes
+    _COST = {
+        "llama-3.3-70b-versatile":                     {"in": 0.59, "out": 0.79},
+        "meta-llama/llama-4-scout-17b-16e-instruct":   {"in": 0.11, "out": 0.34},
+        "llama-3.1-8b-instant":                        {"in": 0.05, "out": 0.08},
+    }
+
+    df["ts"] = pd.to_datetime(df["ts"])
+    df["date"] = df["ts"].dt.date
+
+    def _est_cost(row):
+        p = _COST.get(row["model"], {"in": 0.59, "out": 0.79})
+        return row["prompt_tokens"] / 1e6 * p["in"] + row["completion_tokens"] / 1e6 * p["out"]
+
+    df["est_cost_usd"] = df.apply(_est_cost, axis=1)
+
+    ok = df[df["success"] == 1]
+    summary = {
+        "total_calls":      len(df),
+        "success_calls":    int(df["success"].sum()),
+        "error_rate":       round(1 - float(df["success"].mean()), 4),
+        "total_tokens":     int(df["total_tokens"].sum()),
+        "avg_latency_ms":   round(float(ok["latency_ms"].mean()), 0) if not ok.empty else 0,
+        "p95_latency_ms":   round(float(ok["latency_ms"].quantile(0.95)), 0) if not ok.empty else 0,
+        "est_cost_usd":     round(float(df["est_cost_usd"].sum()), 4),
+        "models_used":      df["model"].value_counts().to_dict(),
+        "features_used":    df["feature"].value_counts().to_dict(),
+    }
+    return {"df": df, "summary": summary}
 
 DEFAULT_FILE_PATH = "data/client_transactions.csv"
 

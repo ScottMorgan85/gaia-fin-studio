@@ -133,13 +133,14 @@ def generate_investment_commentary(model_option, selected_client, selected_strat
         """.strip()
     
     try:
-        chat_completion = client.chat.completions.create(
-            messages=[
+        chat_completion = utils.groq_chat(
+            [
                 {"role": "system", "content": commentary_prompt},
                 {"role": "user", "content": "Generate investment commentary based on the provided details."}
             ],
+            feature="investment_commentary",
             model=model_option,
-            max_tokens=models[model_option]["tokens"]
+            max_tokens=models[model_option]["tokens"],
         )
         commentary = chat_completion.choices[0].message.content
     except Exception as e:

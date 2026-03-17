@@ -1,26 +1,26 @@
 timestamp,client,strategy,decision,ml_score,rationale
-2024-02-16T08:35,Alice Johnson,Commodities,Reject,0.194,Risk-off regime detected; reducing beta exposure
-2024-02-22T12:55,David Brown,Long Short High Yield Bond,Accept,0.576,Technicals confirm breakout; adding to winner
-2024-02-25T11:33,Bob Smith,Private Equity,Reject,0.324,Risk-off regime detected; reducing beta exposure
-2024-03-16T17:40,Warren Miller,Equity,Accept,0.874,Duration positioning appropriate given yield curve shape
-2024-03-28T11:07,Carol White,Long Short Equity Hedge Fund,Reject,0.427,Macro headwinds outweigh valuation discount
-2024-04-15T08:36,Alice Johnson,Commodities,Accept,0.726,Sector rotation aligns with current regime; momentum positive
-2024-04-17T10:21,Carol White,Long Short Equity Hedge Fund,Reject,0.251,Issuer leverage increasing; covenant protection weakening
-2024-06-01T12:52,Hari Seldon,High Yield Bonds,Accept,0.616,Duration positioning appropriate given yield curve shape
-2024-06-09T08:26,David Brown,Long Short High Yield Bond,Reject,0.314,Concentration risk exceeds IPS limit; position size too large
-2024-08-20T13:11,Alice Johnson,Commodities,Accept,0.764,Duration positioning appropriate given yield curve shape
-2024-08-25T12:45,Alice Johnson,Commodities,Reject,0.309,Client IPS restricts below-CCC exposure
-2024-08-27T12:50,James Holden,Leveraged Loans,Accept,0.768,Quality factor outperforming; defensive tilt warranted
-2024-11-19T09:47,Hari Seldon,High Yield Bonds,Accept,0.845,Duration positioning appropriate given yield curve shape
-2025-03-15T12:36,Warren Miller,Equity,Reject,0.409,Macro headwinds outweigh valuation discount
-2025-03-22T15:05,David Brown,Long Short High Yield Bond,Accept,0.683,Quality factor outperforming; defensive tilt warranted
-2025-04-26T16:41,David Brown,Long Short High Yield Bond,Reject,0.214,Wash sale rule triggered on prior harvested lot
-2025-08-12T17:01,Alice Johnson,Commodities,Accept,0.855,Sector rotation aligns with current regime; momentum positive
-2025-09-01T17:58,Alice Johnson,Commodities,Accept,0.737,Duration positioning appropriate given yield curve shape
-2025-10-02T11:16,Sandor Clegane,Government Bonds,Accept,0.62,ML model confidence exceeds threshold; risk-adjusted return favorable
-2025-12-17T14:17,David Brown,Long Short High Yield Bond,Accept,0.789,Positive earnings revision cycle underway
-2026-01-11T17:48,Alice Johnson,Commodities,Reject,0.441,Liquidity concerns in secondary market; bid-ask too wide
-2026-01-22T13:38,Alice Johnson,Commodities,Accept,0.642,Quality factor outperforming; defensive tilt warranted
-2026-02-17T16:02,David Brown,Long Short High Yield Bond,Accept,0.651,ML model confidence exceeds threshold; risk-adjusted return favorable
-2026-03-02T14:55,Warren Miller,Equity,Reject,0.34,Issuer leverage increasing; covenant protection weakening
-2026-03-05T16:24,David Brown,Long Short High Yield Bond,Reject,0.254,Wash sale rule triggered on prior harvested lot
+2024-01-01 21:19:18,Patricia Huang,Long Short Equity Hedge Fund,Accept,0.61,Valuation attractive vs. historical range
+2024-03-25 03:38:53,Elena Rodriguez,High Yield Bonds,Accept,0.71,Credit fundamentals improving; spread compression expected
+2024-04-08 16:29:04,Patricia Huang,Long Short Equity Hedge Fund,Reject,0.3,Client risk profile does not support additional credit risk
+2024-04-09 11:03:30,James Whitfield,Private Equity,Accept,0.65,Valuation attractive vs. historical range
+2024-04-14 16:51:58,Warren Miller,Government Bonds,Reject,0.17,Position size already at maximum within IPS guidelines
+2024-05-02 08:16:32,Warren Miller,Government Bonds,Accept,0.78,Credit fundamentals improving; spread compression expected
+2024-05-30 13:50:33,Elena Rodriguez,High Yield Bonds,Reject,0.22,Macro headwinds outweigh idiosyncratic thesis
+2024-06-18 17:50:41,Warren Miller,Government Bonds,Accept,0.69,Risk/reward favorable given current vol regime
+2024-07-14 08:41:30,Aisha Johnson,Leveraged Loans,Accept,0.58,Factor tilt aligns with current regime (Goldilocks)
+2024-08-02 21:22:52,James Whitfield,Private Equity,Accept,0.64,Earnings revision trend positive for sector overweight
+2024-08-25 10:20:14,Warren Miller,Government Bonds,Reject,0.45,Macro headwinds outweigh idiosyncratic thesis
+2024-09-02 16:32:54,Aisha Johnson,Leveraged Loans,Accept,0.67,Earnings revision trend positive for sector overweight
+2024-11-08 11:27:18,Patricia Huang,Long Short Equity Hedge Fund,Reject,0.41,Macro headwinds outweigh idiosyncratic thesis
+2024-12-08 02:17:57,Warren Miller,Government Bonds,Reject,0.23,Position size already at maximum within IPS guidelines
+2025-01-25 13:23:51,Elena Rodriguez,High Yield Bonds,Reject,0.31,Spread too tight relative to historical; risk/reward poor
+2025-02-12 03:43:01,David Brown,Equity,Accept,0.85,Duration posture appropriate given yield curve shape
+2025-02-13 03:51:19,Warren Miller,Government Bonds,Reject,0.46,Spread too tight relative to historical; risk/reward poor
+2025-02-15 18:01:38,Aisha Johnson,Leveraged Loans,Accept,0.77,Duration posture appropriate given yield curve shape
+2025-02-18 11:57:50,Warren Miller,Government Bonds,Reject,0.19,Wash sale window restricts harvest opportunity this month
+2025-04-08 14:49:41,Patricia Huang,Long Short Equity Hedge Fund,Accept,0.59,Risk/reward favorable given current vol regime
+2025-04-22 16:57:27,Elena Rodriguez,High Yield Bonds,Accept,0.92,Risk/reward favorable given current vol regime
+2025-08-03 02:07:31,David Brown,Equity,Accept,0.82,Earnings revision trend positive for sector overweight
+2025-12-13 19:14:13,Aisha Johnson,Leveraged Loans,Accept,0.9,Factor tilt aligns with current regime (Goldilocks)
+2026-01-04 06:27:11,James Whitfield,Private Equity,Accept,0.92,Risk/reward favorable given current vol regime
+2026-01-24 01:33:51,David Brown,Equity,Accept,0.65,Risk/reward favorable given current vol regime

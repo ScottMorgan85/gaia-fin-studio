@@ -911,16 +911,30 @@ def create_download_link(val, filename):
 
 
 def load_client_data_csv(selected_client: str):
-    # Demo loader that returns a one-row client summary
+    """
+    Load a single client's profile from data/client_data.csv.
+    Returns a one-row DataFrame with columns including 'aum' (mapped from
+    total_aum), 'age', 'risk_profile', and all extended fields.
+    """
     try:
-        df = pd.read_csv("data/client_transactions.csv")
-        if df.empty:
+        df = pd.read_csv("data/client_data.csv")
+        row = df[df["client_name"].str.strip() == selected_client.strip()]
+        if row.empty:
             return pd.DataFrame()
+        r = row.iloc[0]
         return pd.DataFrame({
-            "client":[selected_client],
-            "aum":[df.get("Total Value ($)", pd.Series([0])).sum()],
-            "age":[42],
-            "risk_profile":["Moderate"],
+            "client":           [r.get("client_name", selected_client)],
+            "aum":              [r.get("total_aum", r.get("aum", 0))],
+            "age":              [r.get("age", "—")],
+            "risk_profile":     [r.get("risk_profile", "—")],
+            "client_id":        [r.get("client_id", "—")],
+            "primary_advisor":  [r.get("primary_advisor", "—")],
+            "inception_date":   [r.get("inception_date", "—")],
+            "tax_bracket":      [r.get("tax_bracket", "—")],
+            "state":            [r.get("state", "—")],
+            "filing_status":    [r.get("filing_status", "—")],
+            "time_horizon_yrs": [r.get("time_horizon_yrs", "—")],
+            "next_review_date": [r.get("next_review_date", "—")],
         })
     except Exception:
         return pd.DataFrame()

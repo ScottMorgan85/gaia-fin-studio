@@ -1,9 +1,7 @@
-client_name,aum,age,risk_profile,strategy
-Warren Miller,4800000,45,Aggressive,Equity
-Sandor Clegane,3950000,65,Conservative,Government Bonds
-Hari Seldon,1650000,42,Aggressive,High Yield Bonds
-James Holden,3500000,49,Aggressive,Leveraged Loans
-Alice Johnson,2250000,57,Moderate,Commodities
-Bob Smith,1350000,67,Aggressive,Private Equity
-Carol White,4200000,52,Aggressive,Long Short Equity Hedge Fund
-David Brown,2750000,69,Income,Long Short High Yield Bond
+client_id,client_name,total_aum,age,risk_profile,primary_advisor,inception_date,tax_bracket,state,filing_status,time_horizon_yrs,next_review_date
+C001,Warren Miller,4200000,67,Conservative,Sarah Chen,2019-03-15,37,CA,MFJ,15,2026-06-30
+C002,Patricia Huang,8750000,54,Moderate,Sarah Chen,2021-07-01,37,NY,MFJ,20,2026-04-15
+C003,David Brown,780000,41,Aggressive,Mike Torres,2023-01-10,24,TX,Single,30,2026-07-01
+C004,Elena Rodriguez,2100000,58,Moderate,Sarah Chen,2020-09-22,32,FL,MFJ,18,2026-05-20
+C005,James Whitfield,15200000,71,Conservative,Mike Torres,2017-04-03,37,WY,MFJ,12,2026-03-31
+C006,Aisha Johnson,1250000,45,Moderate,Sarah Chen,2022-06-15,32,IL,HOH,25,2026-08-15

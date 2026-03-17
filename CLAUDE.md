@@ -153,5 +153,8 @@ All five functions are in `utils.py` (appended at end). All cache with `@st.cach
 
 | File | Purpose |
 |------|---------|
+| `data/client_data.csv` | 6 HNW clients — client_id, client_name, total_aum, age, risk_profile, primary_advisor, inception_date, tax_bracket, state, filing_status, time_horizon_yrs, next_review_date. **Note: AUM column is `total_aum`, not `aum`.** `load_client_data_csv()` maps it to `aum` in the returned DataFrame. |
+| `data/accounts.csv` | 23 accounts across 6 clients (2–5 per client). Columns: account_id, client_id, account_name, account_type, custodian, strategy, aum, inception_date, is_taxable. Strategies match strategy_returns.xlsx column names exactly. Account AUM sums verified to equal client total_aum. |
+| `data/client_mapping.py` | Hardcoded client→strategy dict. 6 clients with diverse primary strategies: Warren Miller (GovB), Patricia Huang (L/S Eq HF), David Brown (Equity), Elena Rodriguez (HYB), James Whitfield (PE), Aisha Johnson (LL). Update this when onboarding new clients. |
 | `data/rec_log.csv` | Accept/Reject audit log written by `_log_decision()` |
 | `data/visitor_log.csv` | Access-request log written by `log_visitor()` |

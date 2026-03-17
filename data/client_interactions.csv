@@ -1,39 +1,28 @@
 client_name,date,interaction_type,notes
-Alice Johnson,2024-11-22,Portfolio Review,Portfolio review covered correlation matrix changes and proposed diversification trades.
-Alice Johnson,2025-05-30,Email,Distributed ESG screening update and impact on current holdings.
-Alice Johnson,2025-06-22,Annual Review,Completed annual review; updated IPS to reflect change in retirement timeline.
-Alice Johnson,2026-01-13,Phone Call,Client called regarding recent market volatility; reassured with portfolio positioning.
-Bob Smith,2024-10-28,Phone Call,Client inquired about adding to high-yield sleeve; discussed spread environment.
-Bob Smith,2024-12-12,Quarterly Review,Discussed sector tilts and macro outlook; client approved rebalancing proposal.
-Bob Smith,2025-07-04,Portfolio Review,"Deep-dive portfolio review; covered top 10 holdings, risk metrics, and stress tests."
-Bob Smith,2025-10-27,Meeting,Meeting covered estate planning considerations and portfolio legacy goals.
-Bob Smith,2025-11-16,Phone Call,Brief call to confirm receipt of monthly statement; answered questions on Q2 drawdown.
-Carol White,2024-09-10,Portfolio Review,Reviewed tax lot detail and identified harvesting candidates ahead of year-end.
-Carol White,2025-01-25,Meeting,Met to discuss adding private credit sleeve; client requested more information.
-Carol White,2025-05-19,Portfolio Review,Reviewed tax lot detail and identified harvesting candidates ahead of year-end.
-Carol White,2025-09-27,Quarterly Review,Portfolio vs benchmark attribution discussed; client asked about increasing allocation.
-David Brown,2024-12-19,Email,Distributed ESG screening update and impact on current holdings.
-David Brown,2025-02-09,Meeting,Met to discuss adding private credit sleeve; client requested more information.
-David Brown,2025-07-04,Phone Call,Client inquired about adding to high-yield sleeve; discussed spread environment.
-David Brown,2025-07-07,Email,Distributed ESG screening update and impact on current holdings.
-David Brown,2025-09-03,Meeting,Strategy review meeting; presented three allocation scenarios aligned with IPS objectives.
-David Brown,2025-10-11,Quarterly Review,Reviewed Q3 performance vs benchmark; client satisfied with relative outperformance.
-Hari Seldon,2025-01-18,Meeting,Strategy review meeting; presented three allocation scenarios aligned with IPS objectives.
-Hari Seldon,2025-05-03,Annual Review,Annual review covered tax-loss harvesting opportunities and year-end rebalancing.
-Hari Seldon,2025-07-03,Phone Call,Brief call to confirm receipt of monthly statement; answered questions on Q4 drawdown.
-Hari Seldon,2025-08-15,Email,Sent monthly commentary highlighting regime shift and positioning changes.
-Hari Seldon,2025-09-22,Meeting,Strategy review meeting; presented three allocation scenarios aligned with IPS objectives.
-Hari Seldon,2026-01-09,Email,Responded to client query on duration positioning given rising rate environment.
-James Holden,2024-12-12,Email,Sent monthly commentary highlighting regime shift and positioning changes.
-James Holden,2025-01-26,Portfolio Review,Portfolio review highlighted factor exposures; discussed momentum vs value tilt.
-James Holden,2025-02-03,Email,Sent monthly commentary highlighting regime shift and positioning changes.
-James Holden,2025-07-23,Quarterly Review,Portfolio vs benchmark attribution discussed; client asked about increasing allocation.
-James Holden,2026-01-28,Annual Review,Completed annual review; updated IPS to reflect change in retirement timeline.
-Sandor Clegane,2025-01-27,Meeting,Meeting covered estate planning considerations and portfolio legacy goals.
-Sandor Clegane,2025-06-26,Email,Distributed ESG screening update and impact on current holdings.
-Sandor Clegane,2025-12-17,Quarterly Review,Discussed sector tilts and macro outlook; client approved rebalancing proposal.
-Sandor Clegane,2025-12-28,Email,Distributed ESG screening update and impact on current holdings.
-Warren Miller,2024-09-15,Meeting,In-person meeting at client office; presented scenario analysis for upcoming election cycle.
-Warren Miller,2025-05-04,Portfolio Review,Reviewed tax lot detail and identified harvesting candidates ahead of year-end.
-Warren Miller,2025-06-01,Annual Review,Reviewed full-year returns and fee summary; discussed goals for upcoming year.
-Warren Miller,2026-01-10,Email,Sent monthly commentary highlighting regime shift and positioning changes.
+Aisha Johnson,2024-10-03,Meeting,Intro meeting with client's adult child; explored opening a separate managed account.
+Aisha Johnson,2024-10-28,Phone Call,Brief check-in on recent Fed commentary; no action items.
+Aisha Johnson,2024-11-07,Email Follow-Up,Followed up on outstanding wire transfer for new account funding.
+Aisha Johnson,2025-07-20,Portfolio Review,In-depth portfolio review; stress-tested against 2022-style rate shock scenario.
+Aisha Johnson,2025-10-16,Email Follow-Up,Shared updated fact sheet for primary strategy; client acknowledged receipt.
+David Brown,2025-01-06,Quarterly Review,Discussed macro outlook and portfolio positioning for upcoming quarter.
+David Brown,2025-05-29,Phone Call,Client called regarding volatility in credit markets; provided context on portfolio positioning.
+David Brown,2025-08-19,Meeting,Met with client and CPA to align on tax strategy and Roth conversion ladder.
+David Brown,2025-12-15,Quarterly Review,Reviewed benchmark relative performance; client asked about hedging tail risks.
+Elena Rodriguez,2024-10-17,Portfolio Review,Reviewed sector tilts and discussed rebalancing timeline with custodian ops.
+Elena Rodriguez,2024-11-21,Meeting,In-person meeting at client office; discussed estate planning coordination with their attorney.
+Elena Rodriguez,2025-03-16,Email Follow-Up,Sent Q3 commentary letter and performance report; awaiting response.
+Elena Rodriguez,2025-04-22,Email Follow-Up,Shared updated fact sheet for primary strategy; client acknowledged receipt.
+James Whitfield,2025-02-23,Meeting,Met with client and CPA to align on tax strategy and Roth conversion ladder.
+James Whitfield,2025-05-09,Quarterly Review,Client satisfied with fixed income positioning; discussed extending duration slightly.
+James Whitfield,2025-06-01,Phone Call,Client called regarding volatility in credit markets; provided context on portfolio positioning.
+James Whitfield,2025-08-30,Phone Call,Brief check-in on recent Fed commentary; no action items.
+Patricia Huang,2025-02-11,Portfolio Review,Reviewed sector tilts and discussed rebalancing timeline with custodian ops.
+Patricia Huang,2025-06-12,Portfolio Review,In-depth portfolio review; stress-tested against 2022-style rate shock scenario.
+Patricia Huang,2025-06-12,Phone Call,Brief check-in on recent Fed commentary; no action items.
+Patricia Huang,2025-11-07,Phone Call,Discussed options for new capital inflow of approx. $150K.
+Warren Miller,2024-09-28,Portfolio Review,Reviewed sector tilts and discussed rebalancing timeline with custodian ops.
+Warren Miller,2024-10-01,Annual Review,Full annual review completed. Updated IPS and reviewed long-term allocation targets.
+Warren Miller,2024-11-29,Quarterly Review,Reviewed benchmark relative performance; client asked about hedging tail risks.
+Warren Miller,2025-04-12,Quarterly Review,Client satisfied with fixed income positioning; discussed extending duration slightly.
+Warren Miller,2025-11-07,Portfolio Review,In-depth portfolio review; stress-tested against 2022-style rate shock scenario.
+Warren Miller,2026-01-31,Quarterly Review,Reviewed benchmark relative performance; client asked about hedging tail risks.

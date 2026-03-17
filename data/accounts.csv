@@ -1,0 +1,24 @@
+account_id,client_id,account_name,account_type,custodian,strategy,aum,inception_date,is_taxable
+A001,C001,Miller Taxable Equity,Taxable,Schwab,Equity,1800000,2019-03-15,true
+A002,C001,Miller Traditional IRA,Traditional IRA,Schwab,Long Short High Yield Bond,900000,2019-03-15,false
+A003,C001,Miller Roth IRA,Roth IRA,Schwab,Government Bonds,420000,2021-06-01,false
+A004,C001,Miller Family Trust,Trust,Fidelity,Equity,1080000,2019-03-15,false
+A005,C002,Huang Taxable,Taxable,Fidelity,Equity,3500000,2021-07-01,true
+A006,C002,Huang Trad IRA,Traditional IRA,Fidelity,Long Short Equity Hedge Fund,2100000,2021-07-01,false
+A007,C002,Huang Roth IRA,Roth IRA,Fidelity,High Yield Bonds,850000,2022-03-15,false
+A008,C002,Huang Foundation,Trust,Schwab,Government Bonds,2300000,2021-07-01,false
+A009,C003,Brown Taxable,Taxable,Robinhood,Equity,480000,2023-01-10,true
+A010,C003,Brown Roth IRA,Roth IRA,Robinhood,Equity,220000,2023-01-10,false
+A011,C003,Brown 529,529,Fidelity,Government Bonds,80000,2023-01-10,false
+A012,C004,Rodriguez Taxable,Taxable,Schwab,Equity,840000,2020-09-22,true
+A013,C004,Rodriguez Trad IRA,Traditional IRA,Schwab,Government Bonds,630000,2020-09-22,false
+A014,C004,Rodriguez Joint,Joint Taxable,Schwab,High Yield Bonds,420000,2020-09-22,true
+A015,C004,Rodriguez Annuity,Annuity,MetLife,Leveraged Loans,210000,2020-09-22,false
+A016,C005,Whitfield Taxable,Taxable,Goldman,Equity,4560000,2017-04-03,true
+A017,C005,Whitfield Trad IRA,Traditional IRA,Goldman,Long Short High Yield Bond,3040000,2017-04-03,false
+A018,C005,Whitfield Family LP,Trust,Goldman,Private Equity,4560000,2017-04-03,false
+A019,C005,Whitfield Foundation,Foundation,Schwab,Government Bonds,1520000,2017-04-03,false
+A020,C005,Whitfield Commodities,Taxable,Goldman,Commodities,1520000,2017-04-03,true
+A021,C006,Johnson Taxable,Taxable,Vanguard,Equity,500000,2022-06-15,true
+A022,C006,Johnson 401k Rollover,Traditional IRA,Vanguard,High Yield Bonds,500000,2022-06-15,false
+A023,C006,Johnson 529 Plan,529,Fidelity,Government Bonds,250000,2022-06-15,false

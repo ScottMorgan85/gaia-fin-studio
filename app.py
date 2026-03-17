@@ -211,11 +211,18 @@ def _strategy_abbrev_for(client_name: str) -> Optional[str]:
     if not s:
         return None
     return {
-        "Equity": "Eq",
-        "Equities": "Eq",
-        "Fixed Income": "FI",
-        "Bonds": "FI",
-        "Alternatives": "Alt",
+        "Equity":                       "Eq",
+        "Equities":                     "Eq",
+        "Government Bonds":             "GovB",
+        "High Yield Bonds":             "HYB",
+        "Leveraged Loans":              "LL",
+        "Commodities":                  "Cmdty",
+        "Private Equity":               "PE",
+        "Long Short Equity Hedge Fund": "L/S Eq",
+        "Long Short High Yield Bond":   "L/S HY",
+        "Fixed Income":                 "FI",
+        "Bonds":                        "FI",
+        "Alternatives":                 "Alt",
     }.get(s, s)
 
 client_names = get_client_names()

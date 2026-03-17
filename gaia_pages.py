@@ -2964,7 +2964,8 @@ def display_tax_loss_harvesting(selected_client: str, selected_strategy: str):
         cdf = _pd.read_csv("data/client_data.csv")
         row = cdf[cdf["client_name"].str.strip() == selected_client.strip()]
         if not row.empty:
-            aum = float(row.iloc[0]["aum"])
+            r = row.iloc[0]
+            aum = float(r.get("total_aum", r.get("aum", 1_000_000.0)))
     except Exception:
         pass
 

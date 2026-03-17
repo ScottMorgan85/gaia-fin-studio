@@ -164,6 +164,7 @@ gaia-fin-studio/
 | Layer | Technology |
 |---|---|
 | UI | Streamlit |
+| REST API | FastAPI + Uvicorn (`api.py`) |
 | LLM inference | Groq API (llama-3.3-70b-versatile / llama-4-scout fallback) |
 | Market data | yfinance |
 | Macro data | FRED REST API |
@@ -228,6 +229,50 @@ Access-request and approval trail.
 | `timestamp` | ISO datetime |
 | `name` | Visitor display name |
 | `email` | Visitor email |
+
+---
+
+## REST API
+
+GAIA exposes its analytics layer as a standalone REST service (`api.py`) decoupled from the Streamlit UI — consumable by any downstream app, dashboard, or data pipeline.
+
+### Run the API server
+```bash
+uvicorn api:app --port 8502 --reload
+```
+
+Auto-generated docs: `http://localhost:8502/docs` (Swagger) · `http://localhost:8502/redoc` (ReDoc)
+
+### Authentication
+Set `GAIA_API_KEY` as an env var to enable key enforcement. Pass the key as:
+```
+X-API-Key: <your-key>
+```
+If `GAIA_API_KEY` is unset, auth is disabled (open access for local dev).
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/health` | No | Liveness check — service status and version |
+| `GET` | `/v1/signals` | Yes | Live derived signals: vol regime, regime score, HY spread, yield curve, momentum |
+| `GET` | `/v1/benchmarks` | Yes | DTD/MTD/QTD/YTD/1yr/3yr/5yr for 6 key benchmarks (S&P 500, MSCI EAFE, US Agg, DJ Commodity, HYG, BKLN) |
+| `GET` | `/v1/macro` | Yes | Latest FRED macro snapshot (CPI, GDP, unemployment, T10Y2Y, HY OAS, fed funds, etc.) |
+| `GET` | `/v1/clients` | Yes | List all client names available in the platform |
+| `GET` | `/v1/clients/{client_name}/risk` | Yes | Sharpe, Sortino, Calmar, max drawdown, beta, alpha, up/down capture — 1/3/5yr |
+| `GET` | `/v1/clients/{client_name}/factor-exposures` | Yes | Fama-French 5-factor loadings, t-stats, R², adj-R², annualized alpha |
+
+### Example
+```bash
+# Health check (no key needed)
+curl http://localhost:8502/health
+
+# Live market signals
+curl -H "X-API-Key: $GAIA_API_KEY" http://localhost:8502/v1/signals
+
+# Client risk metrics
+curl -H "X-API-Key: $GAIA_API_KEY" http://localhost:8502/v1/clients/Acme%20Family/risk
+```
 
 ---
 

@@ -3264,3 +3264,229 @@ def display_llm_observatory():
         recent["ts"] = recent["ts"].dt.strftime("%Y-%m-%d %H:%M:%S")
         recent["success"] = recent["success"].map({1: "✓", 0: "✗"})
         st.dataframe(recent.set_index("ts"), use_container_width=True)
+
+
+# ── RAG Research Assistant ────────────────────────────────────────────────────
+
+_RAG_QUICK_QUESTIONS = {
+    "prospectus": [
+        "What is the fund's investment objective?",
+        "What are the key risk factors?",
+        "What are the fees and expense ratios?",
+        "What is the portfolio manager's strategy?",
+        "What are the portfolio's main holdings or sectors?",
+    ],
+    "earnings_transcript": [
+        "What was revenue and earnings growth this quarter?",
+        "What guidance did management provide for next quarter?",
+        "What are management's key concerns or headwinds?",
+        "What competitive advantages were discussed?",
+        "What capital allocation decisions were announced?",
+    ],
+    "10-k": [
+        "What are the primary risk factors?",
+        "What is the revenue breakdown by segment?",
+        "What is management's outlook for the next fiscal year?",
+        "What are the key financial highlights from this period?",
+        "Are there any significant legal proceedings or contingencies?",
+    ],
+    "10-q": [
+        "What drove revenue and earnings changes this quarter?",
+        "What is the current liquidity and debt position?",
+        "Were there any material changes to risk factors?",
+        "What significant events occurred since the last filing?",
+    ],
+    "financial_document": [
+        "What are the key risk factors?",
+        "Summarize the main investment implications.",
+        "What are the performance highlights?",
+        "What is the recommended asset allocation or strategy?",
+        "What macro factors are discussed?",
+    ],
+}
+
+_RAG_SYS_PROMPT = """You are a financial research analyst. Answer the user's question \
+using ONLY the document excerpts provided below. Be precise and cite specific details \
+from the text. If the answer is not clearly supported by the excerpts, say so explicitly \
+rather than speculating. Format your answer in clear, professional prose."""
+
+
+def display_rag_research():
+    """
+    RAG-powered document research assistant.
+    Upload a fund prospectus, earnings transcript, or 10-K → ask questions → get
+    grounded answers with source chunks shown.
+    """
+    # ── Session state initialisation ─────────────────────────────────────────
+    if "rag_index" not in st.session_state:
+        st.session_state["rag_index"] = {}
+    if "rag_history" not in st.session_state:
+        st.session_state["rag_history"] = []
+
+    idx = st.session_state["rag_index"]
+
+    # ── Layout ────────────────────────────────────────────────────────────────
+    left, right = st.columns([1, 2])
+
+    # ── LEFT: document upload ─────────────────────────────────────────────────
+    with left:
+        st.subheader("Document")
+        uploaded = st.file_uploader(
+            "Upload PDF or TXT",
+            type=["pdf", "txt"],
+            help="Fund prospectus, earnings transcript, 10-K/Q, research note.",
+        )
+
+        st.markdown("**— or paste text directly —**")
+        pasted = st.text_area("Paste document text", height=160, key="rag_paste")
+        index_btn = st.button("Index document", type="primary", use_container_width=True)
+
+        if index_btn:
+            with st.spinner("Parsing and indexing…"):
+                if uploaded is not None:
+                    chunks = utils.parse_document_chunks(
+                        uploaded.read(), uploaded.name
+                    )
+                    filename = uploaded.name
+                elif pasted.strip():
+                    chunks = utils.parse_document_chunks(
+                        pasted.encode(), "pasted_document.txt"
+                    )
+                    filename = "pasted_document.txt"
+                else:
+                    chunks = []
+                    filename = ""
+
+                if chunks:
+                    new_idx = utils.build_rag_index(chunks, filename)
+                    if new_idx:
+                        st.session_state["rag_index"] = new_idx
+                        st.session_state["rag_history"] = []
+                        idx = new_idx
+                        st.success(
+                            f"Indexed **{new_idx['n_chunks']}** chunks from "
+                            f"`{filename}` ({new_idx['doc_type'].replace('_', ' ').title()})"
+                        )
+                    else:
+                        st.error("Indexing failed — check the file format.")
+                else:
+                    st.warning("No text extracted. Try a different file or paste text directly.")
+
+        if idx:
+            st.markdown("---")
+            st.markdown(
+                f"**Active document:** `{idx.get('filename', '—')}`  \n"
+                f"**Type:** {idx.get('doc_type', '—').replace('_', ' ').title()}  \n"
+                f"**Chunks:** {idx.get('n_chunks', 0)}"
+            )
+            if st.button("Clear document", use_container_width=True):
+                st.session_state["rag_index"] = {}
+                st.session_state["rag_history"] = []
+                st.rerun()
+
+    # ── RIGHT: chat interface ─────────────────────────────────────────────────
+    with right:
+        st.subheader("Research Chat")
+
+        if not idx:
+            st.info(
+                "Upload a document on the left to get started.  \n"
+                "Supported: fund prospectuses, earnings call transcripts, 10-K/Q filings, "
+                "research notes (PDF or plain text)."
+            )
+            return
+
+        # Quick question buttons
+        doc_type  = idx.get("doc_type", "financial_document")
+        questions = _RAG_QUICK_QUESTIONS.get(doc_type, _RAG_QUICK_QUESTIONS["financial_document"])
+        st.markdown("**Quick questions:**")
+        cols = st.columns(len(questions))
+        quick_q = None
+        for i, q in enumerate(questions):
+            if cols[i].button(q[:40] + ("…" if len(q) > 40 else ""), key=f"qq_{i}",
+                              use_container_width=True, help=q):
+                quick_q = q
+
+        st.markdown("---")
+
+        # Conversation history
+        history = st.session_state["rag_history"]
+        for turn in history:
+            with st.chat_message(turn["role"]):
+                st.markdown(turn["content"])
+                if turn["role"] == "assistant" and turn.get("sources"):
+                    with st.expander(f"Sources ({len(turn['sources'])} chunks)", expanded=False):
+                        for j, (chunk, score) in enumerate(turn["sources"], 1):
+                            st.markdown(
+                                f"**Chunk {j}** — relevance `{score:.3f}`\n\n"
+                                f"> {chunk[:400]}{'…' if len(chunk) > 400 else ''}"
+                            )
+
+        # Query input
+        user_query = st.chat_input("Ask a question about the document…") or quick_q
+        if not user_query:
+            return
+
+        # Show user message immediately
+        with st.chat_message("user"):
+            st.markdown(user_query)
+        history.append({"role": "user", "content": user_query, "sources": []})
+
+        # Retrieve + generate
+        with st.chat_message("assistant"):
+            with st.spinner("Retrieving relevant sections…"):
+                results = utils.retrieve_chunks(user_query, idx, top_k=5)
+
+            if not results:
+                answer = (
+                    "I couldn't find relevant sections in this document for that question. "
+                    "Try rephrasing or ask something more specific to the document content."
+                )
+                st.markdown(answer)
+                history.append({"role": "assistant", "content": answer, "sources": []})
+                return
+
+            # Build context from retrieved chunks
+            context_parts = []
+            for i, (chunk, _score) in enumerate(results, 1):
+                context_parts.append(f"[Excerpt {i}]\n{chunk}")
+            context = "\n\n---\n\n".join(context_parts)
+
+            # Build conversation context (last 3 turns for brevity)
+            convo = []
+            for turn in history[-6:]:
+                if turn["role"] in ("user", "assistant"):
+                    convo.append({"role": turn["role"], "content": turn["content"]})
+
+            messages = [
+                {"role": "system",
+                 "content": f"{_RAG_SYS_PROMPT}\n\n"
+                            f"DOCUMENT EXCERPTS:\n\n{context}"},
+            ] + convo
+
+            try:
+                resp = utils.groq_chat(
+                    messages,
+                    feature="rag_research",
+                    model="llama-3.3-70b-versatile",
+                    max_tokens=900,
+                    temperature=0.2,
+                )
+                answer = resp.choices[0].message.content.strip()
+            except Exception as e:
+                answer = f"Generation failed: {e}"
+
+            st.markdown(answer)
+            with st.expander(f"Sources ({len(results)} chunks retrieved)", expanded=False):
+                for j, (chunk, score) in enumerate(results, 1):
+                    st.markdown(
+                        f"**Chunk {j}** — relevance `{score:.3f}`\n\n"
+                        f"> {chunk[:400]}{'…' if len(chunk) > 400 else ''}"
+                    )
+
+        history.append({
+            "role":    "assistant",
+            "content": answer,
+            "sources": results,
+        })
+        st.session_state["rag_history"] = history

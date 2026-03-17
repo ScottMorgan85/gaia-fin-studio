@@ -61,6 +61,7 @@ SHOW_FORECAST_LAB      = _flag("SHOW_FORECAST_LAB",      "true")
 SHOW_FACTOR_LAB        = _flag("SHOW_FACTOR_LAB",        "true")
 SHOW_TLH               = _flag("SHOW_TLH",               "true")
 SHOW_LLM_OBS           = _flag("SHOW_LLM_OBS",           "true")
+SHOW_RAG               = _flag("SHOW_RAG",               "true")
 SHOW_PORTFOLIO         = _flag("SHOW_PORTFOLIO",         "true")
 SHOW_CLIENT            = _flag("SHOW_CLIENT",            "true")
 USERLOG_ON             = _flag("USERLOG_ON",             "false")
@@ -252,6 +253,7 @@ if SHOW_FORECAST_LAB:      label_to_route["Forecast Lab"]        = "forecast"
 if SHOW_FACTOR_LAB:        label_to_route["Factor Lab"]          = "factor_lab"
 if SHOW_TLH:               label_to_route["Tax-Loss Harvesting"] = "tlh"
 if SHOW_LLM_OBS:           label_to_route["LLM Observatory"]     = "llm_obs"
+if SHOW_RAG:               label_to_route["Research Assistant"]  = "rag"
 label_to_route["Quantum Studio"]  = "quantum"
 if SHOW_PORTFOLIO:         label_to_route["Portfolio"]           = "portfolio"
 if SHOW_CLIENT:            label_to_route["Client"]              = "client"
@@ -341,6 +343,13 @@ elif route == "llm_obs":
         pages.display_llm_observatory()
     else:
         st.info("LLM Observatory is not available in this build.")
+
+elif route == "rag":
+    st.title("Research Assistant")
+    if hasattr(pages, "display_rag_research"):
+        pages.display_rag_research()
+    else:
+        st.info("Research Assistant is not available in this build.")
 
 elif route == "quantum":
     pages.display_quantum_studio(selected_client, selected_strategy)

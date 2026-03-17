@@ -2081,3 +2081,113 @@ def get_tlh_opportunities(
             "blocked_wash_sale":    len(blocked),
         },
     }
+
+
+# ── RAG — Document Intelligence ──────────────────────────────────────────────
+
+def parse_document_chunks(
+    file_content: bytes,
+    filename: str,
+    chunk_words: int = 350,
+    overlap_words: int = 50,
+) -> list:
+    """
+    Parse a PDF or TXT document into overlapping text chunks.
+    Returns list of non-empty strings.  Returns [] on failure.
+    """
+    text = ""
+    try:
+        if filename.lower().endswith(".pdf"):
+            import io
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(file_content))
+            pages = [p.extract_text() or "" for p in reader.pages]
+            text = "\n\n".join(pages)
+        else:
+            text = file_content.decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"[GAIA] RAG parse failed ({filename}): {e}", flush=True)
+        return []
+
+    # Normalise whitespace
+    import re
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if not text:
+        return []
+
+    words = text.split()
+    chunks, start = [], 0
+    while start < len(words):
+        end = min(start + chunk_words, len(words))
+        chunks.append(" ".join(words[start:end]))
+        start += chunk_words - overlap_words
+
+    return [c for c in chunks if len(c.split()) >= 20]   # drop tiny fragments
+
+
+def build_rag_index(chunks: list, filename: str = "") -> dict:
+    """
+    Build a TF-IDF index over a list of text chunks.
+    Returns dict: chunks, vectorizer, matrix, filename, doc_type.
+    Returns {} on failure.
+    """
+    if not chunks:
+        return {}
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        vectorizer = TfidfVectorizer(
+            max_features=8000,
+            stop_words="english",
+            ngram_range=(1, 2),
+        )
+        matrix = vectorizer.fit_transform(chunks)
+
+        # Heuristic doc-type detection from filename
+        fn = filename.lower()
+        if any(k in fn for k in ("prospectus", "fund", "etf", "mutual")):
+            doc_type = "prospectus"
+        elif any(k in fn for k in ("transcript", "earnings", "call")):
+            doc_type = "earnings_transcript"
+        elif any(k in fn for k in ("10-k", "10k", "annual")):
+            doc_type = "10-k"
+        elif any(k in fn for k in ("10-q", "10q", "quarter")):
+            doc_type = "10-q"
+        else:
+            doc_type = "financial_document"
+
+        return {
+            "chunks":      chunks,
+            "vectorizer":  vectorizer,
+            "matrix":      matrix,
+            "filename":    filename,
+            "doc_type":    doc_type,
+            "n_chunks":    len(chunks),
+        }
+    except Exception as e:
+        print(f"[GAIA] build_rag_index failed: {e}", flush=True)
+        return {}
+
+
+def retrieve_chunks(query: str, index: dict, top_k: int = 5) -> list:
+    """
+    Retrieve top-k relevant chunks for a query using TF-IDF cosine similarity.
+    Returns list of (chunk_text, score) tuples, sorted by relevance.
+    Returns [] if index is empty or query has no matches.
+    """
+    if not index or not query.strip():
+        return []
+    try:
+        from sklearn.metrics.pairwise import cosine_similarity
+        q_vec  = index["vectorizer"].transform([query])
+        scores = cosine_similarity(q_vec, index["matrix"])[0]
+        top_idx = scores.argsort()[-top_k:][::-1]
+        # Return top-k even with low scores; caller handles empty context
+        results = [
+            (index["chunks"][i], round(float(scores[i]), 4))
+            for i in top_idx
+            if scores[i] > 0
+        ]
+        return results
+    except Exception as e:
+        print(f"[GAIA] retrieve_chunks failed: {e}", flush=True)
+        return []

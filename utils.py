@@ -229,10 +229,142 @@ def list_clients() -> list[str]:
     return []
 
 
-def load_strategy_returns(file_path='data/strategy_returns.xlsx'):
-    df = pd.read_excel(file_path)
-    df['as_of_date'] = pd.to_datetime(df['as_of_date'])
+@st.cache_data(ttl=3600)
+def load_strategy_returns():
+    """
+    Loads strategy_returns.xlsx and converts cumulative returns
+    to monthly period returns via diff().
+
+    The source file contains cumulative total returns from a
+    July 2014 base (value of 0.0 = starting point).
+    Monthly period return = diff() of cumulative series.
+
+    Returns clean monthly period returns, date-extended to
+    current month using ETF proxies for each strategy.
+    """
+    df = pd.read_excel("data/strategy_returns.xlsx")
+
+    # Clean timestamps from dates
+    df["as_of_date"] = pd.to_datetime(df["as_of_date"]).dt.normalize()
+    df = df.sort_values("as_of_date").reset_index(drop=True)
+
+    numeric_cols = [c for c in df.columns if c != "as_of_date"]
+
+    # Detect cumulative vs period returns: cumulative series have abs().mean() >> 0.01
+    # If cumulative, convert via diff(); if already period returns, pass through
+    sample_means = {c: df[c].dropna().abs().mean() for c in numeric_cols}
+    is_cumulative = any(v > 0.5 for v in sample_means.values())
+
+    if is_cumulative:
+        df[numeric_cols] = df[numeric_cols].diff()
+        df = df.dropna().reset_index(drop=True)
+
+    # Sanity clamp: monthly returns outside [-20%, +20%] are artifacts
+    for col in numeric_cols:
+        df[col] = df[col].clip(-0.20, 0.20)
+
+    for col in numeric_cols:
+        print(f"[GAIA] {col}: mean={df[col].mean():.3f} "
+              f"vol={df[col].std():.3f} "
+              f"min={df[col].min():.3f} "
+              f"max={df[col].max():.3f}", flush=True)
+
     return df
+
+
+@st.cache_data(ttl=86400)
+def extend_strategy_returns(base_df):
+    """
+    Extends strategy returns from the last date in base_df through
+    current month using weighted ETF baskets as proxies.
+    Appends to base_df and returns combined monthly returns df.
+    """
+    import yfinance as yf
+
+    ETF_BASKETS = {
+        "Equity":                       {"SPY": 0.7, "QQQ": 0.2, "IWM": 0.1},
+        "Government Bonds":             {"TLT": 0.5, "IEF": 0.3, "SHY": 0.2},
+        "High Yield Bonds":             {"HYG": 0.6, "JNK": 0.4},
+        "Leveraged Loans":              {"BKLN": 0.7, "SRLN": 0.3},
+        "Commodities":                  {"PDBC": 0.5, "GLD": 0.3, "USO": 0.2},
+        "Long Short Equity Hedge Fund": {"SPY": 0.4, "QQQ": 0.2, "SH": 0.2, "IWM": 0.2},
+        "Long Short High Yield Bond":   {"HYG": 0.5, "TLT": 0.3, "SH": 0.2},
+        "Private Equity":               {"PSP": 0.6, "SPY": 0.3, "IWM": 0.1},
+    }
+
+    last_date = base_df["as_of_date"].max()
+    today = pd.Timestamp.today()
+
+    if last_date >= today - pd.DateOffset(months=2):
+        return base_df  # already current enough
+
+    try:
+        all_tickers = list(set(
+            t for basket in ETF_BASKETS.values() for t in basket
+        ))
+
+        raw = yf.download(
+            all_tickers,
+            start=last_date,
+            end=today,
+            interval="1mo",
+            auto_adjust=True,
+            progress=False,
+        )["Close"]
+
+        if isinstance(raw, pd.Series):
+            raw = raw.to_frame()
+
+        etf_returns = raw.pct_change().dropna()
+
+        new_rows = []
+        for date, row in etf_returns.iterrows():
+            record = {"as_of_date": date}
+            for strategy, basket in ETF_BASKETS.items():
+                ret = sum(
+                    weight * row.get(ticker, 0)
+                    for ticker, weight in basket.items()
+                    if ticker in row.index and not pd.isna(row.get(ticker, float("nan")))
+                )
+                record[strategy] = ret
+            new_rows.append(record)
+
+        if not new_rows:
+            return base_df
+
+        extension_df = pd.DataFrame(new_rows)
+        extension_df["as_of_date"] = pd.to_datetime(
+            extension_df["as_of_date"]
+        ).dt.normalize()
+        extension_df = extension_df[extension_df["as_of_date"] > last_date]
+
+        if extension_df.empty:
+            return base_df
+
+        combined = pd.concat([base_df, extension_df], ignore_index=True)
+        combined = combined.sort_values("as_of_date").reset_index(drop=True)
+
+        print(f"[GAIA] Extended returns from {last_date.date()} "
+              f"to {combined['as_of_date'].max().date()} "
+              f"({len(extension_df)} new months)", flush=True)
+
+        return combined
+
+    except Exception as e:
+        print(f"[GAIA] Return extension failed: {e} — using base only", flush=True)
+        return base_df
+
+
+@st.cache_data(ttl=3600)
+def get_strategy_returns():
+    """
+    Master function for strategy returns.
+    Returns clean monthly period returns from Aug 2014 through
+    current month. Use this everywhere instead of
+    load_strategy_returns() directly.
+    """
+    base = load_strategy_returns()
+    return extend_strategy_returns(base)
 
 def load_benchmark_returns(file_path='data/benchmark_returns.xlsx'):
     df = pd.read_excel(file_path)
@@ -1493,7 +1625,7 @@ def enrich_client_data() -> pd.DataFrame:
     rf_monthly = (1 + RF_ANNUAL) ** (1 / 12) - 1
 
     try:
-        ret_df = load_strategy_returns()
+        ret_df = get_strategy_returns()
     except Exception as e:
         print(f"[GAIA] enrich_client_data load failed: {e}", flush=True)
         return pd.DataFrame()
@@ -1804,7 +1936,7 @@ def get_factor_exposures(strategy_name: str) -> dict:
 
     try:
         # ── 1. Load strategy returns ─────────────────────────────────────────
-        ret_df = load_strategy_returns()
+        ret_df = get_strategy_returns()
         if ret_df is None or ret_df.empty:
             return {}
         date_col = next(

@@ -134,6 +134,9 @@ All five functions are in `utils.py` (appended at end). All cache with `@st.cach
 | `enrich_client_data()` | 1hr | Per-strategy risk metrics: 1/3/5yr returns, sharpe, sortino, calmar, beta, alpha, up/down capture vs SPY |
 | `get_upcoming_events()` | 12hr | yfinance earnings calendar for 10 tickers + hardcoded FOMC dates |
 | `get_benchmark_returns()` | 1hr | Total-return performance table for 6 benchmarks: S&P 500, MSCI EAFE, US Agg Bond, DJ Commodity, HY Credit (HYG proxy), Lev Loan (BKLN proxy). Columns: DTD, MTD, QTD, YTD (cumulative); 1yr/3yr/5yr (annualized). |
+| `load_strategy_returns()` | 1hr | Loads `strategy_returns.xlsx`, strips timestamp artifacts, auto-detects cumulative vs period returns (diff() if cumulative), clamps to ±20%. Do NOT call directly — use `get_strategy_returns()`. |
+| `extend_strategy_returns(base_df)` | 24hr | Appends live monthly returns from yfinance ETF proxies from last xlsx date through current month. 8 weighted baskets (SPY/QQQ/IWM for Equity, etc.). Internal — called by `get_strategy_returns()`. |
+| `get_strategy_returns()` | 1hr | **Master function.** Returns clean monthly period returns Aug 2014 → current month. Use everywhere instead of `load_strategy_returns()` directly. |
 
 **Integrations:**
 - **Market Pulse sidebar** — added to `display_market_commentary_and_overview()`: VIX/vol regime badge, HY spread, yield curve shape, regime score, next FOMC countdown

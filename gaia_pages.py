@@ -1036,19 +1036,12 @@ def display_forecast_lab(selected_client, selected_strategy):
         risk_profile = "Balanced"
 
     # ─────────────────────────────────────────────────────────────────────────
-    # FIX 1 — Load & scale strategy returns
+    # FIX 1 — Load strategy returns (already monthly period returns via utils)
     # ─────────────────────────────────────────────────────────────────────────
-    returns_df = utils.load_strategy_returns().copy()
+    returns_df = utils.get_strategy_returns().copy()
     returns_df["as_of_date"] = pd.to_datetime(returns_df["as_of_date"])
     returns_df = returns_df.sort_values("as_of_date")
-
-    numeric_cols = [c for c in returns_df.columns if c != "as_of_date"]
-    for col in numeric_cols:
-        if returns_df[col].dropna().abs().mean() > 5.0:
-            returns_df[col] = returns_df[col].pct_change()
     returns_df = returns_df.dropna()
-    for col in numeric_cols:
-        returns_df[col] = returns_df[col].clip(-0.20, 0.20)
 
     if selected_strategy not in returns_df.columns:
         st.error(f"Strategy '{selected_strategy}' not found in returns data.")
@@ -2123,9 +2116,7 @@ def display_portfolio(selected_client, selected_strategy):
         return
 
     # Strategy and benchmark returns
-    # sr = utils.load_strategy_returns()[["as_of_date", strat]].set_index("as_of_date").pct_change()
-    # br = utils.load_benchmark_returns()[["as_of_date", bench]].set_index("as_of_date").pct_change()
-    sr = utils.load_strategy_returns()[["as_of_date", strat]]
+    sr = utils.get_strategy_returns()[["as_of_date", strat]]
     br = utils.load_benchmark_returns()[["as_of_date", bench]]
 
     utils.plot_cumulative_returns(sr, br, strat, bench)
@@ -2463,7 +2454,7 @@ not a live trading signal.
     # -----------------------------
     # Load base return data
     # -----------------------------
-    returns_df = utils.load_strategy_returns().copy()
+    returns_df = utils.get_strategy_returns().copy()
     returns_df["as_of_date"] = pd.to_datetime(returns_df["as_of_date"])
     returns_df = returns_df.sort_values("as_of_date")
 

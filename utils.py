@@ -1898,6 +1898,162 @@ def get_benchmark_returns() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ── Live Market Context & News ───────────────────────────────────────────────
+
+@st.cache_data(ttl=1800)  # 30-min cache — news moves fast
+def get_market_news(strategy: str) -> list:
+    """
+    Fetches real market headlines relevant to the strategy
+    using yfinance ticker news (free, no API key needed).
+
+    Returns list of dicts: {title, publisher, url, published, ticker}
+    Grounded news injected into LLM prompt to prevent hallucination.
+    """
+    import yfinance as yf
+    from datetime import datetime as _dt
+
+    STRATEGY_NEWS_TICKERS = {
+        "Equity":                       ["SPY", "QQQ", "IWM"],
+        "Government Bonds":             ["TLT", "IEF", "^TNX"],
+        "High Yield Bonds":             ["HYG", "JNK"],
+        "Leveraged Loans":              ["BKLN", "HYG"],
+        "Commodities":                  ["GLD", "USO", "PDBC"],
+        "Long Short Equity Hedge Fund": ["SPY", "QQQ", "^VIX"],
+        "Long Short High Yield Bond":   ["HYG", "LQD", "TLT"],
+        "Private Equity":               ["PSP", "SPY", "IWM"],
+    }
+
+    tickers = STRATEGY_NEWS_TICKERS.get(strategy, ["SPY"])
+    headlines = []
+    seen_titles: set = set()
+
+    for ticker in tickers:
+        try:
+            raw_news = yf.Ticker(ticker).news or []
+            for item in raw_news[:4]:
+                # Support both old schema (flat) and new schema (nested under "content")
+                c = item.get("content") or item  # new schema has item["content"]
+
+                title = c.get("title") or item.get("title", "")
+                if not title or title in seen_titles:
+                    continue
+                seen_titles.add(title)
+
+                # Publisher: new schema → content.provider.displayName
+                pub = (
+                    (c.get("provider") or {}).get("displayName")
+                    or item.get("publisher")
+                    or (item.get("source") or {}).get("name", "Unknown")
+                )
+
+                # URL: new schema → content.canonicalUrl.url or clickThroughUrl.url
+                url = (
+                    (c.get("canonicalUrl") or {}).get("url")
+                    or (c.get("clickThroughUrl") or {}).get("url")
+                    or item.get("link", "")
+                )
+
+                # Published: new schema → content.pubDate (ISO string)
+                pub_date = c.get("pubDate") or c.get("displayTime", "")
+                ts_raw   = item.get("providerPublishTime", 0)
+                try:
+                    if pub_date:
+                        published = _dt.fromisoformat(
+                            pub_date.replace("Z", "+00:00")
+                        ).strftime("%b %d %Y %H:%M")
+                    elif ts_raw:
+                        published = _dt.fromtimestamp(int(ts_raw)).strftime("%b %d %Y %H:%M")
+                    else:
+                        published = "recent"
+                except Exception:
+                    published = "recent"
+
+                headlines.append({
+                    "title":     title,
+                    "publisher": pub or "Unknown",
+                    "url":       url,
+                    "published": published,
+                    "ticker":    ticker,
+                })
+        except Exception as e:
+            print(f"[GAIA] news fetch failed for {ticker}: {e}", flush=True)
+
+    return headlines[:8]
+
+
+@st.cache_data(ttl=1800)
+def get_live_market_context() -> dict:
+    """
+    Assembles live market numbers for LLM prompt grounding.
+    Pulls from yfinance. Returns a flat dict of key metrics as
+    formatted strings. Never raises — missing values become 'N/A'.
+    """
+    import yfinance as yf
+    ctx: dict = {}
+
+    # VIX
+    try:
+        vix = yf.Ticker("^VIX").history(period="5d")["Close"].dropna()
+        ctx["vix"]        = f"{vix.iloc[-1]:.1f}"
+        ctx["vix_1w_chg"] = f"{vix.iloc[-1] - vix.iloc[0]:+.1f}"
+    except Exception:
+        ctx["vix"] = "N/A"
+        ctx["vix_1w_chg"] = "N/A"
+
+    # 10yr and 2yr yields
+    try:
+        t10 = yf.Ticker("^TNX").history(period="5d")["Close"].dropna()
+        t2  = yf.Ticker("^IRX").history(period="5d")["Close"].dropna()
+        ctx["t10y"]  = f"{t10.iloc[-1]:.2f}%"
+        ctx["t2y"]   = f"{t2.iloc[-1] / 100:.2f}%"
+        spread       = t10.iloc[-1] - t2.iloc[-1] / 100
+        ctx["t10y2y"] = f"{spread:+.2f}%"
+        ctx["curve_shape"] = (
+            "inverted" if spread < 0 else
+            "flat"     if spread < 0.50 else
+            "normal"   if spread < 1.50 else
+            "steep"
+        )
+    except Exception:
+        ctx["t10y"]        = "N/A"
+        ctx["t2y"]         = "N/A"
+        ctx["t10y2y"]      = "N/A"
+        ctx["curve_shape"] = "unknown"
+
+    # HY credit MTD proxy
+    try:
+        hyg = yf.Ticker("HYG").history(period="1mo")["Close"].dropna()
+        ctx["hy_mtd"] = f"{(hyg.iloc[-1] / hyg.iloc[0] - 1) * 100:+.2f}%"
+    except Exception:
+        ctx["hy_mtd"] = "N/A"
+
+    # SPY MTD
+    try:
+        spy = yf.Ticker("SPY").history(period="1mo")["Close"].dropna()
+        ctx["spy_mtd"]   = f"{(spy.iloc[-1] / spy.iloc[0] - 1) * 100:+.2f}%"
+        ctx["spy_price"] = f"${spy.iloc[-1]:.2f}"
+    except Exception:
+        ctx["spy_mtd"]   = "N/A"
+        ctx["spy_price"] = "N/A"
+
+    # Dollar index proxy (UUP)
+    try:
+        dxy = yf.Ticker("UUP").history(period="5d")["Close"].dropna()
+        ctx["dxy_5d"] = f"{(dxy.iloc[-1] / dxy.iloc[0] - 1) * 100:+.2f}%"
+    except Exception:
+        ctx["dxy_5d"] = "N/A"
+
+    # Gold
+    try:
+        gld = yf.Ticker("GLD").history(period="5d")["Close"].dropna()
+        ctx["gold_5d"] = f"{(gld.iloc[-1] / gld.iloc[0] - 1) * 100:+.2f}%"
+    except Exception:
+        ctx["gold_5d"] = "N/A"
+
+    ctx["as_of"] = pd.Timestamp.today().strftime("%B %d, %Y")
+    return ctx
+
+
 # ── Factor Decomposition ─────────────────────────────────────────────────────
 
 @st.cache_data(ttl=86400)

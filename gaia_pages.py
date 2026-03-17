@@ -518,94 +518,130 @@ def _asset_panel(ticker: str, name: str):
 # ────────────────────────────────────────────────────────────────────────────
 # Default Overview & DTD Commentary (longer, strategy-aware)
 # ────────────────────────────────────────────────────────────────────────────
-def generate_dtd_commentary(selected_strategy: str) -> str:
+def generate_dtd_commentary(selected_strategy: str,
+                             selected_client: str = "") -> str:
     """
-    Return exactly 3 richer bullets for DTD performance.
-    - Each bullet starts with "- " and then a blank line
-    - 3–4 sentences, ~110 words per bullet 
-    - Strategy-aware; no headings/preambles
-    """
-    import os
-    from groq import Groq
+    Generates grounded day-to-day market commentary for the selected strategy.
 
-    sys_prompt = (
-        "You are an investment strategist writing a same-day note for portfolio managers, risk, economists and cleint facing sales people and advisors. "
-        "Return only 3 bullets, each 3-4 sentences. No headings or preambles."
-         "Do NOT include bullets, numbering, markdown, emojis, or headings."
-    )
-    user_prompt = (
-        f"Generate 3 bullets on day-to-day performance for {selected_strategy}. "
-        "Blend market moves, macro drivers, simple performance attribution (what helped/hurt), "
-        "and any positioning/hedge tweaks or risk flags for the next few sessions. "
-        "Keep each bullet around 110 words; do not exceed 160 words."
+    Grounds the LLM with:
+      1. Real-time market numbers (VIX, yields, spreads, returns)
+      2. Live news headlines fetched from yfinance (free, no API key)
+      3. Today's date — prevents temporal hallucination
+
+    Falls back to static placeholder text if Groq is unavailable.
+    """
+    fallback = (
+        "Equity markets traded mixed as front-end rates held firm on resilient "
+        "services data while the dollar softened versus major peers. Quality "
+        "growth and AI-adjacent hardware outperformed; cyclicals faded on softer "
+        "survey data. Attribution tilted positive to large-cap growth and semis; "
+        "energy and small-cap value detracted. Maintaining mild quality tilt, "
+        "trimmed beta ~0.2, added a small FX hedge ahead of central bank "
+        "communications.\n\n"
+        "Rates traded choppy with a late bull-flattening as auction tails "
+        "narrowed; breakevens little changed. Core duration contributed while "
+        "curve positioning detracted intra-day. Credit selection added as "
+        "higher-quality issuers outperformed. Nudged duration +0.1yr toward "
+        "benchmark, held TIPS at ~3% as inflation risk remains two-sided.\n\n"
+        "Risk: a hotter CPI or Fed repricing could pressure cyclicals and "
+        "long-duration; conversely a cooler labor print extends quality "
+        "leadership. Near term: barbell of quality growth and IG carry while "
+        "watching liquidity into month-end."
     )
 
     key = get_groq_key()
     if not key:
-        return (
-            "- Futures opened steady before drifting as front-end yields firmed on sticky services prints while the dollar eased versus majors. "
-            "Within equities, quality growth and AI-adjacent hardware outperformed while cyclicals faded on softer survey data; in credit, IG held in while HY widened a touch. "
-            "Attribution tilted positive to large-cap growth and semis; energy and small-cap value detracted. "
-            "Positioning: kept a mild quality tilt, trimmed beta by ~0.2, added a tiny FX hedge ahead of central-bank speak.\n\n"
-            "- Rates traded choppy with a late bull-flattening as auction tails narrowed; breakevens were little changed. "
-            "Core duration contributed while curve positioning detracted intra-day; in securitized, agency MBS convexity remained manageable. "
-            "Credit selection added as higher-quality issuers outperformed; EM was mixed with Asia better, LATAM softer. "
-            "We nudged duration +0.1 years toward benchmark and held TIPS at ~3% as inflation risk remains two-sided.\n\n"
-            "- Commodities softened with crude giving back gains on inventory data while gold stayed resilient into geopolitical headlines. "
-            "FX hedges modestly helped as USD strength faded; overlay options were left unchanged. "
-            "Risk: a hotter CPI/Fed repricing could pressure cyclicals and long-duration assets; conversely, a cooler labor print would extend quality leadership. "
-            "Near term we keep a barbell—quality growth and IG carry—while watching liquidity into month-end."
+        return fallback
+
+    # --- Fetch grounding data ---
+    try:
+        mkt  = utils.get_live_market_context()
+        news = utils.get_market_news(selected_strategy)
+    except Exception as e:
+        print(f"[GAIA] context fetch failed: {e}", flush=True)
+        mkt, news = {}, []
+
+    # Format news block
+    if news:
+        news_block = "\n".join(
+            f"- [{n['published']}] {n['title']} ({n['publisher']})"
+            for n in news[:6]
         )
+    else:
+        news_block = (
+            "No live headlines available — use general market knowledge "
+            "for today's date."
+        )
+
+    # Format market numbers block
+    mkt_block = (
+        f"As of {mkt.get('as_of', 'today')}:\n"
+        f"- VIX: {mkt.get('vix', 'N/A')} "
+        f"(1-week change: {mkt.get('vix_1w_chg', 'N/A')})\n"
+        f"- 10yr Treasury: {mkt.get('t10y', 'N/A')}, "
+        f"2yr: {mkt.get('t2y', 'N/A')}, "
+        f"Spread: {mkt.get('t10y2y', 'N/A')} "
+        f"({mkt.get('curve_shape', 'N/A')} curve)\n"
+        f"- SPY MTD: {mkt.get('spy_mtd', 'N/A')} "
+        f"@ {mkt.get('spy_price', 'N/A')}\n"
+        f"- HY credit MTD: {mkt.get('hy_mtd', 'N/A')}\n"
+        f"- USD (UUP) 5-day: {mkt.get('dxy_5d', 'N/A')}\n"
+        f"- Gold 5-day: {mkt.get('gold_5d', 'N/A')}\n"
+    )
+
+    sys_prompt = (
+        "You are a senior investment strategist writing a same-day market note "
+        "for portfolio managers, risk officers, economists, and client-facing advisors.\n\n"
+        "RULES:\n"
+        "- Use ONLY the market data and news headlines provided below\n"
+        "- Do NOT invent specific prices, spreads, or events not in the data\n"
+        "- If a number is N/A, describe the direction qualitatively\n"
+        "- Reference specific headlines by paraphrasing — never quote verbatim\n"
+        "- Return exactly 3 paragraphs separated by blank lines\n"
+        "- No bullets, numbering, markdown, emojis, or headings\n"
+        "- Each paragraph 3-4 sentences, ~100 words\n"
+        "- Paragraph 1: what happened today (prices, flows)\n"
+        "- Paragraph 2: attribution — what helped/hurt this strategy\n"
+        "- Paragraph 3: positioning and near-term risk flags"
+    )
+
+    user_prompt = (
+        f"Write day-to-day market commentary for the {selected_strategy} strategy.\n\n"
+        f"LIVE MARKET DATA:\n{mkt_block}\n"
+        f"RECENT NEWS HEADLINES:\n{news_block}\n\n"
+        f"Ground every sentence in the data above. Focus specifically on what "
+        f"drives {selected_strategy} performance — credit spreads for bond "
+        f"strategies, growth/value rotation for equity, commodity curves for "
+        f"commodities, etc."
+    )
 
     try:
         text = utils.groq_chat(
             [{"role": "system", "content": sys_prompt},
-             {"role": "user", "content": user_prompt}],
+             {"role": "user",   "content": user_prompt}],
             feature="dtd_commentary",
-            model="llama-3.3-70b-versatile", max_tokens=1200, temperature=0.3,
+            model="llama-3.3-70b-versatile",
+            max_tokens=1200,
+            temperature=0.25,
         ).choices[0].message.content.strip()
     except Exception:
-        text = utils.groq_chat(
-            [{"role": "system", "content": sys_prompt},
-             {"role": "user", "content": user_prompt}],
-            feature="dtd_commentary",
-            model="meta-llama/llama-4-scout-17b-16e-instruct", max_tokens=1200, temperature=0.3,
-        ).choices[0].message.content.strip()
+        try:
+            text = utils.groq_chat(
+                [{"role": "system", "content": sys_prompt},
+                 {"role": "user",   "content": user_prompt}],
+                feature="dtd_commentary",
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                max_tokens=1200,
+                temperature=0.25,
+            ).choices[0].message.content.strip()
+        except Exception:
+            return fallback
 
-    # Normalize to exactly 3 bullets; clamp each to ~90 words
-    raw_lines = [ln for ln in (x.strip() for x in text.splitlines()) if ln]
-    # If the model returned a paragraph, split into sentence chunks of 3–4 per bullet
-    if sum(1 for ln in raw_lines if ln.startswith(("-", "•"))) < 3:
-        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-        chunks, chunk = [], []
-        for s in sents:
-            chunk.append(s)
-            # group 3 sentences per bullet (last one may have 4)
-            if len(chunk) >= 3:
-                chunks.append(" ".join(chunk)); chunk = []
-            if len(chunks) == 3:
-                break
-        if chunk and len(chunks) < 3:
-            chunks.append(" ".join(chunk))
-        raw_lines = chunks[:3]
-
-    # Strip any leading bullets and clamp to ~90 words
-    def clamp_words(s: str, max_words=90):
-        w = s.replace("\n", " ").split()
-        return " ".join(w[:max_words])
-
-    cleaned = []
-    for ln in raw_lines:
-        ln = ln.lstrip("•- \t")
-        cleaned.append(f"- {clamp_words(ln, 90)}")
-
-    # Ensure exactly 3 bullets
-    if len(cleaned) > 3:
-        cleaned = cleaned[:3]
-    while len(cleaned) < 3:
-        cleaned.append("- (placeholder)")
-
-    return "\n\n".join(cleaned)
+    # Normalize to 3 paragraphs
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paras) >= 3:
+        return "\n\n".join(paras[:3])
+    return text if text else fallback
 
 # ---------------------------------------------------------------------------
 # Rewritten Market Commentary + Bar-style Overview
@@ -859,20 +895,22 @@ def display_market_commentary_and_overview(selected_client, selected_strategy, s
     display_performance_snapshot()
     st.divider()
 
-    # ---------- DTD commentary (keeps your formatter) ----------
-    dtd = generate_dtd_commentary(selected_strategy)
-    
-    # Prefer newline-separated lines from the LLM…
-    lines = [ln.strip(" -•\t") for ln in dtd.splitlines() if ln.strip()]
-    
-    # …fallback: split to sentences if it came back as one paragraph
-    if len(lines) < 3:
-        lines = [s.strip() for s in re.split(r'(?<=[.!?])\s+', dtd) if s.strip()][:3]
-    
-    # Final clamp & render
-    max_words = 32
-    lines = [' '.join(ln.split()[:max_words]) for ln in lines[:3]]
-    st.markdown("\n".join(f"- {ln}" for ln in lines))
+    # ---------- DTD commentary (grounded in live data) ----------
+    dtd = generate_dtd_commentary(selected_strategy, selected_client)
+    st.markdown(dtd)
+
+    # ---------- News sources expander ----------
+    try:
+        _news = utils.get_market_news(selected_strategy)
+        if _news:
+            with st.expander(f"Sources ({len(_news)} headlines)", expanded=False):
+                for _n in _news:
+                    st.caption(
+                        f"**{_n['publisher']}** · {_n['published']}  \n"
+                        f"[{_n['title']}]({_n['url']})"
+                    )
+    except Exception:
+        pass
     # ---------- Optional: show strategy-aware LLM cards on this page ----------
     if show_recs:
         display_recommendations(

@@ -1779,3 +1779,194 @@ def get_factor_exposures(strategy_name: str) -> dict:
     except Exception as e:
         print(f"[GAIA] get_factor_exposures failed ({strategy_name}): {e}", flush=True)
         return {}
+
+# ── Tax-Loss Harvesting ───────────────────────────────────────────────────────
+
+_STRATEGY_HOLDINGS = {
+    "Equity": [
+        ("SPY",  "IVV"),    # S&P 500 → iShares Core S&P 500
+        ("QQQ",  "ONEQ"),   # Nasdaq-100 → Fidelity Nasdaq Composite
+        ("IWM",  "IJR"),    # Russell 2000 → iShares S&P 600
+        ("EFA",  "VEA"),    # MSCI EAFE → Vanguard FTSE Developed
+        ("VNQ",  "SCHH"),   # REITs → Schwab U.S. REIT
+        ("MTUM", "JMOM"),   # Momentum → JPMorgan U.S. Momentum Factor
+    ],
+    "Government Bonds": [
+        ("TLT", "VGLT"),    # 20yr Treasury → Vanguard Long-Term Treasury
+        ("IEF", "VGIT"),    # 7-10yr Treasury → Vanguard Intermediate
+        ("TIP", "VTIP"),    # TIPS → Vanguard Short-Term Inflation-Protected
+        ("AGG", "BND"),     # US Agg → Vanguard Total Bond Market
+    ],
+    "High Yield Bonds": [
+        ("HYG",  "JNK"),    # HY → SPDR Bloomberg HY Bond
+        ("LQD",  "VCIT"),   # IG Corp → Vanguard Intermediate-Term Corp
+        ("USHY", "HYLB"),   # US HY → Xtrackers USD HY Corporate Bond
+    ],
+    "Leveraged Loans": [
+        ("BKLN", "SRLN"),   # Leveraged Loans → SPDR Blackstone Senior Loan
+        ("FLOT", "FLRN"),   # Floating Rate → Invesco Variable Rate
+    ],
+    "Commodities": [
+        ("GLD",  "IAU"),    # Gold → iShares Gold Trust
+        ("SLV",  "SIVR"),   # Silver → Aberdeen Physical Silver
+        ("DBA",  "PDBC"),   # Agriculture → Invesco Optimum Yield Commodity
+    ],
+    "Long Short Equity Hedge Fund": [
+        ("SPY", "IVV"),
+        ("QQQ", "ONEQ"),
+        ("IWM", "IJR"),
+    ],
+    "Long Short High Yield Bond": [
+        ("HYG", "JNK"),
+        ("LQD", "VCIT"),
+    ],
+    "Private Equity": [
+        ("PSP", "PEX"),     # Listed PE → ProShares Global Listed PE
+        ("SPY", "IVV"),
+        ("TLT", "VGLT"),
+    ],
+}
+
+
+@st.cache_data(ttl=3600)
+def simulate_tax_lots(strategy_name: str, aum: float) -> pd.DataFrame:
+    """
+    Simulate realistic tax lots for a strategy using actual yfinance price history.
+    Lots are reproducible (seeded RNG keyed to strategy_name).
+    Returns DataFrame with columns: Ticker, Replacement, Lot, Purchase Date,
+    Cost Basis/Share, Shares, Cost Basis Total, Current Price, Current Value,
+    Unrealized G/L ($), Unrealized G/L (%), Holding Days, Term.
+    """
+    holdings = _STRATEGY_HOLDINGS.get(strategy_name, _STRATEGY_HOLDINGS["Equity"])
+    tickers = [t for t, _ in holdings]
+
+    today = pd.Timestamp.today().normalize()
+    start = today - pd.DateOffset(years=3)
+
+    price_data: dict = {}
+    for ticker in tickers:
+        try:
+            raw = yfinance.download(
+                ticker, start=start, end=today,
+                interval="1d", auto_adjust=True, progress=False, actions=False,
+            )
+            if not raw.empty:
+                prices = raw["Close"].squeeze().dropna()
+                prices.index = pd.to_datetime(prices.index).normalize()
+                price_data[ticker] = prices
+        except Exception as e:
+            print(f"[GAIA] TLH price fetch failed {ticker}: {e}", flush=True)
+
+    if not price_data:
+        return pd.DataFrame()
+
+    rng = np.random.default_rng(abs(hash(strategy_name)) % (2 ** 32))
+    lot_value_target = aum / max(len(holdings), 1) / 2.5
+
+    lots = []
+    for ticker, replacement in holdings:
+        if ticker not in price_data:
+            continue
+        prices = price_data[ticker]
+        current_price = float(prices.iloc[-1])
+
+        n_lots = int(rng.integers(2, 4))
+        for lot_idx in range(n_lots):
+            months_ago = int(rng.integers(6, 37))
+            purchase_approx = today - pd.DateOffset(months=months_ago)
+            available = prices.index[prices.index >= purchase_approx]
+            if len(available) == 0:
+                continue
+            purchase_date = available[0]
+
+            cost_per_share = float(prices[purchase_date])
+            if cost_per_share <= 0:
+                continue
+            shares = round(lot_value_target / cost_per_share, 4)
+            cost_total = round(shares * cost_per_share, 2)
+            current_val = round(shares * current_price, 2)
+            unreal_gl = round(current_val - cost_total, 2)
+            unreal_gl_pct = round(unreal_gl / cost_total, 4) if cost_total > 0 else 0.0
+            holding_days = (today - purchase_date).days
+
+            lots.append({
+                "Ticker":            ticker,
+                "Replacement":       replacement,
+                "Lot":               f"{ticker}-{lot_idx + 1}",
+                "Purchase Date":     purchase_date.date(),
+                "Cost Basis/Share":  round(cost_per_share, 2),
+                "Shares":            shares,
+                "Cost Basis Total":  cost_total,
+                "Current Price":     round(current_price, 2),
+                "Current Value":     current_val,
+                "Unrealized G/L ($)": unreal_gl,
+                "Unrealized G/L (%)": unreal_gl_pct,
+                "Holding Days":      holding_days,
+                "Term":              "Long-Term" if holding_days >= 365 else "Short-Term",
+            })
+
+    return pd.DataFrame(lots)
+
+
+@st.cache_data(ttl=3600)
+def get_tlh_opportunities(
+    strategy_name: str,
+    aum: float,
+    harvest_threshold_pct: float = 0.005,
+    tax_rate_st: float = 0.37,
+    tax_rate_lt: float = 0.20,
+) -> dict:
+    """
+    Identify tax-loss harvesting opportunities from simulated tax lots.
+    Applies harvest threshold filter and 30-day wash sale rule.
+    Returns dict: lots, harvestable, blocked, summary.
+    """
+    lots_df = simulate_tax_lots(strategy_name, aum)
+    if lots_df.empty:
+        return {}
+
+    today = pd.Timestamp.today().normalize()
+
+    # Tickers with a lot purchased within 30 days → wash sale risk if harvested today
+    recent_purchase_tickers = set(
+        lots_df.loc[
+            (today - pd.to_datetime(lots_df["Purchase Date"])).dt.days <= 30,
+            "Ticker",
+        ]
+    )
+
+    loss_lots = lots_df[lots_df["Unrealized G/L ($)"] < 0].copy()
+    threshold_lots = loss_lots[
+        loss_lots["Unrealized G/L (%)"].abs() >= harvest_threshold_pct
+    ].copy()
+
+    threshold_lots["Wash Sale Risk"] = threshold_lots["Ticker"].isin(recent_purchase_tickers)
+    harvestable = threshold_lots[~threshold_lots["Wash Sale Risk"]].copy()
+    blocked = threshold_lots[threshold_lots["Wash Sale Risk"]].copy()
+
+    def _tax_saving(row):
+        rate = tax_rate_st if row["Term"] == "Short-Term" else tax_rate_lt
+        return round(abs(row["Unrealized G/L ($)"]) * rate, 2)
+
+    if not harvestable.empty:
+        harvestable["Est. Tax Savings ($)"] = harvestable.apply(_tax_saving, axis=1)
+
+    return {
+        "lots":       lots_df,
+        "harvestable": harvestable,
+        "blocked":    blocked,
+        "summary": {
+            "total_positions":      int(lots_df["Ticker"].nunique()),
+            "total_lots":           len(lots_df),
+            "total_unrealized_gains":  round(
+                float(lots_df.loc[lots_df["Unrealized G/L ($)"] > 0, "Unrealized G/L ($)"].sum()), 2),
+            "total_unrealized_losses": round(
+                float(lots_df.loc[lots_df["Unrealized G/L ($)"] < 0, "Unrealized G/L ($)"].sum()), 2),
+            "harvestable_lots":     len(harvestable),
+            "harvestable_loss_total": round(
+                float(harvestable["Unrealized G/L ($)"].sum()) if not harvestable.empty else 0.0, 2),
+            "est_tax_savings":      round(
+                float(harvestable["Est. Tax Savings ($)"].sum()) if not harvestable.empty else 0.0, 2),
+            "blocked_wash_sale":    len(blocked),
+        },
+    }

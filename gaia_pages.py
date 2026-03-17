@@ -2952,3 +2952,166 @@ Alpha (intercept × 12) is the annualized return unexplained by the five factors
             """
         )
 
+
+
+# ── Tax-Loss Harvesting ───────────────────────────────────────────────────────
+
+def display_tax_loss_harvesting(selected_client: str, selected_strategy: str):
+    """
+    Tax-loss harvesting dashboard — identifies harvestable lots, estimates
+    tax savings, flags wash sale risk, and suggests replacement securities.
+    """
+    # ── Pull AUM for this client ─────────────────────────────────────────────
+    aum = 1_000_000.0
+    try:
+        import pandas as _pd
+        cdf = _pd.read_csv("data/client_data.csv")
+        row = cdf[cdf["client_name"].str.strip() == selected_client.strip()]
+        if not row.empty:
+            aum = float(row.iloc[0]["aum"])
+    except Exception:
+        pass
+
+    st.markdown(
+        """
+        Scans simulated tax lots for unrealized losses that exceed the harvest
+        threshold, applies the **30-day wash sale rule**, and estimates federal
+        tax savings from realizing losses. Replacement securities maintain market
+        exposure while resetting cost basis.
+        """
+    )
+
+    # ── Tax rate inputs ──────────────────────────────────────────────────────
+    with st.expander("Tax rate assumptions", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        tax_rate_st  = c1.slider("Short-term rate (%)", 10, 50, 37, 1) / 100
+        tax_rate_lt  = c2.slider("Long-term rate (%)",  0,  30, 20, 1) / 100
+        threshold_pct = c3.slider("Harvest threshold (%)", 0, 5, 1, 1) / 100
+
+    # ── Load data ────────────────────────────────────────────────────────────
+    with st.spinner("Fetching price history and scanning lots…"):
+        result = utils.get_tlh_opportunities(
+            selected_strategy, aum,
+            harvest_threshold_pct=threshold_pct,
+            tax_rate_st=tax_rate_st,
+            tax_rate_lt=tax_rate_lt,
+        )
+
+    if not result:
+        st.warning("Price data unavailable — yfinance may be rate-limited. Try again shortly.")
+        return
+
+    summary    = result["summary"]
+    lots_df    = result["lots"]
+    harvestable = result["harvestable"]
+    blocked    = result["blocked"]
+
+    # ── Summary metrics ──────────────────────────────────────────────────────
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Positions",          summary["total_positions"])
+    c2.metric("Total Lots",         summary["total_lots"])
+    c3.metric("Unrealized Gains",   f"${summary['total_unrealized_gains']:,.0f}",
+              delta=None)
+    c4.metric("Unrealized Losses",  f"${abs(summary['total_unrealized_losses']):,.0f}",
+              delta=f"${abs(summary['total_unrealized_losses']):,.0f}", delta_color="inverse")
+    c5.metric("Est. Tax Savings",   f"${summary['est_tax_savings']:,.0f}",
+              delta=f"{summary['harvestable_lots']} lots eligible")
+
+    st.divider()
+
+    # ── Harvest opportunities ────────────────────────────────────────────────
+    st.subheader(f"Harvest Opportunities  ({summary['harvestable_lots']} lots)")
+
+    if harvestable.empty:
+        st.info(
+            "No lots currently meet the harvest threshold without wash sale risk. "
+            "Adjust the threshold or check back after 30 days."
+        )
+    else:
+        disp = harvestable[[
+            "Lot", "Ticker", "Replacement", "Purchase Date", "Term",
+            "Cost Basis Total", "Current Value", "Unrealized G/L ($)",
+            "Unrealized G/L (%)", "Est. Tax Savings ($)",
+        ]].copy()
+        disp["Unrealized G/L (%)"] = disp["Unrealized G/L (%)"].apply(lambda v: f"{v:+.2%}")
+        disp["Unrealized G/L ($)"] = disp["Unrealized G/L ($)"].apply(lambda v: f"${v:,.0f}")
+        disp["Cost Basis Total"]   = disp["Cost Basis Total"].apply(lambda v: f"${v:,.0f}")
+        disp["Current Value"]      = disp["Current Value"].apply(lambda v: f"${v:,.0f}")
+        disp["Est. Tax Savings ($)"] = disp["Est. Tax Savings ($)"].apply(lambda v: f"${v:,.0f}")
+
+        st.dataframe(disp.set_index("Lot"), use_container_width=True)
+        st.caption(
+            "Replacement column shows a correlated but non-identical security "
+            "to maintain market exposure after harvesting."
+        )
+
+        total_loss   = abs(summary["harvestable_loss_total"])
+        total_saving = summary["est_tax_savings"]
+        st.success(
+            f"Harvesting all eligible lots realizes **${total_loss:,.0f}** in losses, "
+            f"generating an estimated **${total_saving:,.0f}** in tax savings "
+            f"(blended rate assumption)."
+        )
+
+    # ── Wash sale blocked ────────────────────────────────────────────────────
+    if not blocked.empty:
+        with st.expander(f"Wash Sale Blocked  ({len(blocked)} lots)"):
+            st.caption(
+                "These lots have unrealized losses meeting the threshold but cannot be "
+                "harvested today — a lot in the same ticker was purchased within the "
+                "last 30 days, triggering the IRS wash sale rule."
+            )
+            st.dataframe(
+                blocked[["Lot", "Ticker", "Purchase Date", "Term",
+                          "Unrealized G/L ($)", "Unrealized G/L (%)"]].set_index("Lot"),
+                use_container_width=True,
+            )
+
+    # ── Full lot ledger ──────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("Full Position Ledger")
+
+    def _row_color(val, col):
+        if col == "Unrealized G/L ($)":
+            return "color: #27AE60" if val > 0 else ("color: #C0392B" if val < 0 else "")
+        return ""
+
+    ledger = lots_df[[
+        "Lot", "Ticker", "Purchase Date", "Term", "Shares",
+        "Cost Basis/Share", "Current Price",
+        "Cost Basis Total", "Current Value", "Unrealized G/L ($)", "Unrealized G/L (%)",
+    ]].copy()
+    ledger["Unrealized G/L (%)"] = ledger["Unrealized G/L (%)"].apply(lambda v: f"{v:+.2%}")
+    ledger["Unrealized G/L ($)"] = ledger["Unrealized G/L ($)"].apply(lambda v: f"${v:+,.0f}")
+    ledger["Cost Basis Total"]   = ledger["Cost Basis Total"].apply(lambda v: f"${v:,.0f}")
+    ledger["Current Value"]      = ledger["Current Value"].apply(lambda v: f"${v:,.0f}")
+
+    st.dataframe(ledger.set_index("Lot"), use_container_width=True)
+
+    # ── Methodology ──────────────────────────────────────────────────────────
+    with st.expander("Methodology & Disclosures"):
+        st.markdown(
+            f"""
+**Lot simulation:** Tax lots are synthetically generated using actual market prices
+fetched from Yahoo Finance.  {summary['total_lots']} lots across {summary['total_positions']} 
+positions were simulated with purchase dates distributed randomly over the past 6–36 months,
+using a deterministic seed keyed to the strategy name.
+
+**Harvest threshold:** Only lots with an unrealized loss ≥ {threshold_pct:.1%} of cost basis
+are considered eligible.
+
+**Wash sale rule (IRC §1091):** Any ticker with a lot purchased within 30 calendar days
+of the proposed sale date is flagged and excluded from the harvest list.
+
+**Replacement securities:** Each holding maps to a correlated but non-identical ETF.
+Replacements maintain market exposure and are not deemed substantially identical under
+current IRS guidance — though advisors should confirm with tax counsel.
+
+**Tax savings estimate:** `|Unrealized Loss| × applicable rate`.
+Short-term rate applied to holdings < 365 days; long-term rate to holdings ≥ 365 days.
+
+**Disclaimer:** This is a simulation for illustrative purposes only.
+Actual tax outcomes depend on an investor's complete tax situation.
+Consult a qualified tax advisor before executing any trades.
+            """
+        )

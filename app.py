@@ -229,7 +229,6 @@ client_names = get_client_names()
 selected_client = st.sidebar.selectbox(
     "Select Client",
     client_names,
-    format_func=lambda n: f"{n} ({_strategy_abbrev_for(n)})" if _strategy_abbrev_for(n) else n
 )
 
 # Resolve selected_strategy string
@@ -249,26 +248,39 @@ if not groq_key:
     st.sidebar.warning("GROQ_API_KEY not set; LLM features may be limited.")
 groq_client = Groq(api_key=groq_key) if groq_key else None
 
-# ── Navigation (display label → route key) ──────────────────────────────────
-label_to_route = {}
-if SHOW_PORTFOLIO_PULSE:   label_to_route["Portfolio Pulse"]     = "overview"
-if SHOW_COMMENTARY:        label_to_route["Commentary Co-Pilot"] = "commentary"
-if SHOW_PREDICTIVE_RECS:   label_to_route["Predictive Recs"]     = "recs"
-if SHOW_DECISION_TRACKING: label_to_route["Decision Tracker"]   = "log"
-if SHOW_ALLOCATOR:         label_to_route["Allocator"]           = "allocator"
-if SHOW_FORECAST_LAB:      label_to_route["Forecast Lab"]        = "forecast"
-if SHOW_FACTOR_LAB:        label_to_route["Factor Lab"]          = "factor_lab"
-if SHOW_TLH:               label_to_route["Tax-Loss Harvesting"] = "tlh"
-if SHOW_LLM_OBS:           label_to_route["LLM Observatory"]     = "llm_obs"
-if SHOW_RAG:               label_to_route["Research Assistant"]  = "rag"
-label_to_route["Quantum Studio"]  = "quantum"
-if SHOW_PORTFOLIO:         label_to_route["Portfolio"]           = "portfolio"
-if SHOW_CLIENT:            label_to_route["Client"]              = "client"
-if not label_to_route:
-    label_to_route = {"Portfolio Pulse": "overview"}
+# ── Market Pulse sidebar widget (always visible, below client selector) ──────
+pages.render_market_pulse_sidebar()
 
-selected_label = st.sidebar.radio("Navigate", list(label_to_route.keys()))
-route = label_to_route[selected_label]
+# ── Navigation — 4 grouped zones ─────────────────────────────────────────────
+if "route" not in st.session_state:
+    st.session_state["route"] = "overview"
+
+def _nav(label: str, route_key: str):
+    if st.sidebar.button(label, use_container_width=True, key=f"nav_{route_key}"):
+        st.session_state["route"] = route_key
+
+st.sidebar.caption("MORNING BRIEF")
+if SHOW_PORTFOLIO_PULSE:   _nav("Portfolio Pulse",       "overview")
+
+st.sidebar.caption("CLIENT WORKSPACE")
+if SHOW_CLIENT:            _nav("Client",                "client")
+if SHOW_PORTFOLIO:         _nav("Portfolio",             "portfolio")
+if SHOW_COMMENTARY:        _nav("Commentary Co-Pilot",   "commentary")
+if SHOW_TLH:               _nav("Tax-Loss Harvesting",   "tlh")
+if SHOW_DECISION_TRACKING: _nav("Decision Tracker",      "log")
+
+st.sidebar.caption("ANALYTICS LAB")
+if SHOW_FORECAST_LAB:      _nav("Forecast Lab",          "forecast")
+if SHOW_FACTOR_LAB:        _nav("Factor Lab",            "factor_lab")
+_nav("Quantum Studio",                                    "quantum")
+if SHOW_PREDICTIVE_RECS:   _nav("Predictive Recs",       "recs")
+
+st.sidebar.caption("PRACTICE")
+if SHOW_ALLOCATOR:         _nav("Allocator",             "allocator")
+if SHOW_LLM_OBS:           _nav("LLM Observatory",       "llm_obs")
+if SHOW_RAG:               _nav("Research Assistant",    "rag")
+
+route = st.session_state["route"]
 
 # Secret admin route toggle via query param
 if st.query_params.get("admin") == ["1"]:

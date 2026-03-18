@@ -847,44 +847,45 @@ def display_performance_snapshot():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Portfolio Pulse: DTD commentary + optional recs + market overview
+# Market Pulse sidebar widget — call from app.py, always visible
 # ─────────────────────────────────────────────────────────────────────────────
-import re
-def display_market_commentary_and_overview(selected_client, selected_strategy, show_recs=True, n_cards=4, display_df=True):
+def render_market_pulse_sidebar():
     import datetime as _dt
-
-    # ---------- Market Pulse sidebar ----------
     try:
         _sig = utils.get_derived_signals()
         _events = utils.get_upcoming_events()
         with st.sidebar:
             st.markdown("---")
             st.markdown("**Market Pulse**")
-            # VIX / vol regime
             _vix = _sig.get("vix_current")
             _vol = _sig.get("vol_regime", "Unknown")
             _vol_color = {"Low Vol": "🟢", "Normal": "🔵", "Elevated": "🟠", "Crisis": "🔴"}.get(_vol, "⚪")
             st.caption(f"{_vol_color} VIX {f'{_vix:.1f}' if _vix else '—'} · {_vol}")
-            # HY spread
             _hy = _sig.get("hy_spread")
             if _hy is not None:
                 st.caption(f"HY Spread: {_hy:.0f} bps")
-            # Yield curve
             _yc = _sig.get("yield_curve", "Unknown")
             _yc_color = {"Steep": "🟢", "Normal": "🔵", "Flat": "🟡", "Inverted": "🔴"}.get(_yc, "⚪")
             _t10 = _sig.get("t10y2y_current")
             st.caption(f"{_yc_color} Curve: {_yc} ({f'{_t10:+.2f}%' if _t10 is not None else '—'})")
-            # Macro regime score
             _rs = _sig.get("regime_score", 0)
             _rs_color = "🟢" if _rs >= 1 else ("🔴" if _rs <= -1 else "🟡")
             st.caption(f"{_rs_color} Regime score: {_rs:+d} / 2")
-            # Next FOMC
             _fomc = _events.get("fomc_dates", [])
             if _fomc:
                 _days = (_fomc[0] - _dt.date.today()).days
                 st.caption(f"📅 FOMC in {_days}d ({_fomc[0].strftime('%b %d')})")
+            st.markdown("---")
     except Exception as _e:
         print(f"[GAIA] Market Pulse sidebar failed: {_e}", flush=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio Pulse: DTD commentary + optional recs + market overview
+# ─────────────────────────────────────────────────────────────────────────────
+import re
+def display_market_commentary_and_overview(selected_client, selected_strategy, show_recs=True, n_cards=4, display_df=True):
+    import datetime as _dt
 
     # ---------- header ----------
     now = _dt.datetime.now()

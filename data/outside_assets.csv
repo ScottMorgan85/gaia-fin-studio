@@ -1,0 +1,6 @@
+client_id,client_name,institution,estimated_aum,asset_type,confidence,source,opportunity_type,estimated_revenue,notes
+C002,Patricia Huang,Merrill Lynch,2100000,Equity/Cash,High,LinkedIn profile + public records,Cross-sell — bring over to GAIA,21000,Likely former employer 401k + brokerage; advisor at ML is not specialized in RSU/tech exec situations
+C002,Patricia Huang,Fidelity NetBenefits,850000,NVDA RSU/401k,High,Employer plan — Meridian Systems,Consolidation opportunity,8500,Current employer 401k; not yet rolled to GAIA management
+C001,Warren Miller,JP Morgan Private Bank,1800000,Multi-asset,Medium,Referral network intel,Cross-sell,18000,Legacy relationship from working days; JPMPB not providing estate planning integration
+C005,James Whitfield,UBS,4500000,Equity,High,CPA referral,Cross-sell — major opportunity,45000,UBS relationship manager retiring; Whitfield expressed dissatisfaction Q4 2025 review
+C003,David Brown,Robinhood,95000,Equity,Low,Client self-reported,Consolidation,950,Small account; low priority but shows growth trajectory

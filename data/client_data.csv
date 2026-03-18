@@ -1,7 +1,7 @@
-client_id,client_name,total_aum,age,risk_profile,primary_advisor,inception_date,tax_bracket,state,filing_status,time_horizon_yrs,next_review_date
-C001,Warren Miller,4200000,67,Conservative,Sarah Chen,2019-03-15,37,CA,MFJ,15,2026-06-30
-C002,Patricia Huang,8750000,54,Moderate,Sarah Chen,2021-07-01,37,NY,MFJ,20,2026-04-15
-C003,David Brown,780000,41,Aggressive,Mike Torres,2023-01-10,24,TX,Single,30,2026-07-01
-C004,Elena Rodriguez,2100000,58,Moderate,Sarah Chen,2020-09-22,32,FL,MFJ,18,2026-05-20
-C005,James Whitfield,15200000,71,Conservative,Mike Torres,2017-04-03,37,WY,MFJ,12,2026-03-31
-C006,Aisha Johnson,1250000,45,Moderate,Sarah Chen,2022-06-15,32,IL,HOH,25,2026-08-15
+client_id,client_name,total_aum,age,risk_profile,primary_advisor,inception_date,tax_bracket,state,filing_status,time_horizon_yrs,next_review_date,employer,notes
+C001,Warren Miller,4200000,67,Conservative,Sarah Chen,2019-03-15,37,CA,MFJ,15,2026-06-30,,Retired tech exec; estate planning focus
+C002,Patricia Huang,8750000,54,Moderate,Sarah Chen,2021-07-01,37,CA,MFJ,20,2026-04-15,Meridian Systems,SVP Product; NVDA RSU vesting; Huang Family Foundation
+C003,David Brown,780000,41,Aggressive,Mike Torres,2023-01-10,24,TX,Single,30,2026-07-01,,Emerging HNW; growth focus
+C004,Elena Rodriguez,2100000,58,Moderate,Sarah Chen,2020-09-22,32,FL,MFJ,18,2026-05-20,,Business owner; sold company 2019
+C005,James Whitfield,15200000,71,Conservative,Mike Torres,2017-04-03,37,WY,MFJ,12,2026-03-31,,UHNW; family office structure; must receive quarterly updates
+C006,Aisha Johnson,1250000,45,Moderate,Sarah Chen,2022-06-15,32,IL,HOH,25,2026-08-15,,Divorced exec; rebuilding wealth post-settlement

@@ -1280,11 +1280,15 @@ def get_top_transactions(selected_strategy, as_of_month_end=None, lookback_month
         if not filtered.empty:
             transactions_df = filtered
 
+    # Guard: new lot-level schema doesn't have Selected_Strategy — return empty gracefully
+    if 'Selected_Strategy' not in transactions_df.columns:
+        return pd.DataFrame()
+
     filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy]
 
     # If still empty, fall back to overall (strategy only) to avoid blank prompts
     if filtered_transactions.empty:
-        filtered_transactions = transactions_df[transactions_df['Selected_Strategy'] == selected_strategy] if 'Selected_Strategy' in transactions_df.columns else transactions_df
+        filtered_transactions = transactions_df
 
     # Determine top buys/sells
     if 'Total Value ($)' in filtered_transactions.columns:
@@ -2493,3 +2497,143 @@ def retrieve_chunks(query: str, index: dict, top_k: int = 5) -> list:
     except Exception as e:
         print(f"[GAIA] retrieve_chunks failed: {e}", flush=True)
         return []
+
+
+# ── Client Data Loaders (Phase 2 — household model) ─────────────────────────
+
+@st.cache_data(ttl=3600)
+def load_client_alerts(client_name: str = None) -> pd.DataFrame:
+    """Load client alerts, optionally filtered by client name."""
+    try:
+        df = pd.read_csv("data/client_alerts.csv")
+        if client_name:
+            return df[df["client_name"] == client_name].copy()
+        return df
+    except Exception as e:
+        print(f"[GAIA] alerts load failed: {e}", flush=True)
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def load_rsu_schedule(client_id: str = None) -> pd.DataFrame:
+    """Load RSU vesting schedule, optionally filtered by client_id."""
+    try:
+        df = pd.read_csv("data/rsu_vesting_schedule.csv")
+        df["vest_date"] = pd.to_datetime(df["vest_date"])
+        if client_id:
+            return df[df["client_id"] == client_id].copy()
+        return df
+    except Exception as e:
+        print(f"[GAIA] RSU schedule load failed: {e}", flush=True)
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def load_outside_assets(client_id: str = None) -> pd.DataFrame:
+    """Load estimated outside assets for practice intelligence."""
+    try:
+        df = pd.read_csv("data/outside_assets.csv")
+        if client_id:
+            return df[df["client_id"] == client_id].copy()
+        return df
+    except Exception as e:
+        print(f"[GAIA] outside assets load failed: {e}", flush=True)
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def load_tax_lots(account_id: str = None, client_id: str = None) -> pd.DataFrame:
+    """
+    Load client_transactions.csv as tax lots.
+    Optionally filter by account or client.
+    Computes concentration_pct within the filtered set automatically.
+    Returns empty DataFrame (never raises) on any error.
+    """
+    try:
+        df = pd.read_csv("data/client_transactions.csv")
+        # Guard: old schema lacks lot_id — return empty so callers degrade gracefully
+        if "lot_id" not in df.columns:
+            return pd.DataFrame()
+        if account_id:
+            df = df[df["account_id"] == account_id].copy()
+        if client_id:
+            df = df[df["client_id"] == client_id].copy()
+        # Numeric coerce
+        for col in ("current_value", "cost_basis_total", "unrealized_gl_dollars",
+                    "shares", "cost_basis_per_share", "current_price"):
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        total_val = df["current_value"].sum() if "current_value" in df.columns else 0
+        if total_val > 0:
+            df["concentration_pct"] = (df["current_value"] / total_val * 100).round(2)
+        return df.reset_index(drop=True)
+    except Exception as e:
+        print(f"[GAIA] tax lots load failed: {e}", flush=True)
+        return pd.DataFrame()
+
+
+def get_client_tlh_opportunities(client_id: str) -> pd.DataFrame:
+    """
+    Return lots eligible for tax-loss harvesting.
+    Eligible: unrealized_gl_dollars < 0 and wash_sale_flag != true.
+    Sorted by largest loss first.
+    """
+    lots = load_tax_lots(client_id=client_id)
+    if lots.empty or "unrealized_gl_dollars" not in lots.columns:
+        return pd.DataFrame()
+    eligible = lots[
+        (lots["unrealized_gl_dollars"] < 0) &
+        (lots["wash_sale_flag"].astype(str).str.lower() != "true")
+    ].copy()
+    return eligible.sort_values("unrealized_gl_dollars", ascending=True).reset_index(drop=True)
+
+
+def get_household_summary(client_name: str) -> dict:
+    """
+    Returns household-level summary for a client.
+    Includes total AUM, taxable vs tax-deferred split,
+    total unrealized G/L, TLH opportunities count and total loss,
+    number of accounts, risk profile, advisor, next review, notes.
+    """
+    try:
+        clients  = pd.read_csv("data/client_data.csv")
+        accounts = pd.read_csv("data/accounts.csv")
+
+        client_row = clients[clients["client_name"] == client_name]
+        if client_row.empty:
+            return {}
+        client_row  = client_row.iloc[0]
+        client_id   = client_row["client_id"]
+
+        client_accounts = accounts[accounts["client_id"] == client_id].copy()
+        # Ensure is_taxable is boolean-comparable
+        client_accounts["is_taxable"] = (
+            client_accounts["is_taxable"].astype(str).str.lower() == "true"
+        )
+        taxable_aum     = client_accounts.loc[client_accounts["is_taxable"],  "aum"].sum()
+        tax_deferred_aum = client_accounts.loc[~client_accounts["is_taxable"], "aum"].sum()
+
+        lots = load_tax_lots(client_id=client_id)
+        tlh  = get_client_tlh_opportunities(client_id)
+
+        total_gl   = lots["unrealized_gl_dollars"].sum()  if not lots.empty else 0
+        tlh_loss   = tlh["unrealized_gl_dollars"].sum()   if not tlh.empty  else 0
+
+        return {
+            "client_name":       client_name,
+            "client_id":         client_id,
+            "total_aum":         client_row["total_aum"],
+            "taxable_aum":       taxable_aum,
+            "tax_deferred_aum":  tax_deferred_aum,
+            "n_accounts":        len(client_accounts),
+            "total_gain_loss":   total_gl,
+            "tlh_opportunities": len(tlh),
+            "tlh_total_loss":    tlh_loss,
+            "risk_profile":      client_row["risk_profile"],
+            "advisor":           client_row["primary_advisor"],
+            "next_review":       client_row["next_review_date"],
+            "notes":             client_row.get("notes", ""),
+        }
+    except Exception as e:
+        print(f"[GAIA] household summary failed: {e}", flush=True)
+        return {}

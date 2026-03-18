@@ -124,7 +124,7 @@ GDP ≤ 0   Stagflation            Deflation
 
 ## Data Layer — utils.py functions
 
-All five functions are in `utils.py` (appended at end). All cache with `@st.cache_data`, return empty df/dict on failure, never crash.
+All functions are in `utils.py` (appended at end). All cache with `@st.cache_data`, return empty df/dict on failure, never crash.
 
 | Function | TTL | Description |
 |----------|-----|-------------|
@@ -139,6 +139,12 @@ All five functions are in `utils.py` (appended at end). All cache with `@st.cach
 | `load_strategy_returns()` | 1hr | Loads `strategy_returns.xlsx`, strips timestamp artifacts, auto-detects cumulative vs period returns (diff() if cumulative), clamps to ±20%. Do NOT call directly — use `get_strategy_returns()`. |
 | `extend_strategy_returns(base_df)` | 24hr | Appends live monthly returns from yfinance ETF proxies from last xlsx date through current month. 8 weighted baskets (SPY/QQQ/IWM for Equity, etc.). Internal — called by `get_strategy_returns()`. |
 | `get_strategy_returns()` | 1hr | **Master function.** Returns clean monthly period returns Aug 2014 → current month. Use everywhere instead of `load_strategy_returns()` directly. |
+| `load_client_alerts(client_name)` | 1hr | Reads `data/client_alerts.csv`. Optional `client_name` filter. Returns DataFrame with priority, alert_type, title, description, action_required, due_date, account_id, status. |
+| `load_rsu_schedule(client_id)` | 1hr | Reads `data/rsu_vesting_schedule.csv`. Optional `client_id` filter. Returns vest_date, shares_vesting, estimated_value, tax_withheld_pct, net_shares_after_tax. |
+| `load_outside_assets(client_id)` | 1hr | Reads `data/outside_assets.csv`. Optional `client_id` filter. Returns institution, estimated_aum, opportunity_type, estimated_revenue, confidence, notes. |
+| `load_tax_lots(account_id, client_id)` | 1hr | Reads `data/client_transactions.csv` (lot-level schema). Filter by account_id or client_id. Coerces numerics, computes concentration_pct within account. |
+| `get_client_tlh_opportunities(client_id)` | — | Calls `load_tax_lots()` and filters for unrealized_gl_dollars < 0 and not wash_sale. Returns DataFrame of harvestable lots sorted by loss amount. |
+| `get_household_summary(client_name)` | — | Returns dict: total_aum, taxable_aum, tax_deferred_aum, n_accounts, total_gain_loss, tlh_opportunities, tlh_total_loss, risk_profile, advisor, next_review, notes. |
 
 **Integrations:**
 - **Market Pulse sidebar** — added to `display_market_commentary_and_overview()`: VIX/vol regime badge, HY spread, yield curve shape, regime score, next FOMC countdown
@@ -156,7 +162,11 @@ All five functions are in `utils.py` (appended at end). All cache with `@st.cach
 | File | Purpose |
 |------|---------|
 | `data/client_data.csv` | 6 HNW clients — client_id, client_name, total_aum, age, risk_profile, primary_advisor, inception_date, tax_bracket, state, filing_status, time_horizon_yrs, next_review_date. **Note: AUM column is `total_aum`, not `aum`.** `load_client_data_csv()` maps it to `aum` in the returned DataFrame. |
-| `data/accounts.csv` | 23 accounts across 6 clients (2–5 per client). Columns: account_id, client_id, account_name, account_type, custodian, strategy, aum, inception_date, is_taxable. Strategies match strategy_returns.xlsx column names exactly. Account AUM sums verified to equal client total_aum. |
+| `data/accounts.csv` | 24 accounts across 6 clients (2–5 per client). Columns: account_id, client_id, account_name, account_type, custodian, strategy, aum, inception_date, is_taxable. Strategies match strategy_returns.xlsx column names exactly. Account AUM sums verified to equal client total_aum. |
 | `data/client_mapping.py` | Hardcoded client→strategy dict. 6 clients with diverse primary strategies: Warren Miller (GovB), Patricia Huang (L/S Eq HF), David Brown (Equity), Elena Rodriguez (HYB), James Whitfield (PE), Aisha Johnson (LL). Update this when onboarding new clients. |
+| `data/client_transactions.csv` | Lot-level tax lot schema. Columns: lot_id, account_id, client_id, ticker, shares, cost_basis_per_share, current_price, cost_basis_total, current_value, unrealized_gl_dollars, unrealized_gl_pct, purchase_date, term, wash_sale_flag, replacement_ticker, asset_class, notes. 26 lots (L001–L026). Patricia NVDA lots L007/L008/L009 are underwater TLH candidates; L001–L006 have 873–1953% gains (do not harvest). |
+| `data/rsu_vesting_schedule.csv` | Patricia Huang (C002) NVDA RSU vesting schedule. 4 quarterly vests in 2026. Q1 vest March 31 is IMMINENT (600 shares, $69K gross, 37% withholding). |
+| `data/outside_assets.csv` | Practice intelligence on assets held away. 5 rows across C001/C002/C003/C005. Patricia has $2.1M at Merrill Lynch + $850K at Fidelity. Whitfield has $4.5M at UBS (RM retiring — major cross-sell opportunity). |
+| `data/client_alerts.csv` | Actionable alerts with priority (Critical/High/Medium), alert_type (RSU_VEST, TLH_OPPORTUNITY, CONCENTRATION_RISK, FOUNDATION_REVIEW, QUARTERLY_LETTER, OUTSIDE_ASSETS), due_date, account_id, status. 7 alerts across 3 clients. Patricia has 4 (1 Critical). |
 | `data/rec_log.csv` | Accept/Reject audit log written by `_log_decision()` |
 | `data/visitor_log.csv` | Access-request log written by `log_visitor()` |

@@ -1,98 +1,27 @@
-client_name,Name,Ticker,Transaction Type,Shares,Price,Total Value ($),Cost Basis Per Share,Cost Basis Total,Purchase Date,Selected_Strategy,Commentary
-Warren Miller,Apple Inc.,AAPL,Sell,465,159.32,74083.8,86.52,40231.8,2021-03-09,Equity,Added on dip
-Warren Miller,Apple Inc.,AAPL,Dividend Reinvestment,1923,101.35,194896.05,67.77,130321.71,2020-05-16,Equity,Sector rotation into financials
-Warren Miller,NVIDIA Corp.,NVDA,Buy,1568,49.65,77851.2,46.99,73680.32,2026-02-24,Equity,Long-term core holding
-Warren Miller,NVIDIA Corp.,NVDA,Buy,4667,42.35,197647.45,41.25,192513.75,2024-10-11,Equity,Rebalancing into growth
-Warren Miller,NVIDIA Corp.,NVDA,Buy,2711,47.16,127850.76,31.42,85179.62,2021-01-28,Equity,Added on dip
-Warren Miller,NVIDIA Corp.,NVDA,Dividend Reinvestment,2018,62.96,127053.28,45.21,91233.78,2025-03-10,Equity,Dividend reinvestment program
-Warren Miller,Amazon.com Inc.,AMZN,Buy,235,192.5,45237.5,140.21,32949.35,2024-02-04,Equity,Dividend reinvestment program
-Warren Miller,Amazon.com Inc.,AMZN,Sell,770,221.18,170308.6,118.88,91537.6,2020-12-06,Equity,Momentum-driven add
-Warren Miller,Amazon.com Inc.,AMZN,Buy,647,146.29,94649.63,110.91,71758.77,2021-11-11,Equity,Long-term core holding
-Warren Miller,Amazon.com Inc.,AMZN,Dividend Reinvestment,538,159.11,85601.18,169.94,91427.72,2026-01-10,Equity,Defensive tilt amid volatility
-Warren Miller,Microsoft Corp.,MSFT,Buy,278,341.1,94825.8,234.12,65085.36,2023-09-04,Equity,Risk-off repositioning
-Warren Miller,Microsoft Corp.,MSFT,Buy,900,226.74,204066.0,211.05,189945.0,2024-07-15,Equity,Sector rotation into financials
-Warren Miller,Microsoft Corp.,MSFT,Buy,440,315.19,138683.6,239.13,105217.2,2025-08-20,Equity,Tactical overweight
-Warren Miller,Microsoft Corp.,MSFT,Dividend Reinvestment,565,272.86,154165.9,177.07,100044.55,2022-10-21,Equity,Credit upgrade candidate
-Sandor Clegane,iShares 7-10 Year Treasury ETF,IEF,Dividend Reinvestment,1269,153.12,194309.28,113.58,144133.02,2021-04-08,Government Bonds,Income allocation
-Sandor Clegane,iShares 7-10 Year Treasury ETF,IEF,Dividend Reinvestment,758,232.12,175946.96,155.06,117535.48,2024-05-09,Government Bonds,Core equity position
-Sandor Clegane,Vanguard Interm-Term Treasury,VGIT,Buy,903,126.18,113940.54,79.39,71689.17,2021-04-28,Government Bonds,Rebalancing into growth
-Sandor Clegane,Vanguard Interm-Term Treasury,VGIT,Buy,2228,113.29,252410.12,86.14,191919.92,2023-05-01,Government Bonds,Opportunistic purchase on weakness
-Sandor Clegane,Vanguard Interm-Term Treasury,VGIT,Dividend Reinvestment,2821,95.21,268587.41,61.08,172306.68,2022-01-15,Government Bonds,Sector rotation into financials
-Sandor Clegane,Vanguard Interm-Term Treasury,VGIT,Dividend Reinvestment,2563,97.31,249405.53,74.87,191891.81,2021-10-02,Government Bonds,Core equity position
-Sandor Clegane,Vanguard Total Bond Market ETF,BND,Buy,770,125.83,96889.1,115.01,88557.7,2023-09-03,Government Bonds,Defensive tilt amid volatility
-Sandor Clegane,Vanguard Total Bond Market ETF,BND,Sell,458,142.95,65471.1,84.59,38742.22,2020-09-08,Government Bonds,Income allocation
-Sandor Clegane,Vanguard Total Bond Market ETF,BND,Dividend Reinvestment,725,137.46,99658.5,149.18,108155.5,2026-01-04,Government Bonds,Long-term core holding
-Sandor Clegane,Vanguard Total Bond Market ETF,BND,Dividend Reinvestment,1752,158.79,278200.08,110.58,193736.16,2023-01-04,Government Bonds,Sector rotation into financials
-Sandor Clegane,iShares TIPS Bond ETF,TIP,Dividend Reinvestment,592,216.14,127954.88,152.71,90404.32,2023-07-14,Government Bonds,Inflation hedge
-Sandor Clegane,iShares TIPS Bond ETF,TIP,Dividend Reinvestment,232,157.14,36456.48,123.48,28647.36,2021-05-24,Government Bonds,Defensive tilt amid volatility
-Sandor Clegane,iShares TIPS Bond ETF,TIP,Buy,347,123.7,42923.9,106.19,36847.93,2022-07-05,Government Bonds,Risk-off repositioning
-Sandor Clegane,iShares TIPS Bond ETF,TIP,Dividend Reinvestment,856,189.46,162177.76,128.48,109978.88,2020-10-31,Government Bonds,Tactical overweight
-Sandor Clegane,iShares 20+ Year Treasury ETF,TLT,Buy,432,252.99,109291.68,222.7,96206.4,2025-05-04,Government Bonds,Rebalancing into growth
-Sandor Clegane,iShares 20+ Year Treasury ETF,TLT,Buy,791,255.28,201926.48,222.59,176068.69,2024-11-14,Government Bonds,Rebalancing into growth
-Sandor Clegane,iShares 20+ Year Treasury ETF,TLT,Buy,1071,251.05,268874.55,164.14,175793.94,2020-09-19,Government Bonds,Sector rotation into financials
-Sandor Clegane,iShares 20+ Year Treasury ETF,TLT,Buy,719,187.47,134790.93,147.39,105973.41,2022-03-04,Government Bonds,Inflation hedge
-Hari Seldon,iShares iBoxx HY Corp Bond ETF,HYG,Buy,819,124.53,101990.07,116.28,95233.32,2024-08-05,High Yield Bonds,Long-term core holding
-Hari Seldon,iShares iBoxx HY Corp Bond ETF,HYG,Sell,1929,115.33,222471.57,97.02,187151.58,2024-04-15,High Yield Bonds,Dividend reinvestment program
-Hari Seldon,Vanguard Interm Corp Bond ETF,VCIT,Dividend Reinvestment,1529,132.17,202087.93,127.25,194565.25,2025-06-30,High Yield Bonds,Systematic rebalance
-Hari Seldon,Vanguard Interm Corp Bond ETF,VCIT,Dividend Reinvestment,1205,141.05,169965.25,105.61,127260.05,2020-09-20,High Yield Bonds,Opportunistic purchase on weakness
-Hari Seldon,Vanguard Interm Corp Bond ETF,VCIT,Buy,1878,140.19,263276.82,92.63,173959.14,2021-10-20,High Yield Bonds,Income allocation
-Hari Seldon,iShares iBoxx IG Corp Bond ETF,LQD,Buy,893,205.3,183332.9,141.43,126296.99,2022-09-04,High Yield Bonds,Income allocation
-Hari Seldon,iShares iBoxx IG Corp Bond ETF,LQD,Buy,401,247.94,99423.94,200.58,80432.58,2024-09-27,High Yield Bonds,Sector rotation into financials
-Hari Seldon,iShares iBoxx IG Corp Bond ETF,LQD,Buy,884,203.14,179575.76,161.2,142500.8,2023-07-24,High Yield Bonds,Inflation hedge
-Hari Seldon,iShares iBoxx IG Corp Bond ETF,LQD,Dividend Reinvestment,135,307.59,41524.65,197.8,26703.0,2023-08-02,High Yield Bonds,Rebalancing into growth
-Hari Seldon,iShares Fallen Angels USD Bond,FALN,Buy,4613,39.99,184473.87,40.82,188302.66,2026-01-25,High Yield Bonds,Defensive tilt amid volatility
-Hari Seldon,iShares Fallen Angels USD Bond,FALN,Buy,3322,44.22,146898.84,36.14,120057.08,2024-03-07,High Yield Bonds,Opportunistic purchase on weakness
-James Holden,iShares Floating Rate Bond ETF,FLOT,Buy,844,106.6,89970.4,61.87,52218.28,2021-05-01,Leveraged Loans,Sector rotation into financials
-James Holden,iShares Floating Rate Bond ETF,FLOT,Sell,1159,83.38,96637.42,61.42,71185.78,2023-11-19,Leveraged Loans,Duration extension play
-James Holden,iShares Floating Rate Bond ETF,FLOT,Buy,1596,73.62,117497.52,45.99,73400.04,2020-08-10,Leveraged Loans,Risk-off repositioning
-James Holden,Invesco Variable Rate Pref ETF,VRP,Buy,5343,34.51,184386.93,23.05,123156.15,2022-12-22,Leveraged Loans,Income allocation
-James Holden,Invesco Variable Rate Pref ETF,VRP,Buy,4392,50.06,219863.52,28.9,126928.8,2021-09-16,Leveraged Loans,Yield enhancement trade
-James Holden,Invesco Senior Loan ETF,BKLN,Buy,7622,41.93,319590.46,21.56,164330.32,2020-07-04,Leveraged Loans,Momentum-driven add
-James Holden,Invesco Senior Loan ETF,BKLN,Sell,5187,32.08,166398.96,23.71,122983.77,2022-05-24,Leveraged Loans,Tactical overweight
-James Holden,SPDR Blackstone Senior Loan,SRLN,Buy,2832,107.44,304270.08,63.3,179265.6,2021-11-10,Leveraged Loans,Long-term core holding
-James Holden,SPDR Blackstone Senior Loan,SRLN,Buy,2045,86.89,177690.05,69.55,142229.75,2023-10-06,Leveraged Loans,Duration extension play
-Alice Johnson,SPDR Gold Shares,GLD,Buy,991,221.24,219248.84,165.61,164119.51,2022-04-11,Commodities,Defensive tilt amid volatility
-Alice Johnson,SPDR Gold Shares,GLD,Buy,444,269.53,119671.32,166.25,73815.0,2020-04-20,Commodities,Duration extension play
-Alice Johnson,Invesco DB Agriculture Fund,DBA,Buy,5621,28.27,158905.67,21.14,118827.94,2025-10-01,Commodities,Rebalancing into growth
-Alice Johnson,Invesco DB Agriculture Fund,DBA,Sell,3094,17.68,54701.92,14.21,43965.74,2022-12-19,Commodities,Momentum-driven add
-Alice Johnson,Invesco DB Agriculture Fund,DBA,Dividend Reinvestment,2506,28.62,71721.72,18.05,45233.3,2023-07-22,Commodities,Sector rotation into financials
-Alice Johnson,iPath Bloomberg Commodity Idx,DJP,Dividend Reinvestment,9935,24.77,246089.95,18.82,186976.7,2020-07-14,Commodities,Sector rotation into financials
-Alice Johnson,iPath Bloomberg Commodity Idx,DJP,Dividend Reinvestment,8142,34.27,279026.34,22.86,186126.12,2024-02-14,Commodities,Risk-off repositioning
-Alice Johnson,iPath Bloomberg Commodity Idx,DJP,Sell,3909,28.78,112501.02,20.24,79118.16,2021-06-08,Commodities,Risk-off repositioning
-Alice Johnson,iShares Silver Trust,SLV,Sell,7165,23.0,164795.0,19.73,141365.45,2023-05-10,Commodities,Long-term core holding
-Alice Johnson,iShares Silver Trust,SLV,Buy,4125,28.78,118717.5,18.95,78168.75,2023-05-31,Commodities,Yield enhancement trade
-Alice Johnson,iShares Silver Trust,SLV,Sell,3174,25.1,79667.4,19.66,62400.84,2023-08-26,Commodities,Long-term core holding
-Bob Smith,SPDR S&P 500 ETF,SPY,Buy,79,430.75,34029.25,372.83,29453.57,2023-07-09,Private Equity,Liquidity management
-Bob Smith,SPDR S&P 500 ETF,SPY,Sell,385,615.68,237036.8,326.64,125756.4,2020-11-08,Private Equity,Liquidity management
-Bob Smith,SPDR S&P 500 ETF,SPY,Buy,64,528.33,33813.12,405.18,25931.52,2024-07-08,Private Equity,Yield enhancement trade
-Bob Smith,SPDR S&P 500 ETF,SPY,Buy,112,436.66,48905.92,302.97,33932.64,2022-06-29,Private Equity,Rebalancing into growth
-Bob Smith,Blackstone Inc.,BX,Dividend Reinvestment,3225,101.11,326079.75,61.35,197853.75,2021-07-14,Private Equity,Risk-off repositioning
-Bob Smith,Blackstone Inc.,BX,Dividend Reinvestment,1492,97.8,145917.6,75.95,113317.4,2024-12-31,Private Equity,Inflation hedge
-Bob Smith,Blackstone Inc.,BX,Buy,1140,92.0,104880.0,61.73,70372.2,2021-10-27,Private Equity,Duration extension play
-Bob Smith,Invesco Global Listed PE ETF,PSP,Buy,2032,19.55,39725.6,18.98,38567.36,2025-06-21,Private Equity,Defensive tilt amid volatility
-Bob Smith,Invesco Global Listed PE ETF,PSP,Buy,2704,23.02,62246.08,14.46,39099.84,2023-01-31,Private Equity,Defensive tilt amid volatility
-Bob Smith,Invesco Global Listed PE ETF,PSP,Sell,2045,23.9,48875.5,17.72,36237.4,2024-05-01,Private Equity,Risk-off repositioning
-Bob Smith,Invesco Global Listed PE ETF,PSP,Sell,8973,16.81,150836.13,19.03,170756.19,2026-02-14,Private Equity,Core equity position
-Bob Smith,iShares 20+ Year Treasury ETF,TLT,Sell,349,326.38,113906.62,221.29,77230.21,2024-04-21,Private Equity,Yield enhancement trade
-Bob Smith,iShares 20+ Year Treasury ETF,TLT,Buy,476,303.6,144513.6,274.28,130557.28,2026-01-27,Private Equity,Liquidity management
-Bob Smith,iShares 20+ Year Treasury ETF,TLT,Sell,955,202.71,193588.05,148.68,141989.4,2022-07-01,Private Equity,Long-term core holding
-Bob Smith,iShares 20+ Year Treasury ETF,TLT,Sell,438,374.98,164241.24,270.42,118443.96,2025-04-12,Private Equity,Core equity position
-Carol White,Alphabet Inc.,GOOGL,Buy,1606,99.97,160551.82,65.12,104582.72,2020-08-07,Long Short Equity Hedge Fund,Credit upgrade candidate
-Carol White,Alphabet Inc.,GOOGL,Buy,753,142.23,107099.19,91.88,69185.64,2023-02-27,Long Short Equity Hedge Fund,Liquidity management
-Carol White,Invesco QQQ ETF,QQQ,Buy,182,454.87,82786.34,352.61,64175.02,2026-02-01,Long Short Equity Hedge Fund,Added on dip
-Carol White,Invesco QQQ ETF,QQQ,Buy,96,438.37,42083.52,298.12,28619.52,2020-05-21,Long Short Equity Hedge Fund,Defensive tilt amid volatility
-Carol White,Microsoft Corp.,MSFT,Buy,249,299.16,74490.84,253.73,63178.77,2025-05-07,Long Short Equity Hedge Fund,Momentum-driven add
-Carol White,Microsoft Corp.,MSFT,Buy,788,341.6,269180.8,191.36,150791.68,2021-12-02,Long Short Equity Hedge Fund,Dividend reinvestment program
-Carol White,iShares Russell 2000 ETF,IWM,Sell,1025,312.78,320599.5,179.39,183874.75,2020-04-29,Long Short Equity Hedge Fund,Credit upgrade candidate
-Carol White,iShares Russell 2000 ETF,IWM,Buy,312,210.77,65760.24,137.43,42878.16,2022-04-06,Long Short Equity Hedge Fund,Rebalancing into growth
-David Brown,iShares iBoxx IG Corp Bond ETF,LQD,Sell,457,191.57,87547.49,215.55,98506.35,2025-09-17,Long Short High Yield Bond,Rebalancing into growth
-David Brown,iShares iBoxx IG Corp Bond ETF,LQD,Buy,770,277.23,213467.1,220.7,169939.0,2024-11-24,Long Short High Yield Bond,Yield enhancement trade
-David Brown,Vanguard Interm Corp Bond ETF,VCIT,Dividend Reinvestment,998,165.99,165658.02,166.76,166426.48,2025-11-21,Long Short High Yield Bond,Liquidity management
-David Brown,Vanguard Interm Corp Bond ETF,VCIT,Buy,527,173.32,91339.64,136.62,71998.74,2025-04-02,Long Short High Yield Bond,Income allocation
-David Brown,SPDR Bloomberg HY Bond ETF,JNK,Sell,975,156.03,152129.25,135.24,131859.0,2025-02-03,Long Short High Yield Bond,Risk-off repositioning
-David Brown,SPDR Bloomberg HY Bond ETF,JNK,Buy,1086,158.72,172369.92,101.6,110337.6,2020-05-11,Long Short High Yield Bond,Duration extension play
-David Brown,SPDR Bloomberg HY Bond ETF,JNK,Dividend Reinvestment,1439,166.67,239838.13,124.39,178997.21,2023-11-09,Long Short High Yield Bond,Core equity position
-David Brown,iShares iBoxx HY Corp Bond ETF,HYG,Sell,2164,106.25,229925.0,72.86,157669.04,2022-03-07,Long Short High Yield Bond,Liquidity management
-David Brown,iShares iBoxx HY Corp Bond ETF,HYG,Buy,484,128.25,62073.0,131.7,63742.8,2025-01-23,Long Short High Yield Bond,Dividend reinvestment program
-David Brown,iShares iBoxx HY Corp Bond ETF,HYG,Dividend Reinvestment,887,142.78,126645.86,112.17,99494.79,2024-03-05,Long Short High Yield Bond,Risk-off repositioning
-David Brown,iShares iBoxx HY Corp Bond ETF,HYG,Buy,584,136.29,79593.36,118.2,69028.8,2023-12-26,Long Short High Yield Bond,Sector rotation into financials
+lot_id,account_id,client_id,ticker,shares,cost_basis_per_share,current_price,cost_basis_total,current_value,unrealized_gl_dollars,unrealized_gl_pct,purchase_date,term,wash_sale_flag,replacement_ticker,asset_class,notes
+L001,A005,C002,NVDA,2500,5.60,115.00,14000,287500,273500,1953.57%,2021-03-15,Long-Term,false,,Equity,Q1 2021 vest; 1953% gain; harvesting would trigger massive tax
+L002,A005,C002,NVDA,2500,7.60,115.00,19000,287500,268500,1413.16%,2021-06-15,Long-Term,false,,Equity,Q2 2021 vest; 1413% gain; hold indefinitely
+L003,A005,C002,NVDA,2000,8.00,115.00,16000,230000,214000,1337.50%,2021-09-15,Long-Term,false,,Equity,Q3 2021 vest; high gain; candidate for charitable donation to foundation
+L004,A005,C002,NVDA,2000,11.80,115.00,23600,230000,206400,873.73%,2021-12-15,Long-Term,false,,Equity,Q4 2021 vest; still substantial gain
+L005,A005,C002,NVDA,1500,10.80,115.00,16200,172500,156300,964.81%,2022-03-15,Long-Term,false,,Equity,Q1 2022 vest; gain but smaller
+L006,A005,C002,NVDA,1500,6.20,115.00,9300,172500,163200,1754.84%,2022-06-15,Long-Term,false,,Equity,Q2 2022 vest at dip; large gain
+L007,A005,C002,NVDA,800,120.50,115.00,96400,92000,-4400,-4.56%,2025-09-15,Short-Term,false,SMCI,Equity,Q3 2025 vest; UNDERWATER -$4400; SHORT-TERM loss harvest candidate; replacement: SMCI
+L008,A005,C002,NVDA,800,118.20,115.00,94560,92000,-2560,-2.71%,2025-12-15,Short-Term,false,SMCI,Equity,Q4 2025 vest; UNDERWATER -$2560; SHORT-TERM loss harvest candidate
+L009,A005,C002,NVDA,600,130.40,115.00,78240,69000,-9240,-11.81%,2026-01-15,Short-Term,false,AMD,Equity,Q1 2026 vest; UNDERWATER -$9240; largest current TLH opportunity; replacement: AMD
+L010,A009,C002,NVDA,3000,0.00,115.00,0,345000,345000,N/A,2022-06-01,Long-Term,false,MSFT,Equity,Donated shares; zero cost basis; ESG board approval required; consider exchange fund or CRT
+L011,A006,C002,SPY,1200,380.00,565.00,456000,678000,222000,48.68%,2021-08-01,Long-Term,false,,Equity,Systematic NVDA sale proceeds reinvested
+L012,A006,C002,QQQ,800,310.00,480.00,248000,384000,136000,54.84%,2021-08-01,Long-Term,false,,Equity,Diversification; tech-heavy index
+L013,A006,C002,AGG,3000,108.00,97.50,324000,292500,-31500,-9.72%,2022-01-15,Long-Term,false,BND,Fixed Income,TLH eligible; bond loss from rate rises; replacement BND
+L014,A006,C002,VNQ,1500,98.00,88.40,147000,132600,-14400,-9.80%,2022-03-01,Long-Term,false,IYR,Real Estate,TLH eligible; REIT losses from rate environment; replacement IYR
+L015,A001,C001,SPY,800,399.00,565.00,319200,452000,132800,41.61%,2020-03-20,Long-Term,false,,Equity,Bought at COVID low
+L016,A001,C001,SPY,400,450.00,565.00,180000,226000,46000,25.56%,2021-06-15,Long-Term,false,,Equity,Additional purchase
+L017,A001,C001,QQQ,300,320.00,480.00,96000,144000,48000,50.00%,2020-06-01,Long-Term,false,,Equity,Tech allocation
+L018,A001,C001,TLT,2000,142.00,87.21,284000,174420,-109580,-38.58%,2021-01-15,Long-Term,false,IEF,Fixed Income,Significant TLH opportunity; bond losses from rate cycle
+L019,A001,C001,LQD,1500,120.00,108.69,180000,163035,-16965,-9.43%,2022-06-01,Long-Term,false,VCIT,Fixed Income,TLH eligible
+L020,A017,C005,SPY,3000,250.00,565.00,750000,1695000,945000,126.00%,2017-06-01,Long-Term,false,,Equity,Core long-term holding
+L021,A017,C005,QQQ,2000,155.00,480.00,310000,960000,650000,209.68%,2018-03-01,Long-Term,false,,Equity,Tech growth
+L022,A017,C005,MSFT,1500,85.00,415.00,127500,622500,495000,388.24%,2017-04-03,Long-Term,false,,Equity,Long-term holding
+L023,A017,C005,NVDA,500,45.00,115.00,22500,57500,35000,155.56%,2019-01-15,Long-Term,false,,Equity,Early AI position
+L024,A010,C003,VTI,1200,185.00,258.00,222000,309600,87600,39.46%,2023-01-10,Long-Term,false,,Equity,Core total market
+L025,A010,C003,VXUS,800,52.00,58.40,41600,46720,5120,12.31%,2023-01-10,Long-Term,false,,Equity,International diversification
+L026,A010,C003,BND,1500,72.00,74.20,108000,111300,3300,3.06%,2023-01-10,Long-Term,false,,Fixed Income,Bond core

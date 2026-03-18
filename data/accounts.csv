@@ -1,24 +1,25 @@
-account_id,client_id,account_name,account_type,custodian,strategy,aum,inception_date,is_taxable
-A001,C001,Miller Taxable Equity,Taxable,Schwab,Equity,1800000,2019-03-15,true
-A002,C001,Miller Traditional IRA,Traditional IRA,Schwab,Long Short High Yield Bond,900000,2019-03-15,false
-A003,C001,Miller Roth IRA,Roth IRA,Schwab,Government Bonds,420000,2021-06-01,false
-A004,C001,Miller Family Trust,Trust,Fidelity,Equity,1080000,2019-03-15,false
-A005,C002,Huang Taxable,Taxable,Fidelity,Equity,3500000,2021-07-01,true
-A006,C002,Huang Trad IRA,Traditional IRA,Fidelity,Long Short Equity Hedge Fund,2100000,2021-07-01,false
-A007,C002,Huang Roth IRA,Roth IRA,Fidelity,High Yield Bonds,850000,2022-03-15,false
-A008,C002,Huang Foundation,Trust,Schwab,Government Bonds,2300000,2021-07-01,false
-A009,C003,Brown Taxable,Taxable,Robinhood,Equity,480000,2023-01-10,true
-A010,C003,Brown Roth IRA,Roth IRA,Robinhood,Equity,220000,2023-01-10,false
-A011,C003,Brown 529,529,Fidelity,Government Bonds,80000,2023-01-10,false
-A012,C004,Rodriguez Taxable,Taxable,Schwab,Equity,840000,2020-09-22,true
-A013,C004,Rodriguez Trad IRA,Traditional IRA,Schwab,Government Bonds,630000,2020-09-22,false
-A014,C004,Rodriguez Joint,Joint Taxable,Schwab,High Yield Bonds,420000,2020-09-22,true
-A015,C004,Rodriguez Annuity,Annuity,MetLife,Leveraged Loans,210000,2020-09-22,false
-A016,C005,Whitfield Taxable,Taxable,Goldman,Equity,4560000,2017-04-03,true
-A017,C005,Whitfield Trad IRA,Traditional IRA,Goldman,Long Short High Yield Bond,3040000,2017-04-03,false
-A018,C005,Whitfield Family LP,Trust,Goldman,Private Equity,4560000,2017-04-03,false
-A019,C005,Whitfield Foundation,Foundation,Schwab,Government Bonds,1520000,2017-04-03,false
-A020,C005,Whitfield Commodities,Taxable,Goldman,Commodities,1520000,2017-04-03,true
-A021,C006,Johnson Taxable,Taxable,Vanguard,Equity,500000,2022-06-15,true
-A022,C006,Johnson 401k Rollover,Traditional IRA,Vanguard,High Yield Bonds,500000,2022-06-15,false
-A023,C006,Johnson 529 Plan,529,Fidelity,Government Bonds,250000,2022-06-15,false
+account_id,client_id,account_name,account_type,custodian,strategy,aum,inception_date,is_taxable,notes
+A001,C001,Miller Taxable Equity,Taxable,Schwab,Equity,1800000,2019-03-15,true,Core equity; TLH monitored
+A002,C001,Miller Traditional IRA,Traditional IRA,Schwab,Long Short High Yield Bond,900000,2019-03-15,false,Bond sleeve in tax-deferred — optimal asset location
+A003,C001,Miller Roth IRA,Roth IRA,Schwab,Equity,420000,2021-06-01,false,Growth equity; tax-free
+A004,C001,Miller Family Trust,Trust,Fidelity,Equity,1080000,2019-03-15,false,Irrevocable trust; estate planning; generation-skipping
+A005,C002,Huang Taxable — NVDA Concentrated,Taxable,Fidelity,Equity,4200000,2021-07-01,true,Primary taxable; holds concentrated NVDA RSU lots; TLH active on recent underwater lots
+A006,C002,Huang Diversified Taxable,Taxable,Fidelity,Equity,1850000,2021-07-01,true,Diversification account; systematic selling proceeds from NVDA
+A007,C002,Huang Traditional IRA,Traditional IRA,Fidelity,Long Short High Yield Bond,1200000,2021-07-01,false,Pre-tax retirement; bond-heavy for tax efficiency
+A008,C002,Huang Roth IRA,Roth IRA,Fidelity,Equity,500000,2022-03-15,false,Tax-free growth; aggressive equity; longest time horizon
+A009,C002,Huang Family Foundation,Foundation,Schwab,Equity,1000000,2021-09-01,false,501c3 DAF; ESG screened; board approval required for trades; NVDA donated shares with zero cost basis
+A010,C003,Brown Taxable,Taxable,Robinhood,Equity,480000,2023-01-10,true,Primary taxable
+A011,C003,Brown Roth IRA,Roth IRA,Robinhood,Equity,220000,2023-01-10,false,Max contribution annual
+A012,C003,Brown 529 — Child,529,Fidelity,Government Bonds,80000,2023-06-15,false,College savings; conservative allocation
+A013,C004,Rodriguez Taxable,Taxable,Schwab,Equity,840000,2020-09-22,true,Post-business-sale proceeds
+A014,C004,Rodriguez Traditional IRA,Traditional IRA,Schwab,Government Bonds,630000,2020-09-22,false,Pre-tax retirement
+A015,C004,Rodriguez Joint Taxable,Joint Taxable,Schwab,High Yield Bonds,420000,2020-09-22,true,Spouse joint account
+A016,C004,Rodriguez Annuity,Annuity,MetLife,Leveraged Loans,210000,2020-09-22,false,Variable annuity; legacy from business sale
+A017,C005,Whitfield Taxable Core,Taxable,Goldman,Equity,4560000,2017-04-03,true,Core equity; large-cap bias
+A018,C005,Whitfield Traditional IRA,Traditional IRA,Goldman,Long Short High Yield Bond,3040000,2017-04-03,false,Bond-heavy; RMD planning critical at age 71
+A019,C005,Whitfield Family LP,Partnership,Goldman,Private Equity,4560000,2017-04-03,false,Family limited partnership; estate planning vehicle
+A020,C005,Whitfield Foundation,Foundation,Schwab,Government Bonds,1520000,2017-04-03,false,Charitable giving; conservative; annual grant schedule
+A021,C005,Whitfield Commodities,Taxable,Goldman,Commodities,1520000,2017-04-03,true,Inflation hedge; real assets allocation
+A022,C006,Johnson Taxable,Taxable,Vanguard,Equity,500000,2022-06-15,true,Post-settlement rebuilding
+A023,C006,Johnson Roth IRA,Roth IRA,Vanguard,Equity,375000,2022-06-15,false,Tax-free growth priority
+A024,C006,Johnson 401k Rollover,Traditional IRA,Vanguard,High Yield Bonds,375000,2022-06-15,false,Rollover from former employer plan

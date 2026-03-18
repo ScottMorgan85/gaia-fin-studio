@@ -1567,7 +1567,7 @@ similar macro-aware asset managers.
 #─────────────────────────────────────────────────────────────────────────────
 # Client Page
 #─────────────────────────────────────────────────────────────────────────────
-def display_client_page(selected_client: str):
+def display_client_legacy(selected_client: str):
     import streamlit as st
     try:
         import pandas as pd
@@ -1651,6 +1651,379 @@ def display_client_page(selected_client: str):
             st.write(intr)
     except Exception as e:
         st.caption(f"(interactions unavailable: {e})")
+# ─────────────────────────────────────────────────────────────────────────────
+# Client 360 — Bloomberg-terminal-style hero view
+# ─────────────────────────────────────────────────────────────────────────────
+def display_client_page(selected_client: str):
+    """Alias so app.py `pages.display_client_page` still resolves."""
+    display_client_360(selected_client)
+
+
+def display_client_360(selected_client: str):
+    import streamlit as st
+    import pandas as pd
+
+    # ── helpers ────────────────────────────────────────────────────────────────
+    def _fmt_usd(v, decimals=0):
+        try:
+            v = float(v)
+            return f"${v:,.{decimals}f}"
+        except Exception:
+            return "—"
+
+    def _fmt_pct(v, decimals=1):
+        try:
+            return f"{float(v):.{decimals}f}%"
+        except Exception:
+            return "—"
+
+    def _safe(df, col, default="—"):
+        try:
+            return df[col].iloc[0]
+        except Exception:
+            return default
+
+    # ── load household summary ─────────────────────────────────────────────────
+    hh = utils.get_household_summary(selected_client)
+    client_id = hh.get("client_id", "")
+
+    # load raw client row for extra fields
+    try:
+        _cd = pd.read_csv("data/client_data.csv")
+        _crow = _cd[_cd["client_name"] == selected_client]
+        employer     = _safe(_crow, "employer", "—")
+        tax_bracket  = _safe(_crow, "tax_bracket", "—")
+        state        = _safe(_crow, "state", "—")
+        time_horizon = _safe(_crow, "time_horizon_yrs", "—")
+        age          = _safe(_crow, "age", "—")
+    except Exception:
+        employer = tax_bracket = state = time_horizon = age = "—"
+
+    # ── SECTION 1: Household Header ────────────────────────────────────────────
+    risk = hh.get("risk_profile", "—")
+    risk_color = {"Conservative": "#3b82f6", "Moderate": "#10b981", "Aggressive": "#ef4444"}.get(str(risk), "#6b7280")
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:4px;'>"
+        f"<span style='font-size:22px;font-weight:700;'>{selected_client}</span>"
+        f"<span style='background:{risk_color};color:white;border-radius:4px;"
+        f"padding:2px 10px;font-size:12px;font-weight:600;'>{risk}</span>"
+        f"</div>"
+        f"<div style='color:#6b7280;font-size:13px;margin-bottom:12px;'>"
+        f"{'Employer: ' + str(employer) + ' · ' if employer and employer != '—' else ''}"
+        f"Advisor: {hh.get('advisor','—')} · "
+        f"Next Review: {hh.get('next_review','—')} · "
+        f"State: {state} · Age: {age} · Horizon: {time_horizon} yrs · Tax Bracket: {tax_bracket}%"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    with m1: st.metric("Total AUM",      _fmt_usd(hh.get("total_aum")))
+    with m2: st.metric("Accounts",       str(hh.get("n_accounts", "—")))
+    with m3: st.metric("Taxable AUM",    _fmt_usd(hh.get("taxable_aum")))
+    with m4: st.metric("Tax-Deferred",   _fmt_usd(hh.get("tax_deferred_aum")))
+    gl = hh.get("total_gain_loss", 0)
+    gl_str = ("+" if gl >= 0 else "") + _fmt_usd(gl)
+    with m5: st.metric("Unrealized G/L", gl_str)
+    with m6: st.metric("TLH Opps",       str(hh.get("tlh_opportunities", 0)))
+
+    st.markdown("---")
+
+    # ── SECTION 2: Alerts Banner ───────────────────────────────────────────────
+    try:
+        alerts_df = utils.load_client_alerts(selected_client)
+        active_alerts = alerts_df[alerts_df["status"] == "Active"] if not alerts_df.empty else pd.DataFrame()
+    except Exception:
+        active_alerts = pd.DataFrame()
+
+    if not active_alerts.empty:
+        _pc = {"Critical": "#dc2626", "High": "#ea580c", "Medium": "#ca8a04"}
+        _bc = {"Critical": "#fef2f2", "High": "#fff7ed", "Medium": "#fefce8"}
+        for _, alert in active_alerts.iterrows():
+            p      = str(alert.get("priority", "Medium"))
+            bg     = _bc.get(p, "#f3f4f6")
+            border = _pc.get(p, "#6b7280")
+            tc     = _pc.get(p, "#374151")
+            title  = alert.get("title", "Alert")
+            desc   = alert.get("description", "")
+            st.markdown(
+                f"<div style='background:{bg};border-left:4px solid "
+                f"{border};padding:8px 14px;margin-bottom:6px;"
+                f"border-radius:4px;font-size:13px;'>"
+                f"<strong style='color:{tc};'>[{p}] {title}</strong> — "
+                f"{desc}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        st.markdown("")
+
+    # ── SECTION 3: Accounts Table ──────────────────────────────────────────────
+    st.subheader("Accounts")
+    try:
+        accts = pd.read_csv("data/accounts.csv")
+        accts = accts[accts["client_id"] == client_id].copy()
+        if not accts.empty:
+            accts["AUM"] = accts["aum"].apply(lambda v: _fmt_usd(v))
+            accts["Taxable"] = accts["is_taxable"].astype(str).str.lower().map({"true": "✓", "false": "—"})
+            display_cols = {
+                "account_name": "Account",
+                "account_type": "Type",
+                "custodian":    "Custodian",
+                "strategy":     "Strategy",
+                "AUM":          "AUM",
+                "Taxable":      "Taxable",
+            }
+            if "notes" in accts.columns:
+                display_cols["notes"] = "Notes"
+            show = accts[[c for c in display_cols if c in accts.columns]].rename(columns=display_cols)
+            st.dataframe(show, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No accounts on record.")
+    except Exception as _e:
+        st.caption(f"Accounts unavailable: {_e}")
+
+    st.markdown("---")
+
+    # ── SECTION 4: Two-column split ────────────────────────────────────────────
+    col_left, col_right = st.columns([1, 1], gap="large")
+
+    # LEFT — Concentration / Tax Lots
+    with col_left:
+        st.subheader("Tax Lots & Concentration")
+        try:
+            lots = utils.load_tax_lots(client_id=client_id)
+        except Exception:
+            lots = pd.DataFrame()
+
+        if lots.empty:
+            st.caption("No tax lot data.")
+        else:
+            # Concentration: show tickers with highest current_value
+            conc = (
+                lots.groupby("ticker")["current_value"]
+                .sum()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+            total_val = conc["current_value"].sum() or 1
+            conc["pct"] = conc["current_value"] / total_val * 100
+
+            # Highlight NVDA if present
+            nvda_pct = conc.loc[conc["ticker"] == "NVDA", "pct"].sum()
+            if nvda_pct > 0:
+                st.markdown(
+                    f"<div style='font-size:13px;margin-bottom:4px;'>"
+                    f"NVDA concentration: <strong style='color:#dc2626;'>{nvda_pct:.1f}%</strong> of taxable account"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                # Mini bar
+                bar_w = min(int(nvda_pct), 100)
+                st.markdown(
+                    f"<div style='background:#fee2e2;border-radius:4px;height:10px;width:100%;'>"
+                    f"<div style='background:#dc2626;border-radius:4px;height:10px;width:{bar_w}%;'></div>"
+                    f"</div><br>",
+                    unsafe_allow_html=True,
+                )
+
+            # Lot table — key columns only
+            lot_cols = ["ticker", "shares", "cost_basis_total", "current_value",
+                        "unrealized_gl_dollars", "unrealized_gl_pct", "term", "wash_sale_flag"]
+            lot_cols = [c for c in lot_cols if c in lots.columns]
+            lot_show = lots[lot_cols].copy()
+            rename_map = {
+                "ticker": "Ticker", "shares": "Shares",
+                "cost_basis_total": "Cost Basis", "current_value": "Mkt Value",
+                "unrealized_gl_dollars": "Unreal G/L $", "unrealized_gl_pct": "Unreal G/L %",
+                "term": "Term", "wash_sale_flag": "Wash Sale",
+            }
+            lot_show = lot_show.rename(columns={k: v for k, v in rename_map.items() if k in lot_show.columns})
+            st.dataframe(lot_show, use_container_width=True, hide_index=True, height=250)
+
+        # RSU Schedule (if any)
+        try:
+            rsu = utils.load_rsu_schedule(client_id=client_id)
+        except Exception:
+            rsu = pd.DataFrame()
+
+        if not rsu.empty:
+            st.markdown("**RSU Vesting Schedule**")
+            rsu_cols = ["vest_date", "shares_vesting", "estimated_value",
+                        "tax_withheld_pct", "net_shares_after_tax"]
+            rsu_show = rsu[[c for c in rsu_cols if c in rsu.columns]].copy()
+            rename_rsu = {
+                "vest_date": "Vest Date", "shares_vesting": "Shares",
+                "estimated_value": "Est. Value", "tax_withheld_pct": "Tax Withheld %",
+                "net_shares_after_tax": "Net Shares",
+            }
+            rsu_show = rsu_show.rename(columns={k: v for k, v in rename_rsu.items() if k in rsu_show.columns})
+            st.dataframe(rsu_show, use_container_width=True, hide_index=True)
+
+    # RIGHT — Practice Intelligence
+    with col_right:
+        st.subheader("Practice Intelligence")
+        try:
+            outside = utils.load_outside_assets(client_id=client_id)
+        except Exception:
+            outside = pd.DataFrame()
+
+        if outside.empty:
+            st.caption("No held-away assets on record.")
+        else:
+            total_away = outside["estimated_aum"].sum() if "estimated_aum" in outside.columns else 0
+            st.markdown(
+                f"<div style='font-size:13px;margin-bottom:8px;'>"
+                f"Assets held away: <strong>{_fmt_usd(total_away)}</strong></div>",
+                unsafe_allow_html=True,
+            )
+            oa_cols = ["institution", "estimated_aum", "opportunity_type", "estimated_revenue", "notes"]
+            oa_cols = [c for c in oa_cols if c in outside.columns]
+            oa_show = outside[oa_cols].copy()
+            rename_oa = {
+                "institution": "Institution", "estimated_aum": "AUM Away",
+                "opportunity_type": "Opportunity", "estimated_revenue": "Est. Revenue", "notes": "Notes",
+            }
+            oa_show = oa_show.rename(columns={k: v for k, v in rename_oa.items() if k in oa_show.columns})
+            st.dataframe(oa_show, use_container_width=True, hide_index=True)
+
+        # AI talking points
+        if st.button("Generate AI Talking Points", key="c360_talking_pts"):
+            try:
+                outside_summary = ""
+                if not outside.empty and "institution" in outside.columns:
+                    rows = []
+                    for _, r in outside.iterrows():
+                        rows.append(
+                            f"{r.get('institution','?')}: {_fmt_usd(r.get('estimated_aum',0))} "
+                            f"({r.get('opportunity_type','?')})"
+                        )
+                    outside_summary = "; ".join(rows)
+
+                alerts_summary = ""
+                if not active_alerts.empty:
+                    alerts_summary = "; ".join(
+                        str(a.get("title", "")) for _, a in active_alerts.iterrows()
+                    )
+
+                prompt = (
+                    f"You are a senior wealth advisor preparing for a meeting with {selected_client}. "
+                    f"Client profile: {risk} risk, {_fmt_usd(hh.get('total_aum'))} AUM, advisor {hh.get('advisor','—')}. "
+                    f"Active alerts: {alerts_summary or 'none'}. "
+                    f"Assets held away: {outside_summary or 'none'}. "
+                    f"Generate 4 concise, insightful talking points for the advisor to raise. "
+                    f"Each point should be one sentence. Format as a numbered list."
+                )
+                resp = utils.groq_chat(
+                    [{"role": "user", "content": prompt}],
+                    feature="client_360_talking_points",
+                    model="llama-3.3-70b-versatile",
+                    max_tokens=400,
+                    temperature=0.4,
+                )
+                st.markdown(resp.choices[0].message.content)
+            except Exception as _e:
+                st.warning(f"Could not generate talking points: {_e}")
+
+    st.markdown("---")
+
+    # ── SECTION 5: Performance vs Benchmark ───────────────────────────────────
+    st.subheader("Performance vs Benchmark")
+    try:
+        tr = utils.load_trailing_returns(selected_client)
+        if tr is not None and not tr.empty:
+            def _style_active(v):
+                try:
+                    f = float(v)
+                    color = "#15803d" if f >= 0 else "#dc2626"
+                    return f"color:{color};font-weight:600;"
+                except Exception:
+                    return ""
+
+            tr_display = tr.copy()
+            for col in ["Return", "Benchmark", "Active"]:
+                if col in tr_display.columns:
+                    tr_display[col] = tr_display[col].apply(lambda v: _fmt_pct(v))
+
+            styled = tr_display.style.applymap(
+                _style_active, subset=["Active"] if "Active" in tr_display.columns else []
+            )
+            st.dataframe(styled, use_container_width=True)
+        else:
+            st.caption("Trailing returns unavailable.")
+    except Exception as _e:
+        st.caption(f"Performance data unavailable: {_e}")
+
+    # Risk metrics row
+    try:
+        from data.client_mapping import client_strategy_risk_mapping as _csrm
+        _strat_info = _csrm.get(selected_client, {})
+        _strat_name = _strat_info.get("strategy_name") if isinstance(_strat_info, dict) else str(_strat_info)
+        _enriched = utils.enrich_client_data()
+        if _enriched is not None and not _enriched.empty and _strat_name in _enriched.index:
+            _rm = _enriched.loc[_strat_name]
+            _r1, _r2, _r3, _r4, _r5 = st.columns(5)
+            def _num(v, d=2):
+                try: return f"{float(v):.{d}f}"
+                except Exception: return "—"
+            with _r1: st.metric("Sharpe",       _num(_rm.get("sharpe")))
+            with _r2: st.metric("Sortino",      _num(_rm.get("sortino")))
+            with _r3: st.metric("Calmar",       _num(_rm.get("calmar")))
+            with _r4: st.metric("Max Drawdown", _fmt_pct(_rm.get("max_drawdown")))
+            with _r5: st.metric("5yr Return",   _fmt_pct(_rm.get("return_5yr")))
+    except Exception:
+        pass
+
+    st.markdown("---")
+
+    # ── SECTION 6: Recent Interactions ────────────────────────────────────────
+    st.subheader("Recent Interactions")
+    try:
+        intr_df = pd.read_csv("data/client_interactions.csv")
+        client_intr = intr_df[intr_df["client_name"] == selected_client].copy()
+        if not client_intr.empty:
+            client_intr = client_intr.sort_values("date", ascending=False).head(5)
+            show_cols = ["date", "interaction_type", "notes"]
+            show_cols = [c for c in show_cols if c in client_intr.columns]
+            rename_intr = {"date": "Date", "interaction_type": "Type", "notes": "Notes"}
+            st.dataframe(
+                client_intr[show_cols].rename(columns=rename_intr),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("No interactions recorded.")
+    except Exception:
+        st.caption("No interactions recorded.")
+
+    with st.expander("Log New Interaction", expanded=False):
+        with st.form(key=f"c360_log_intr_{selected_client.replace(' ','_')}"):
+            intr_date = st.date_input("Date", value=pd.Timestamp.today().date())
+            intr_type = st.selectbox(
+                "Type",
+                ["Phone Call", "Meeting", "Email", "Review", "Note", "Other"],
+            )
+            intr_notes = st.text_area("Notes", height=80)
+            submitted = st.form_submit_button("Save")
+            if submitted:
+                try:
+                    new_row = pd.DataFrame([{
+                        "client_name":      selected_client,
+                        "date":             str(intr_date),
+                        "interaction_type": intr_type,
+                        "notes":            intr_notes,
+                    }])
+                    try:
+                        existing = pd.read_csv("data/client_interactions.csv")
+                        updated = pd.concat([existing, new_row], ignore_index=True)
+                    except Exception:
+                        updated = new_row
+                    updated.to_csv("data/client_interactions.csv", index=False)
+                    st.success("Interaction logged.")
+                    st.rerun()
+                except Exception as _e:
+                    st.error(f"Failed to save: {_e}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Scenario Allocator (desktop-friendly 3-column editors)
 # ─────────────────────────────────────────────────────────────────────────────

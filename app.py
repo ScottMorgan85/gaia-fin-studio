@@ -375,7 +375,9 @@ elif route == "quantum":
 
 elif route == "client":
     st.title("Client 360")
-    if hasattr(pages, "display_client_page"):
+    if hasattr(pages, "display_client_360"):
+        pages.display_client_360(selected_client)
+    elif hasattr(pages, "display_client_page"):
         pages.display_client_page(selected_client)
     else:
         st.info("Client page is not available in this build.")

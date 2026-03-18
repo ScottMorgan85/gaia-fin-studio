@@ -1,110 +1,175 @@
+import pandas as pd
+import os
 
-client_strategy_risk_mapping = {
-    "Warren Miller": {
+# Intentional strategy assignments for known clients.
+# These define the PRIMARY strategy used for commentary, trailing returns,
+# portfolio charts, and benchmark comparisons.
+# New clients added to client_data.csv but not listed here get "Equity" as default.
+_STRATEGY_OVERRIDES = {
+    "Warren Miller":   {
         "strategy_name": "Government Bonds",
-        "risk": "Low",
-        "client_id": 1,
-        "strategy_id": "govt",
-        "benchmark_id": "govt_bench",
-        "benchmark_name": "Bloomberg Barclays US Aggregate Bond Index"
+        "strategy_id":   "govt",
+        "benchmark_name": "Bloomberg Barclays US Aggregate Bond Index",
     },
-    "Patricia Huang": {
+    "Patricia Huang":  {
         "strategy_name": "Long Short Equity Hedge Fund",
-        "risk": "Medium",
-        "client_id": 2,
-        "strategy_id": "lse",
-        "benchmark_id": "lse_bench",
-        "benchmark_name": "HFRI Equity Hedge Index"
+        "strategy_id":   "lse",
+        "benchmark_name": "HFRI Equity Hedge Index",
     },
-    "David Brown": {
+    "David Brown":     {
         "strategy_name": "Equity",
-        "risk": "High",
-        "client_id": 3,
-        "strategy_id": "eq",
-        "benchmark_id": "eq_bench",
-        "benchmark_name": "S&P 500 Index"
+        "strategy_id":   "eq",
+        "benchmark_name": "S&P 500 Index",
     },
     "Elena Rodriguez": {
         "strategy_name": "High Yield Bonds",
-        "risk": "Medium",
-        "client_id": 4,
-        "strategy_id": "hyb",
-        "benchmark_id": "hyb_bench",
-        "benchmark_name": "ICE BofAML US High Yield Index"
+        "strategy_id":   "hyb",
+        "benchmark_name": "ICE BofAML US High Yield Index",
     },
     "James Whitfield": {
         "strategy_name": "Private Equity",
-        "risk": "High",
-        "client_id": 5,
-        "strategy_id": "pe",
-        "benchmark_id": "pe_bench",
-        "benchmark_name": "Cambridge Associates Private Equity Index"
+        "strategy_id":   "pe",
+        "benchmark_name": "Cambridge Associates Private Equity Index",
     },
-    "Aisha Johnson": {
+    "Aisha Johnson":   {
         "strategy_name": "Leveraged Loans",
-        "risk": "Medium",
-        "client_id": 6,
-        "strategy_id": "ll",
-        "benchmark_id": "ll_bench",
-        "benchmark_name": "S&P/LSTA Leveraged Loan Index"
+        "strategy_id":   "ll",
+        "benchmark_name": "S&P/LSTA Leveraged Loan Index",
     },
 }
 
-def get_client_names():
+_DEFAULT_STRATEGY = {
+    "strategy_name": "Equity",
+    "strategy_id":   "eq",
+    "benchmark_name": "S&P 500 Index",
+}
+
+
+def _load() -> dict:
+    """Build client_strategy_risk_mapping dynamically from client_data.csv.
+    Falls back to strategy override dict if CSV is unavailable.
+    """
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    csv_path = os.path.join(base, "data", "client_data.csv")
+
+    try:
+        clients = pd.read_csv(csv_path)
+    except Exception:
+        # Graceful fallback: build from overrides alone
+        return {
+            name: {
+                **overrides,
+                "risk": "Moderate",
+                "client_id": f"C{(i + 1):03d}",
+            }
+            for i, (name, overrides) in enumerate(_STRATEGY_OVERRIDES.items())
+        }
+
+    mapping = {}
+    for _, row in clients.iterrows():
+        name = str(row["client_name"]).strip()
+        overrides = _STRATEGY_OVERRIDES.get(name, _DEFAULT_STRATEGY)
+        mapping[name] = {
+            "strategy_name":  overrides["strategy_name"],
+            "strategy_id":    overrides["strategy_id"],
+            "benchmark_id":   overrides["strategy_id"] + "_bench",
+            "benchmark_name": overrides["benchmark_name"],
+            "risk":           row.get("risk_profile", "Moderate"),
+            "client_id":      row.get("client_id", "—"),
+        }
+    return mapping
+
+
+client_strategy_risk_mapping = _load()
+
+
+def get_client_names() -> list:
     return list(client_strategy_risk_mapping.keys())
 
-def get_client_info(client_name=None):
+
+def get_client_info(client_name: str = None):
     if client_name:
         return client_strategy_risk_mapping.get(client_name, None)
     return client_strategy_risk_mapping
 
+
 strategies = {
     "Equity": {
-        "description": "Our Equity strategy focuses on a diversified mix of large-cap stocks across various sectors, aiming to outperform the S&P 500. We employ a bottom-up stock-picking approach, leveraging in-depth fundamental analysis and rigorous research. Over a complete market cycle, this strategy aims to deliver superior returns by identifying undervalued opportunities and mitigating risks through diversification. In different market conditions, portfolio concentration may shift towards defensive sectors in downturns and growth sectors in bullish phases, with selective high-conviction bets.",
-        "benchmark": "S&P 500"
+        "description": (
+            "Our Equity strategy focuses on a diversified mix of large-cap stocks across "
+            "various sectors, aiming to outperform the S&P 500. We employ a bottom-up "
+            "stock-picking approach, leveraging in-depth fundamental analysis and rigorous "
+            "research."
+        ),
+        "benchmark": "S&P 500",
     },
     "Government Bonds": {
-        "description": "Our Government Bonds strategy invests in high-quality sovereign debt, primarily within the U.S., targeting outperformance relative to the Bloomberg Barclays US Aggregate Bond Index. We use top-down macroeconomic analysis to determine duration, yield curve positioning, and sector allocation. This strategy aims to deliver steady income and capital preservation, with lower volatility compared to equities, particularly during economic uncertainty. Portfolio duration and credit quality are actively managed to respond to interest rate changes and economic conditions.",
-        "benchmark": "Bloomberg Barclays US Aggregate Bond Index"
+        "description": (
+            "Our Government Bonds strategy invests in high-quality sovereign debt, primarily "
+            "within the U.S., targeting outperformance relative to the Bloomberg Barclays US "
+            "Aggregate Bond Index."
+        ),
+        "benchmark": "Bloomberg Barclays US Aggregate Bond Index",
     },
     "High Yield Bonds": {
-        "description": "Our High Yield Bonds strategy targets below-investment-grade corporate bonds, seeking to outperform the ICE BofAML US High Yield Index. Through thorough credit analysis, we identify issuers with improving credit profiles and robust cash flows. Over a complete market cycle, this strategy aims to provide higher returns than investment-grade bonds, albeit with increased volatility. Portfolio concentration shifts based on economic outlook and market liquidity, balancing high-conviction ideas with risk management.",
-        "benchmark": "ICE BofAML US High Yield Index"
+        "description": (
+            "Our High Yield Bonds strategy targets below-investment-grade corporate bonds, "
+            "seeking to outperform the ICE BofAML US High Yield Index."
+        ),
+        "benchmark": "ICE BofAML US High Yield Index",
     },
     "Leveraged Loans": {
-        "description": "Our Leveraged Loans strategy invests in senior secured loans of non-investment-grade companies, aiming to outperform the S&P/LSTA Leveraged Loan Index. Rigorous credit analysis and covenant assessment are central to our approach, ensuring favorable risk-adjusted returns. This strategy delivers high current income with lower interest rate sensitivity due to floating rates, performing well across market cycles. Portfolio exposure adjusts based on credit market conditions, prioritizing stability during downturns.",
-        "benchmark": "S&P/LSTA Leveraged Loan Index"
+        "description": (
+            "Our Leveraged Loans strategy invests in senior secured loans of non-investment-grade "
+            "companies, aiming to outperform the S&P/LSTA Leveraged Loan Index."
+        ),
+        "benchmark": "S&P/LSTA Leveraged Loan Index",
     },
     "Commodities": {
-        "description": "Our Commodities strategy provides exposure to a diversified basket of commodities, seeking to outperform the Bloomberg Commodity Index. Utilizing both fundamental and technical analysis, we identify trends and cycles in commodity markets. This strategy aims to offer strong returns through diversification and inflation protection, performing well during inflationary periods and volatile equity markets. Portfolio concentration shifts based on commodity cycles and macroeconomic indicators, with strategic bets on favorable commodities.",
-        "benchmark": "Bloomberg Commodity Index"
+        "description": (
+            "Our Commodities strategy provides exposure to a diversified basket of commodities, "
+            "seeking to outperform the Bloomberg Commodity Index."
+        ),
+        "benchmark": "Bloomberg Commodity Index",
     },
     "Long Short Equity Hedge Fund": {
-        "description": "Our Long Short Equity Hedge Fund strategy takes long positions in undervalued equities and short positions in overvalued ones, aiming to outperform the HFRI Equity Hedge Index. We combine fundamental and quantitative analysis to identify mispricings, with rigorous risk management and dynamic rebalancing. This strategy delivers consistent returns with lower volatility, generating alpha in both rising and falling markets. Portfolio net exposure varies with market conditions, focusing on high-conviction ideas and diversification.",
-        "benchmark": "HFRI Equity Hedge Index"
+        "description": (
+            "Our Long Short Equity Hedge Fund strategy takes long positions in undervalued equities "
+            "and short positions in overvalued ones, aiming to outperform the HFRI Equity Hedge Index."
+        ),
+        "benchmark": "HFRI Equity Hedge Index",
     },
     "Long Short High Yield Bond": {
-        "description": "Our Long Short High Yield Bond strategy involves long positions in attractive high-yield bonds and short positions in those with deteriorating fundamentals, targeting outperformance relative to the HFRI Fixed Income - Credit Index. Combining in-depth credit analysis with macroeconomic insights, we actively trade and hedge to manage risk. This strategy aims to provide higher returns with lower volatility than traditional high-yield portfolios, generating alpha through strategic positions. Portfolio concentration shifts based on credit cycles, balancing high-conviction bonds and risk management.",
-        "benchmark": "HFRI Fixed Income - Credit Index"
+        "description": (
+            "Our Long Short High Yield Bond strategy involves long positions in attractive high-yield "
+            "bonds and short positions in those with deteriorating fundamentals, targeting "
+            "outperformance relative to the HFRI Fixed Income - Credit Index."
+        ),
+        "benchmark": "HFRI Fixed Income - Credit Index",
     },
     "Private Equity": {
-        "description": "Our Private Equity strategy invests in a diversified portfolio of private companies, targeting superior long-term returns compared to the Cambridge Associates Private Equity Index. We focus on sourcing high-quality deals, performing rigorous due diligence, and actively managing companies to enhance value. This strategy aims to deliver substantial returns through capital appreciation and strategic exits, outperforming public equity markets. Portfolio concentration evolves with the investment cycle, focusing on growth sectors initially and stable businesses later.",
-        "benchmark": "Cambridge Associates Private Equity Index"
-    }
+        "description": (
+            "Our Private Equity strategy invests in a diversified portfolio of private companies, "
+            "targeting superior long-term returns compared to the Cambridge Associates Private "
+            "Equity Index."
+        ),
+        "benchmark": "Cambridge Associates Private Equity Index",
+    },
 }
 
-def get_strategy_details(client_name):
+
+def get_strategy_details(client_name: str):
     client_info = client_strategy_risk_mapping.get(client_name)
     if client_info:
-        strategy_name = client_info['strategy_name']
+        strategy_name = client_info["strategy_name"]
         strategy_details = strategies.get(strategy_name)
         if strategy_details:
             return {
-                "client_name": client_name,
+                "client_name":   client_name,
                 "strategy_name": strategy_name,
-                "description": strategy_details['description'],
-                "benchmark": strategy_details['benchmark'],
-                "risk": client_info['risk']
+                "description":   strategy_details["description"],
+                "benchmark":     strategy_details["benchmark"],
+                "risk":          client_info["risk"],
             }
     return None
 

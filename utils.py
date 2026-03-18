@@ -26,15 +26,12 @@ import data.client_central_fact as fact_data
 import data.client_interactions_data as interactions
 from groq import Groq
 
-groq_api_key = os.environ.get('GROQ_API_KEY')
-client = Groq(api_key=groq_api_key)
-
 def get_fred_key() -> str:
     """Return FRED API key from env var, falling back to hardcoded public key."""
     return os.environ.get("FRED_API_KEY", "f4ac14beb82a2e5cf49e141465baa458")
 
-DEFAULT_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant")
+DEFAULT_MODEL  = os.environ.get("GROQ_MODEL",         "llama-3.3-70b-versatile")
+FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 
 _LLM_DB = os.path.join("data", "llm_log.db")
 
@@ -78,12 +75,19 @@ def _log_llm_call(model: str, feature: str, latency_ms: int, resp,
 
 
 def groq_chat(messages, feature: str = "", **kwargs):
-    """Centralized Groq wrapper with observability logging and model fallback."""
+    """Centralized Groq wrapper with observability logging and model fallback.
+    Instantiates the Groq client per-call so it always uses the current env var
+    (avoids stale None key from module-level import before secrets are loaded).
+    """
     model = kwargs.pop("model", DEFAULT_MODEL)
+    _key = os.environ.get("GROQ_API_KEY", "")
+    if not _key:
+        raise RuntimeError("GROQ_API_KEY not set or empty")
+    _client = Groq(api_key=_key)
 
     def _call(m):
         t0 = _time.time()
-        resp = client.chat.completions.create(model=m, messages=messages, **kwargs)
+        resp = _client.chat.completions.create(model=m, messages=messages, **kwargs)
         return resp, int((_time.time() - t0) * 1000)
 
     try:
@@ -385,40 +389,16 @@ def load_client_data(client_id):
 
 def get_client_strategy_details(client_name: str):
     """
-    Look up the latest strategy details for a client from client_fact_table.xlsx.
-    Prints a brief summary (for logs) and returns the strategy name (string) if found, else None.
+    Return the strategy name for a client using client_mapping (CSV-backed).
+    Falls back to None gracefully — callers must handle None.
     """
-    path = "data/client_fact_table.xlsx"
     try:
-        fact = pd.read_excel(path)
+        info = client_mapping.get_client_info(client_name)
+        if info and isinstance(info, dict):
+            return info.get("strategy_name")
     except Exception:
-        return None
-
-    dfc = fact[fact["client_name"].astype(str).str.strip().str.casefold() == str(client_name).strip().casefold()].copy()
-    if dfc.empty:
-        print("Client not found or no details available.")
-        return None
-
-    if "as_of_date" in dfc.columns:
-        dfc["as_of_date"] = pd.to_datetime(dfc["as_of_date"], errors="coerce")
-        dfc = dfc.sort_values("as_of_date", ascending=False)
-    row = dfc.iloc[0]
-
-    details = {
-        'client_name': row.get('client_name', client_name),
-        'strategy_name': row.get('client_strategy', None),
-        'description': row.get('description', ''),  # optional/not present in data
-        'benchmark': row.get('benchmark', None),
-        'risk': row.get('risk_profile', None),
-    }
-
-    print(f"Client Name: {details['client_name']}")
-    print(f"Strategy Name: {details['strategy_name']}")
-    print(f"Description: {details['description']}")
-    print(f"Benchmark: {details['benchmark']}")
-    print(f"Risk: {details['risk']}")
-
-    return details['strategy_name']
+        pass
+    return None
 
 def load_trailing_returns(client_name):
     """
@@ -786,35 +766,49 @@ def plot_growth_of_10000(monthly_returns_df, selected_strategy, benchmark):
 
 
 def plot_cumulative_returns(client_returns, benchmark_returns, client_strategy, benchmark):
+    """Plot both series as Growth of $10,000.
+    Strategy data is expected as monthly period returns (from get_strategy_returns()).
+    Benchmark data may be in period or cumulative form — auto-detected by mean abs value.
+    """
     fig = go.Figure()
 
-    # Ensure 'as_of_date' is a datetime column
-    client_returns['as_of_date'] = pd.to_datetime(client_returns['as_of_date'])
+    client_returns  = client_returns.copy()
+    benchmark_returns = benchmark_returns.copy()
+    client_returns['as_of_date']    = pd.to_datetime(client_returns['as_of_date'])
     benchmark_returns['as_of_date'] = pd.to_datetime(benchmark_returns['as_of_date'])
 
-    # Add client strategy trace
+    # Strategy: period returns → growth-of-$10k
+    sr = pd.to_numeric(client_returns[client_strategy], errors='coerce').fillna(0)
+    strategy_growth = (1 + sr).cumprod() * 10_000
+
+    # Benchmark: detect period vs cumulative, then convert to growth-of-$10k
+    br = pd.to_numeric(benchmark_returns[benchmark], errors='coerce').fillna(0)
+    if br.abs().mean() > 0.05:
+        # Already in cumulative-return form (e.g. 0.72 = +72% total)
+        bench_growth = (1 + br) * 10_000
+    else:
+        bench_growth = (1 + br).cumprod() * 10_000
+
     fig.add_trace(go.Scatter(
         x=client_returns['as_of_date'],
-        y=client_returns[client_strategy],
+        y=strategy_growth,
         mode='lines',
         name=client_strategy,
         line=dict(color='blue', width=2)
     ))
-
-    # Add benchmark trace
     fig.add_trace(go.Scatter(
         x=benchmark_returns['as_of_date'],
-        y=benchmark_returns[benchmark],
+        y=bench_growth,
         mode='lines',
         name=benchmark,
         line=dict(color='orange', width=2)
     ))
 
-    # Update layout
     fig.update_layout(
-        title=f'{client_strategy} vs {benchmark} Returns Over Time',
+        title=f'{client_strategy} vs {benchmark} — Growth of $10,000',
         xaxis_title='Date',
-        yaxis_title='Returns',
+        yaxis_title='Portfolio Value ($)',
+        yaxis_tickformat='$,.0f',
         hovermode='x unified'
     )
 
@@ -1037,10 +1031,10 @@ portfolio_characteristics = {
             "Weighted Average Market Capitalization (mil)"
         ],
         "Fund": [
-            55, "$138.4 M", "76.6%", 2.0, "38.6%", "28.0%", "$87,445", "$949,838"
+            "55", "$138.4 M", "76.6%", "2.0x", "38.6%", "28.0%", "$87,445", "$949,838"
         ],
         "Benchmark": [
-            500, "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
+            "500", "N/A", "N/A", "2.1x", "41.2%", "22.1%", "$19,253", "$726,011"
         ]
     },
     "Government Bonds": {
@@ -1050,10 +1044,10 @@ portfolio_characteristics = {
             "Effective Duration"
         ],
         "Fund": [
-            200, "$500 M", "12.0%", "5.5 years", "AA", "1.75%", "1.5%", "5.2 years"
+            "200", "$500 M", "12.0%", "5.5 years", "AA", "1.75%", "1.5%", "5.2 years"
         ],
         "Benchmark": [
-            3000, "N/A", "N/A", "6.0 years", "AA+", "1.80%", "1.6%", "5.8 years"
+            "3000", "N/A", "N/A", "6.0 years", "AA+", "1.80%", "1.6%", "5.8 years"
         ]
     },
     "High Yield Bonds": {
@@ -1063,10 +1057,10 @@ portfolio_characteristics = {
             "Effective Duration"
         ],
         "Fund": [
-            150, "$250 M", "45.0%", "4.0 years", "BB-", "5.25%", "5.0%", "3.8 years"
+            "150", "$250 M", "45.0%", "4.0 years", "BB-", "5.25%", "5.0%", "3.8 years"
         ],
         "Benchmark": [
-            2350, "N/A", "N/A", "4.5 years", "BB", "5.50%", "5.3%", "4.2 years"
+            "2350", "N/A", "N/A", "4.5 years", "BB", "5.50%", "5.3%", "4.2 years"
         ]
     },
     "Leveraged Loans": {
@@ -1076,10 +1070,10 @@ portfolio_characteristics = {
             "Effective Duration"
         ],
         "Fund": [
-            100, "$300 M", "60.0%", "450bps", "B+", "6.75%", "6.5%", "0.2 years"
+            "100", "$300 M", "60.0%", "450bps", "B+", "6.75%", "6.5%", "0.2 years"
         ],
         "Benchmark": [
-            1000, "N/A", "N/A", "421 bps", "BB-", "7.00%", "6.8%", "0.3 years"
+            "1000", "N/A", "N/A", "421 bps", "BB-", "7.00%", "6.8%", "0.3 years"
         ]
     },
     "Commodities": {
@@ -1089,10 +1083,10 @@ portfolio_characteristics = {
             "Correlation to Bonds"
         ],
         "Fund": [
-            30, "$200 M", "80.0%", "15.0%", "0.75", "0.5", "0.3", "0.1"
+            "30", "$200 M", "80.0%", "15.0%", "0.75", "0.5", "0.3", "0.1"
         ],
         "Benchmark": [
-            50, "N/A", "N/A", "14.0%", "0.8", "0.4", "0.35", "0.15"
+            "50", "N/A", "N/A", "14.0%", "0.8", "0.4", "0.35", "0.15"
         ]
     },
     "Long Short Equity Hedge Fund": {
@@ -1102,7 +1096,7 @@ portfolio_characteristics = {
             "Alpha"
         ],
         "Fund": [
-            75, "$1.2 B", "150.0%", "130%", "70%", "200%", "60%", "2.5%"
+            "75", "$1.2 B", "150.0%", "130%", "70%", "200%", "60%", "2.5%"
         ],
         "Benchmark": [
             "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
@@ -1115,7 +1109,7 @@ portfolio_characteristics = {
             "Alpha"
         ],
         "Fund": [
-            60, "$400 M", "130.0%", "110%", "40%", "150%", "70%", "1.8%"
+            "60", "$400 M", "130.0%", "110%", "40%", "150%", "70%", "1.8%"
         ],
         "Benchmark": [
             "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
@@ -1128,7 +1122,7 @@ portfolio_characteristics = {
             "Standard Deviation"
         ],
         "Fund": [
-            25, "$2.5 B", "10.0%", "18.0%", "1.5x", "7 years", "$500 M", "12.0%"
+            "25", "$2.5 B", "10.0%", "18.0%", "1.5x", "7 years", "$500 M", "12.0%"
         ],
         "Benchmark": [
             "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"

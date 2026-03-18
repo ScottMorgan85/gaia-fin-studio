@@ -18,6 +18,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Runtime append-only data logs — excluded to avoid noisy diffs
+data/visitor_log.csv
+data/rec_log.csv
+data/client_interactions.csv
+
 # Logs
 *.log
 nohup.out

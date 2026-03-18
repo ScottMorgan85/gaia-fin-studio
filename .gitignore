@@ -1,6 +1,13 @@
 # Secrets — never commit
 .streamlit/secrets*.toml
 
+# Claude Code local config
+.claude/
+*.local.json
+
+# Local scratch files
+working_local_packages.txt
+
 # Python
 __pycache__/
 *.py[cod]

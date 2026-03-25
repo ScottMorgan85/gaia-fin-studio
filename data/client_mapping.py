@@ -1,41 +1,27 @@
 import pandas as pd
 import os
 
-# Intentional strategy assignments for known clients.
-# These define the PRIMARY strategy used for commentary, trailing returns,
-# portfolio charts, and benchmark comparisons.
-# New clients added to client_data.csv but not listed here get "Equity" as default.
+# Metadata for every known strategy name: strategy_id + benchmark.
+# Used for dynamic primary-strategy lookup (highest-AUM account wins).
+_STRATEGY_META = {
+    "Equity":                       {"strategy_id": "eq",    "benchmark_name": "S&P 500 Index"},
+    "Government Bonds":             {"strategy_id": "govt",  "benchmark_name": "Bloomberg Barclays US Aggregate Bond Index"},
+    "High Yield Bonds":             {"strategy_id": "hyb",   "benchmark_name": "ICE BofAML US High Yield Index"},
+    "Leveraged Loans":              {"strategy_id": "ll",    "benchmark_name": "S&P/LSTA Leveraged Loan Index"},
+    "Commodities":                  {"strategy_id": "comm",  "benchmark_name": "Bloomberg Commodity Index"},
+    "Long Short Equity Hedge Fund": {"strategy_id": "lse",   "benchmark_name": "HFRI Equity Hedge Index"},
+    "Long Short High Yield Bond":   {"strategy_id": "lshyb", "benchmark_name": "HFRI Fixed Income - Credit Index"},
+    "Private Equity":               {"strategy_id": "pe",    "benchmark_name": "Cambridge Associates Private Equity Index"},
+}
+
+# Fallback overrides used when accounts.csv is unavailable.
 _STRATEGY_OVERRIDES = {
-    "Warren Miller":   {
-        "strategy_name": "Government Bonds",
-        "strategy_id":   "govt",
-        "benchmark_name": "Bloomberg Barclays US Aggregate Bond Index",
-    },
-    "Patricia Huang":  {
-        "strategy_name": "Long Short Equity Hedge Fund",
-        "strategy_id":   "lse",
-        "benchmark_name": "HFRI Equity Hedge Index",
-    },
-    "David Brown":     {
-        "strategy_name": "Equity",
-        "strategy_id":   "eq",
-        "benchmark_name": "S&P 500 Index",
-    },
-    "Elena Rodriguez": {
-        "strategy_name": "High Yield Bonds",
-        "strategy_id":   "hyb",
-        "benchmark_name": "ICE BofAML US High Yield Index",
-    },
-    "James Whitfield": {
-        "strategy_name": "Private Equity",
-        "strategy_id":   "pe",
-        "benchmark_name": "Cambridge Associates Private Equity Index",
-    },
-    "Aisha Johnson":   {
-        "strategy_name": "Leveraged Loans",
-        "strategy_id":   "ll",
-        "benchmark_name": "S&P/LSTA Leveraged Loan Index",
-    },
+    "Warren Miller":   {"strategy_name": "Government Bonds",             "strategy_id": "govt",  "benchmark_name": "Bloomberg Barclays US Aggregate Bond Index"},
+    "Patricia Huang":  {"strategy_name": "Long Short Equity Hedge Fund", "strategy_id": "lse",   "benchmark_name": "HFRI Equity Hedge Index"},
+    "David Brown":     {"strategy_name": "Equity",                       "strategy_id": "eq",    "benchmark_name": "S&P 500 Index"},
+    "Elena Rodriguez": {"strategy_name": "High Yield Bonds",             "strategy_id": "hyb",   "benchmark_name": "ICE BofAML US High Yield Index"},
+    "James Whitfield": {"strategy_name": "Private Equity",               "strategy_id": "pe",    "benchmark_name": "Cambridge Associates Private Equity Index"},
+    "Aisha Johnson":   {"strategy_name": "Leveraged Loans",              "strategy_id": "ll",    "benchmark_name": "S&P/LSTA Leveraged Loan Index"},
 }
 
 _DEFAULT_STRATEGY = {
@@ -47,10 +33,12 @@ _DEFAULT_STRATEGY = {
 
 def _load() -> dict:
     """Build client_strategy_risk_mapping dynamically from client_data.csv.
-    Falls back to strategy override dict if CSV is unavailable.
+    Primary strategy = strategy of highest-AUM account per client (accounts.csv).
+    Falls back to _STRATEGY_OVERRIDES if CSVs are unavailable.
     """
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    csv_path = os.path.join(base, "data", "client_data.csv")
+    base       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    csv_path   = os.path.join(base, "data", "client_data.csv")
+    accts_path = os.path.join(base, "data", "accounts.csv")
 
     try:
         clients = pd.read_csv(csv_path)
@@ -65,17 +53,40 @@ def _load() -> dict:
             for i, (name, overrides) in enumerate(_STRATEGY_OVERRIDES.items())
         }
 
+    # Primary strategy = strategy of highest-AUM account per client
+    primary_by_client: dict = {}
+    try:
+        accounts = pd.read_csv(accts_path)
+        primary = (
+            accounts.sort_values("aum", ascending=False, kind="stable")
+            .groupby("client_id").first()
+            .reset_index()[["client_id", "strategy"]]
+        )
+        primary_by_client = dict(zip(primary["client_id"], primary["strategy"]))
+    except Exception:
+        pass  # fall through to _STRATEGY_OVERRIDES per client below
+
     mapping = {}
     for _, row in clients.iterrows():
-        name = str(row["client_name"]).strip()
-        overrides = _STRATEGY_OVERRIDES.get(name, _DEFAULT_STRATEGY)
+        name      = str(row["client_name"]).strip()
+        client_id = row.get("client_id", "—")
+
+        # Resolve strategy: highest-AUM account → _STRATEGY_OVERRIDES → default
+        strat_name = primary_by_client.get(client_id)
+        if strat_name and strat_name in _STRATEGY_META:
+            meta = _STRATEGY_META[strat_name]
+        else:
+            override   = _STRATEGY_OVERRIDES.get(name, _DEFAULT_STRATEGY)
+            strat_name = override["strategy_name"]
+            meta       = _STRATEGY_META.get(strat_name, _DEFAULT_STRATEGY)
+
         mapping[name] = {
-            "strategy_name":  overrides["strategy_name"],
-            "strategy_id":    overrides["strategy_id"],
-            "benchmark_id":   overrides["strategy_id"] + "_bench",
-            "benchmark_name": overrides["benchmark_name"],
+            "strategy_name":  strat_name,
+            "strategy_id":    meta["strategy_id"],
+            "benchmark_id":   meta["strategy_id"] + "_bench",
+            "benchmark_name": meta["benchmark_name"],
             "risk":           row.get("risk_profile", "Moderate"),
-            "client_id":      row.get("client_id", "—"),
+            "client_id":      client_id,
         }
     return mapping
 

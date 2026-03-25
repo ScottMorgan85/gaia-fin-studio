@@ -291,12 +291,15 @@ if st.query_params.get("admin") == ["1"]:
 
 # ── Router (single source of page titles) ───────────────────────────────────
 if route == "overview":
+    if hasattr(pages, "display_morning_brief"):
+        pages.display_morning_brief(selected_client)
+    else:
+        st.title("Portfolio Pulse")
+        pages.display_portfolio_pulse_legacy(selected_client, selected_strategy, show_recs=True)
+
+elif route == "overview_legacy":
     st.title("Portfolio Pulse")
-    pages.display_market_commentary_and_overview(
-        selected_client,
-        selected_strategy,
-        show_recs=True
-    )
+    pages.display_portfolio_pulse_legacy(selected_client, selected_strategy, show_recs=True)
 
 elif route == "commentary":
     st.title("Commentary Co-Pilot")

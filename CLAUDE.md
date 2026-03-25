@@ -75,6 +75,23 @@ DigitalOcean: Settings → Environment Variables (flat `GROQ_API_KEY=...`).
 
 ## Features
 
+### Morning Brief (default landing page)
+Three-column advisor dashboard — the first thing seen when opening GAIA.
+
+| Field | Value |
+|-------|-------|
+| Function | `display_morning_brief(selected_client)` in `gaia_pages.py` |
+| Tab name | `Portfolio Pulse` (route key `overview`) |
+| Left column | `_mb_render_alerts()` — all client alerts sorted Critical→High→Medium, selected client highlighted with ▶, upcoming reviews (30-day window), pending letters |
+| Center column | `_mb_render_markets()` — VIX/curve/regime/HY badges, `display_performance_snapshot()` table, 3-sentence AI summary (cached in session state, `feature="morning_brief_summary"`) |
+| Right column | `_mb_render_your_day()` — FOMC countdown, book summary (AUM/clients/alerts/pipeline), quick actions (batch letters, alert log, practice intel), AI usage counter |
+| Legacy route | `overview_legacy` → `display_portfolio_pulse_legacy()` (former `display_market_commentary_and_overview`) |
+| Alias | `display_market_commentary_and_overview = display_portfolio_pulse_legacy` for backward compat |
+
+**Regime label mapping** (from `regime_score` int): +1/+2 = Goldilocks, 0 = Mixed, -1 = Reflation, -2 = Stagflation.
+**AI usage counter**: uses `utils.get_llm_stats(days=1)["summary"]["total_calls"]` — no `GroqUsageTracker` class exists.
+**Batch letter generation**: calls `_ql_build_prompt_data()` + `_ql_build_user_message()` + `utils.groq_chat()` + `_ql_append_log()` directly (does not call `display_quarterly_letter()` UI function). Status saved as `"pending"`.
+
 ### Quantum Studio
 A quantum-inspired portfolio optimization PoC that uses simulated annealing to mimic
 QUBO-style optimization across six synthetic sleeve allocations anchored to live strategy returns.

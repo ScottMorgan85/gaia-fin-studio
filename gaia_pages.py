@@ -881,10 +881,10 @@ def render_market_pulse_sidebar():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Portfolio Pulse: DTD commentary + optional recs + market overview
+# Portfolio Pulse: DTD commentary + optional recs + market overview (legacy)
 # ─────────────────────────────────────────────────────────────────────────────
 import re
-def display_market_commentary_and_overview(selected_client, selected_strategy, show_recs=True, n_cards=4, display_df=True):
+def display_portfolio_pulse_legacy(selected_client, selected_strategy, show_recs=True, n_cards=4, display_df=True):
     import datetime as _dt
 
     # ---------- header ----------
@@ -952,6 +952,9 @@ def display_market_commentary_and_overview(selected_client, selected_strategy, s
             utils.create_dateframe_view(df_fi)
 
     return df_em_stocks, df_fi
+
+# Backward-compat alias — app.py shim and misc scripts reference the old name
+display_market_commentary_and_overview = display_portfolio_pulse_legacy
 
 # ---------------------------------------------------------------------------
 def _show_recommendation_analytics():
@@ -4426,3 +4429,358 @@ def display_quarterly_letter(selected_client: str, selected_strategy: str) -> No
                 st.markdown("**Headlines fed to model**")
                 for h in prompt_data["headlines"]:
                     st.write(f"• {h}")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Morning Brief — advisor landing page
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _mb_priority_order(priority: str) -> int:
+    return {"Critical": 0, "High": 1, "Medium": 2}.get(priority, 3)
+
+
+def _mb_regime_label(regime_score: int) -> str:
+    if regime_score >= 1:
+        return "Goldilocks"
+    if regime_score == 0:
+        return "Mixed"
+    if regime_score == -1:
+        return "Reflation"
+    return "Stagflation"
+
+
+def _mb_render_alerts(selected_client: str) -> None:
+    """Left column: client alert feed, upcoming reviews, pending letters."""
+    import pandas as pd
+    from datetime import date as _date, timedelta as _td
+
+    st.markdown("### Client Alerts")
+
+    # Load and sort alerts
+    try:
+        alerts_df = utils.load_client_alerts()
+        if alerts_df.empty:
+            raise FileNotFoundError
+        alerts_df["_order"] = alerts_df["priority"].apply(_mb_priority_order)
+        alerts_df = alerts_df.sort_values(["_order", "client_name"]).reset_index(drop=True)
+        active = alerts_df[alerts_df["status"].str.lower() != "dismissed"]
+        critical_high = active[active["priority"].isin(["Critical", "High"])]
+        st.caption(f"{len(critical_high)} alert{'s' if len(critical_high) != 1 else ''} requiring attention")
+    except Exception:
+        st.info("No alerts configured — add alerts to data/client_alerts.csv")
+        active = pd.DataFrame()
+
+    if not active.empty:
+        for _, row in active.iterrows():
+            client_name = str(row.get("client_name", ""))
+            is_selected = client_name == selected_client
+            prefix = "▶ " if is_selected else ""
+            title = str(row.get("title", ""))
+            desc  = str(row.get("description", ""))
+            desc_short = desc[:100] + ("…" if len(desc) > 100 else "")
+            action = str(row.get("action_required", ""))
+            due    = str(row.get("due_date", ""))
+            priority = str(row.get("priority", "Medium"))
+
+            body = (
+                f"**{prefix}{client_name}** — {title}\n\n"
+                f"{desc_short}\n\n"
+                f"*Action:* {action}   *Due:* {due}"
+            )
+            if priority == "Critical":
+                st.error(body)
+            elif priority == "High":
+                st.warning(body)
+            else:
+                st.info(body)
+
+    st.markdown("---")
+
+    # Upcoming reviews within 30 days
+    st.markdown("**Upcoming Reviews**")
+    try:
+        client_df = pd.read_csv("data/client_data.csv")
+        today = _date.today()
+        window = today + _td(days=30)
+        client_df["next_review_date"] = pd.to_datetime(
+            client_df["next_review_date"], errors="coerce"
+        ).dt.date
+        upcoming = client_df[
+            client_df["next_review_date"].notna() &
+            (client_df["next_review_date"] >= today) &
+            (client_df["next_review_date"] <= window)
+        ].sort_values("next_review_date")
+        if upcoming.empty:
+            st.caption("No reviews in the next 30 days.")
+        else:
+            for _, r in upcoming.iterrows():
+                days_out = (r["next_review_date"] - today).days
+                label = "today" if days_out == 0 else f"in {days_out}d"
+                st.write(
+                    f"📅 **{r['client_name']}** — "
+                    f"{r['next_review_date'].strftime('%B %d')} ({label})"
+                )
+    except Exception as _e:
+        st.caption(f"Review data unavailable: {_e}")
+
+    st.markdown("---")
+
+    # Letters pending approval
+    st.markdown("**Letters Pending Approval**")
+    try:
+        letters_df = pd.read_csv("data/quarterly_letters.csv")
+        pending = letters_df[letters_df["status"].str.lower() != "approved"]
+        if pending.empty:
+            st.caption("No letters pending ✓")
+        else:
+            names = ", ".join(pending["client_name"].unique())
+            st.caption(f"{len(pending)} pending: {names}")
+    except Exception:
+        st.caption("No letters pending ✓")
+
+
+def _mb_render_markets(selected_client: str) -> None:
+    """Center column: market badges, performance snapshot, AI summary."""
+    import datetime as _dt
+    import pandas as pd
+
+    today_str = _dt.date.today().strftime("%B %d, %Y")
+    st.markdown(f"### Markets — {today_str}")
+
+    # Market signal badges
+    try:
+        sig = utils.get_derived_signals()
+        mkt = utils.get_live_market_context()
+
+        vix_val  = sig.get("vix_current")
+        vol_reg  = sig.get("vol_regime", "Unknown")
+        curve    = sig.get("yield_curve", "Unknown")
+        rs       = sig.get("regime_score", 0)
+        hy_spread = sig.get("hy_spread")
+        regime_label = _mb_regime_label(rs)
+
+        vol_color  = {"Low Vol": "🟢", "Normal": "🔵", "Elevated": "🟠", "Crisis": "🔴"}.get(vol_reg, "⚪")
+        curve_color = {"Steep": "🟢", "Normal": "🔵", "Flat": "🟡", "Inverted": "🔴"}.get(curve, "⚪")
+        reg_color  = "🟢" if rs >= 1 else ("🔴" if rs <= -1 else "🟡")
+
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric(
+            "VIX",
+            f"{vix_val:.1f}" if vix_val else "—",
+            delta=f"{vol_color} {vol_reg}",
+            delta_color="off",
+        )
+        b2.metric("Curve", curve, delta=f"{curve_color}", delta_color="off")
+        b3.metric("Regime", regime_label, delta=f"{reg_color} score {rs:+d}", delta_color="off")
+        b4.metric(
+            "HY Spread",
+            f"{hy_spread:.0f} bps" if hy_spread else "—",
+            delta_color="off",
+        )
+    except Exception as _e:
+        st.caption(f"Market signals unavailable: {_e}")
+        sig = {}
+        mkt = {}
+
+    st.markdown("---")
+
+    # Performance snapshot table (reuse existing function)
+    display_performance_snapshot()
+
+    st.markdown("---")
+
+    # AI market summary — generate once per session
+    if "mb_market_summary" not in st.session_state:
+        try:
+            vix_str  = f"VIX {vix_val:.1f}" if vix_val else "VIX unknown"
+            spy_str  = mkt.get("spy_mtd", "SPY return unavailable")
+            hy_str   = f"HY spread {hy_spread:.0f} bps" if hy_spread else "HY spread unavailable"
+            prompt_text = (
+                f"Write 3 sentences summarizing today's market conditions for a wealth advisor's "
+                f"morning brief. Use these data points: {vix_str}, SPY QTD {spy_str}, "
+                f"yield curve {curve}, macro regime {regime_label}, {hy_str}. "
+                f"Be specific, concise, and professional. No bullet points."
+            )
+            resp = utils.groq_chat(
+                [{"role": "user", "content": prompt_text}],
+                feature="morning_brief_summary",
+                max_tokens=200,
+                temperature=0.2,
+            )
+            st.session_state["mb_market_summary"] = resp.choices[0].message.content.strip()
+        except Exception:
+            # Static fallback based on available data
+            vix_label = vix_val and f"VIX at {vix_val:.1f} ({vol_reg.lower()})" or "volatility data unavailable"
+            st.session_state["mb_market_summary"] = (
+                f"Markets are operating with {vix_label}. "
+                f"The yield curve is {curve.lower()}, signaling a {regime_label.lower()} macro environment. "
+                f"Advisors should monitor credit spreads and central bank policy for near-term directional cues."
+            )
+
+    st.info(st.session_state["mb_market_summary"])
+
+
+def _mb_render_your_day(selected_client: str) -> None:
+    """Right column: FOMC countdown, book summary, quick actions, AI usage."""
+    import datetime as _dt
+    import pandas as pd
+
+    st.markdown("### Your Day")
+
+    # FOMC countdown
+    try:
+        events = utils.get_upcoming_events()
+        fomc_dates = events.get("fomc_dates", [])
+        if fomc_dates:
+            next_fomc = fomc_dates[0]
+            days_to = (next_fomc - _dt.date.today()).days
+            st.metric(
+                "Next FOMC",
+                f"{days_to}d",
+                delta=next_fomc.strftime("%b %d, %Y"),
+                delta_color="off",
+            )
+        else:
+            st.metric("Next FOMC", "—")
+    except Exception:
+        st.metric("Next FOMC", "—")
+
+    st.markdown("---")
+
+    # Book summary
+    st.markdown("**Book Summary**")
+    try:
+        clients_df = pd.read_csv("data/client_data.csv")
+        total_aum   = clients_df["total_aum"].sum()
+        n_clients   = len(clients_df)
+
+        alerts_df = utils.load_client_alerts()
+        n_alerts = len(alerts_df[
+            (alerts_df["status"].str.lower() != "dismissed") &
+            (alerts_df["priority"].isin(["Critical", "High"]))
+        ]) if not alerts_df.empty else 0
+
+        outside_df = pd.read_csv("data/outside_assets.csv")
+        pipeline = outside_df["estimated_aum"].sum()
+
+        col_a, col_b = st.columns(2)
+        col_a.metric("Total AUM",   f"${total_aum/1e9:.2f}B")
+        col_b.metric("Clients",     str(n_clients))
+        col_a.metric("Alerts",      str(n_alerts))
+        col_b.metric("Pipeline",    f"${pipeline/1e6:.1f}M")
+    except Exception as _e:
+        st.caption(f"Book summary unavailable: {_e}")
+
+    st.markdown("---")
+
+    # Quick actions
+    st.markdown("**Quick Actions**")
+
+    if st.button("Generate All Q1 Letters", key="mb_gen_all", use_container_width=True):
+        try:
+            from data.client_mapping import get_client_names
+            all_clients = list(get_client_names())
+        except Exception:
+            all_clients = []
+
+        if not all_clients:
+            st.warning("No clients found.")
+        else:
+            progress = st.progress(0, text="Starting...")
+            errors = []
+            for i, cname in enumerate(all_clients):
+                progress.progress((i) / len(all_clients), text=f"Drafting letter for {cname}…")
+                try:
+                    from data.client_mapping import client_strategy_risk_mapping
+                    strat = client_strategy_risk_mapping.get(cname, "Equity")
+                    if isinstance(strat, dict):
+                        strat = strat.get("strategy_name", "Equity")
+                    pdata = _ql_build_prompt_data(cname, strat, "Q1 2026")
+                    from datetime import datetime as _dt2
+                    pdata["generated_at"] = _dt2.now().isoformat(timespec="seconds")
+                    umsg = _ql_build_user_message(pdata)
+                    resp = utils.groq_chat(
+                        [{"role": "system", "content": _QL_SYSTEM_PROMPT},
+                         {"role": "user",   "content": umsg}],
+                        feature="quarterly_letter_batch",
+                        max_tokens=2000,
+                        temperature=0.4,
+                    )
+                    letter_text = resp.choices[0].message.content.strip()
+                    _ql_append_log(pdata, letter_text, status="pending")
+                    import time as _t; _t.sleep(0.5)  # rate-limit guard
+                except Exception as _le:
+                    errors.append(f"{cname}: {_le}")
+            progress.progress(1.0, text="Done!")
+            if errors:
+                st.warning("Some letters failed: " + "; ".join(errors))
+            else:
+                st.success(f"Generated {len(all_clients)} letters — review in Commentary Co-Pilot.")
+
+    if st.button("View Full Alert Log", key="mb_alert_log", use_container_width=True):
+        st.session_state["route"] = "log"
+        st.rerun()
+
+    if st.button("Practice Intelligence", key="mb_practice", use_container_width=True):
+        st.session_state["route"] = "client"
+        st.rerun()
+
+    st.markdown("---")
+
+    # AI usage today
+    st.markdown("**AI Usage Today**")
+    try:
+        stats = utils.get_llm_stats(days=1)
+        count = stats.get("summary", {}).get("total_calls", 0) if stats else 0
+        limit = 500
+        st.caption(f"AI calls today: {count} / {limit}")
+        st.progress(min(count / limit, 1.0))
+    except Exception:
+        st.caption("AI usage data unavailable")
+
+
+def display_morning_brief(selected_client: str) -> None:
+    """
+    Morning Brief — the default advisor landing page.
+    Three-column layout: client alerts | markets | your day.
+    """
+    import datetime as _dt
+
+    # Page header
+    today = _dt.date.today()
+    day_name = today.strftime("%A")
+    date_str = today.strftime("%B %d, %Y")
+
+    # Greeting: pull advisor first name from selected client's profile
+    advisor_first = "Advisor"
+    try:
+        cdf = utils.load_client_data_csv(selected_client)
+        if not cdf.empty:
+            full_name = str(cdf.iloc[0].get("primary_advisor", ""))
+            advisor_first = full_name.split()[0] if full_name else "Advisor"
+    except Exception:
+        pass
+
+    hour = _dt.datetime.now().hour
+    greeting = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+
+    st.markdown(f"## Morning Brief")
+    st.markdown(f"*{day_name}, {date_str} · {greeting}, {advisor_first}*")
+    st.markdown("---")
+
+    col_left, col_center, col_right = st.columns([2, 2, 1.2])
+
+    with col_left:
+        _mb_render_alerts(selected_client)
+
+    with col_center:
+        _mb_render_markets(selected_client)
+
+    with col_right:
+        _mb_render_your_day(selected_client)
+
+    # Link to legacy pulse
+    st.markdown("---")
+    if st.button("View detailed market commentary →", key="mb_legacy_link"):
+        st.session_state["route"] = "overview_legacy"
+        st.rerun()

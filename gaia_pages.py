@@ -4029,21 +4029,36 @@ Rules:
 
 
 def _ql_quarter_returns(returns_df: "pd.DataFrame", strategy: str, year: int, months: list) -> dict:
-    """Compute quarter and YTD returns for a strategy from a monthly returns DataFrame."""
+    """Compute quarter and YTD returns for a strategy from a monthly returns DataFrame.
+
+    get_strategy_returns() returns a DataFrame with 'as_of_date' as a plain column
+    (not the index). Convert to DatetimeIndex before filtering.
+    """
     result = {"quarter_return": None, "ytd_return": None, "available_thru": None}
     if returns_df is None or returns_df.empty:
         return result
     if strategy not in returns_df.columns:
+        print(f"[GAIA] QL: strategy '{strategy}' not found. "
+              f"Available: {[c for c in returns_df.columns if c != 'as_of_date']}", flush=True)
         return result
 
-    series = returns_df[strategy].dropna()
-    # quarter return
+    # Set as_of_date as DatetimeIndex so .index.year / .index.month work
+    df = returns_df.copy()
+    if "as_of_date" in df.columns:
+        df["as_of_date"] = pd.to_datetime(df["as_of_date"])
+        df = df.set_index("as_of_date")
+
+    series = df[strategy].dropna()
+    print(f"[GAIA] QL: returns range {series.index.min().date()} → {series.index.max().date()}, "
+          f"n={len(series)} | filtering year={year} months={months}", flush=True)
+
     q_mask = (series.index.year == year) & (series.index.month.isin(months))
     q_vals = series[q_mask]
+    print(f"[GAIA] QL: quarter rows matched: {len(q_vals)}", flush=True)
     if not q_vals.empty:
         result["quarter_return"] = float(((1 + q_vals).prod() - 1) * 100)
         result["available_thru"] = q_vals.index.max().strftime("%b %Y")
-    # YTD: Jan through end of quarter
+
     ytd_mask = (series.index.year == year) & (series.index.month <= max(months))
     ytd_vals = series[ytd_mask]
     if not ytd_vals.empty:
@@ -4092,19 +4107,46 @@ def _ql_build_prompt_data(selected_client: str, selected_strategy: str, quarter_
     except Exception:
         data["quarter_return"] = data["ytd_return"] = data["available_thru"] = None
 
-    # Macro data (FRED)
+    # Macro data (FRED) — columns: FEDFUNDS, CPIAUCSL, T10Y2Y, GDPC1
     try:
         macro_df = utils.get_macro_data()
         if not macro_df.empty:
             last = macro_df.dropna(how="all").iloc[-1]
-            data["fed_funds"] = last.get("DFF",  last.get("fed_funds",  "N/A"))
-            data["cpi_yoy"]   = last.get("CPIAUCSL", last.get("cpi", "N/A"))
-            data["t10y2y"]    = last.get("T10Y2Y",   last.get("t10y2y", "N/A"))
-            data["gdp"]       = last.get("GDP",       last.get("gdp", "N/A"))
+            # Fed Funds: FRED series is FEDFUNDS (not DFF); fallback to known current value
+            data["fed_funds"] = (
+                macro_df["FEDFUNDS"].dropna().iloc[-1]
+                if "FEDFUNDS" in macro_df.columns
+                else 4.33
+            )
+            # CPI: stored as level (e.g. ~315); compute YoY% if 12 months of data available
+            if "CPIAUCSL" in macro_df.columns:
+                cpi = macro_df["CPIAUCSL"].dropna()
+                if len(cpi) >= 13:
+                    data["cpi_yoy"] = round(float((cpi.iloc[-1] / cpi.iloc[-13] - 1) * 100), 2)
+                else:
+                    data["cpi_yoy"] = round(float(cpi.iloc[-1]), 2)
+            else:
+                data["cpi_yoy"] = "N/A"
+            data["t10y2y"] = (
+                round(float(macro_df["T10Y2Y"].dropna().iloc[-1]), 2)
+                if "T10Y2Y" in macro_df.columns else "N/A"
+            )
+            # GDP: GDPC1 is quarterly real GDP in billions; compute YoY%
+            if "GDPC1" in macro_df.columns:
+                gdp = macro_df["GDPC1"].dropna()
+                if len(gdp) >= 5:
+                    data["gdp"] = round(float((gdp.iloc[-1] / gdp.iloc[-5] - 1) * 100), 2)
+                else:
+                    data["gdp"] = round(float(gdp.iloc[-1]), 1)
+            else:
+                data["gdp"] = "N/A"
         else:
-            data["fed_funds"] = data["cpi_yoy"] = data["t10y2y"] = data["gdp"] = "N/A"
-    except Exception:
-        data["fed_funds"] = data["cpi_yoy"] = data["t10y2y"] = data["gdp"] = "N/A"
+            data["fed_funds"] = 4.33
+            data["cpi_yoy"] = data["t10y2y"] = data["gdp"] = "N/A"
+    except Exception as _macro_err:
+        print(f"[GAIA] QL macro fetch error: {_macro_err}", flush=True)
+        data["fed_funds"] = 4.33
+        data["cpi_yoy"] = data["t10y2y"] = data["gdp"] = "N/A"
 
     # Live market context
     try:
@@ -4273,20 +4315,17 @@ def display_quarterly_letter(selected_client: str, selected_strategy: str) -> No
 
     st.subheader("Quarterly Letter Engine")
 
-    # Quarter selector
-    quarters = list(_QL_QUARTER_MAP.keys())
-    quarter_label = st.selectbox("Quarter", quarters, key="ql_quarter")
+    # Quarter selector — Q1 2026 first (index=0 is the default)
+    quarters = list(_QL_QUARTER_MAP.keys())  # ["Q1 2026", "Q4 2025", "Q3 2025", "Q2 2025"]
+    quarter_label = st.selectbox("Quarter", quarters, index=0, key="ql_quarter")
 
-    col_gen, col_disc = st.columns([1, 6])
-    with col_gen:
+    has_letter = bool(st.session_state.get("ql_letter_text"))
+    if not has_letter:
         generate_clicked = st.button("Generate Letter", key="ql_generate", type="primary")
-    with col_disc:
-        discard_clicked = st.button("Discard", key="ql_discard")
-
-    if discard_clicked:
-        for k in ["ql_letter_text", "ql_letter_data", "ql_approved"]:
-            st.session_state.pop(k, None)
-        st.rerun()
+        discard_clicked = False
+    else:
+        generate_clicked = False
+        discard_clicked = False  # handled below alongside Approve
 
     if generate_clicked:
         with st.spinner("Gathering data and drafting letter..."):
@@ -4325,9 +4364,16 @@ def display_quarterly_letter(selected_client: str, selected_strategy: str) -> No
             key="ql_letter_editor",
         )
 
-        col_approve, col_spacer = st.columns([1, 5])
+        col_approve, col_discard, col_spacer = st.columns([1, 1, 5])
         with col_approve:
             approve_clicked = st.button("Approve & Log", key="ql_approve", type="primary")
+        with col_discard:
+            discard_clicked = st.button("Discard", key="ql_discard")
+
+        if discard_clicked:
+            for k in ["ql_letter_text", "ql_letter_data", "ql_approved"]:
+                st.session_state.pop(k, None)
+            st.rerun()
 
         if approve_clicked:
             final_text = edited_text

@@ -1683,6 +1683,17 @@ def display_client_360(selected_client: str):
         except Exception:
             return default
 
+    def fmt_millions(v):
+        try:
+            v = float(v)
+            if v >= 1_000_000:
+                return f"${v/1_000_000:.2f}M"
+            elif v >= 1_000:
+                return f"${v/1_000:.0f}K"
+            return f"${v:,.0f}"
+        except Exception:
+            return "—"
+
     # ── load household summary ─────────────────────────────────────────────────
     hh = utils.get_household_summary(selected_client)
     client_id = hh.get("client_id", "")
@@ -1717,15 +1728,29 @@ def display_client_360(selected_client: str):
         unsafe_allow_html=True,
     )
 
+    # Outside assets for header card (cached — fast second call)
+    try:
+        _oa_hdr     = utils.load_outside_assets(client_id=client_id)
+        _total_away = float(_oa_hdr["estimated_aum"].sum()) if not _oa_hdr.empty and "estimated_aum" in _oa_hdr.columns else 0.0
+    except Exception:
+        _total_away = 0.0
+
+    _total_aum   = float(hh.get("total_aum", 0) or 0)
+    _tax_def_aum = float(hh.get("tax_deferred_aum", 0) or 0)
+    _tax_def_pct = f"{_tax_def_aum / _total_aum:.1%}" if _total_aum > 0 else "—"
+    _gl          = float(hh.get("total_gain_loss", 0) or 0)
+    _gl_str      = ("+" if _gl >= 0 else "") + fmt_millions(abs(_gl))
+    _tlh_count   = hh.get("tlh_opportunities", 0)
+    _tlh_loss    = float(hh.get("tlh_total_loss", 0) or 0)
+
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    with m1: st.metric("Total AUM",      _fmt_usd(hh.get("total_aum")))
+    with m1: st.metric("Total AUM",      fmt_millions(_total_aum))
     with m2: st.metric("Accounts",       str(hh.get("n_accounts", "—")))
-    with m3: st.metric("Taxable AUM",    _fmt_usd(hh.get("taxable_aum")))
-    with m4: st.metric("Tax-Deferred",   _fmt_usd(hh.get("tax_deferred_aum")))
-    gl = hh.get("total_gain_loss", 0)
-    gl_str = ("+" if gl >= 0 else "") + _fmt_usd(gl)
-    with m5: st.metric("Unrealized G/L", gl_str)
-    with m6: st.metric("TLH Opps",       str(hh.get("tlh_opportunities", 0)))
+    with m3: st.metric("Tax-Deferred",   _tax_def_pct)
+    with m4: st.metric("Unrealized G/L", _gl_str)
+    with m5: st.metric("TLH Opps",       f"{_tlh_count} lots",
+                        delta=fmt_millions(abs(_tlh_loss)) if _tlh_loss else None)
+    with m6: st.metric("Outside Assets", fmt_millions(_total_away) if _total_away > 0 else "—")
 
     st.markdown("---")
 
@@ -1929,25 +1954,67 @@ def display_client_360(selected_client: str):
     # ── SECTION 5: Performance vs Benchmark ───────────────────────────────────
     st.subheader("Performance vs Benchmark")
     try:
-        tr = utils.load_trailing_returns(selected_client)
-        if tr is not None and not tr.empty:
+        from data.client_mapping import client_strategy_risk_mapping as _csrm5
+        _s5_info  = _csrm5.get(selected_client, {})
+        _s5_name  = _s5_info.get("strategy_name", "Equity") if isinstance(_s5_info, dict) else "Equity"
+
+        _all_rets = utils.get_strategy_returns()
+        _date_col = next((c for c in _all_rets.columns if c.lower() in ("as_of_date", "date")), None)
+        if _all_rets is not None and not _all_rets.empty and _s5_name in _all_rets.columns and _date_col:
+            _all_rets[_date_col] = pd.to_datetime(_all_rets[_date_col])
+            _s5_ser = _all_rets.set_index(_date_col)[_s5_name].dropna()
+            _s5_ser.index = _s5_ser.index.to_period("M").to_timestamp("M")
+
+            # SPY benchmark monthly returns (already cached via get_market_data)
+            _mkt = utils.get_market_data()
+            _spy = _mkt["monthly_returns"]["SPY"].dropna() if (not _mkt["monthly_returns"].empty and "SPY" in _mkt["monthly_returns"].columns) else pd.Series(dtype=float)
+            if not _spy.empty:
+                _spy.index = pd.to_datetime(_spy.index).to_period("M").to_timestamp("M")
+
+            _today  = pd.Timestamp.today()
+            _q      = (_today.month - 1) // 3
+            _periods = [
+                ("QTD",    pd.Timestamp(_today.year, _q * 3 + 1, 1), _today),
+                ("YTD",    pd.Timestamp(_today.year, 1, 1),           _today),
+                ("1 Year", _today - pd.DateOffset(years=1),           _today),
+                ("3 Year", _today - pd.DateOffset(years=3),           _today),
+                ("5 Year", _today - pd.DateOffset(years=5),           _today),
+            ]
+
+            def _period_ret(ser, start, end):
+                mask = (ser.index >= start) & (ser.index <= end)
+                s = ser[mask]
+                return float((1 + s).prod() - 1) if not s.empty else None
+
+            _perf_rows = []
+            for _lbl, _start, _end in _periods:
+                _r   = _period_ret(_s5_ser, _start, _end)
+                _b   = _period_ret(_spy, _start, _end) if not _spy.empty else None
+                _act = (_r - _b) if (_r is not None and _b is not None) else None
+                _perf_rows.append({"Period": _lbl, "Return": _r, "Benchmark": _b, "Active": _act})
+
+            _tr = pd.DataFrame(_perf_rows).set_index("Period")
+
             def _style_active(v):
                 try:
-                    f = float(v)
+                    f = float(str(v).rstrip("%"))
                     color = "#15803d" if f >= 0 else "#dc2626"
                     return f"color:{color};font-weight:600;"
                 except Exception:
                     return ""
 
-            tr_display = tr.copy()
-            for col in ["Return", "Benchmark", "Active"]:
-                if col in tr_display.columns:
-                    tr_display[col] = tr_display[col].apply(lambda v: _fmt_pct(v))
+            _tr_display = _tr.copy()
+            for _col in ["Return", "Benchmark", "Active"]:
+                if _col in _tr_display.columns:
+                    _tr_display[_col] = _tr_display[_col].apply(
+                        lambda v: _fmt_pct(v * 100) if v is not None else "—"
+                    )
 
-            styled = tr_display.style.applymap(
-                _style_active, subset=["Active"] if "Active" in tr_display.columns else []
+            _styled = _tr_display.style.applymap(
+                _style_active, subset=["Active"] if "Active" in _tr_display.columns else []
             )
-            st.dataframe(styled, use_container_width=True)
+            st.caption(f"Strategy: {_s5_name}  |  Benchmark: SPY")
+            st.dataframe(_styled, use_container_width=True)
         else:
             st.caption("Trailing returns unavailable.")
     except Exception as _e:
@@ -1961,15 +2028,42 @@ def display_client_360(selected_client: str):
         _enriched = utils.enrich_client_data()
         if _enriched is not None and not _enriched.empty and _strat_name in _enriched.index:
             _rm = _enriched.loc[_strat_name]
-            _r1, _r2, _r3, _r4, _r5 = st.columns(5)
             def _num(v, d=2):
                 try: return f"{float(v):.{d}f}"
                 except Exception: return "—"
+
+            # Compute beta/alpha inline with proper month-end index alignment
+            _beta_str = _alpha_str = "—"
+            try:
+                _rets_df = utils.get_strategy_returns()
+                _dc = next((c for c in _rets_df.columns if c.lower() in ("as_of_date", "date")), None)
+                if _dc and _strat_name in _rets_df.columns:
+                    _r = _rets_df.set_index(_dc)[_strat_name].dropna()
+                    _r.index = pd.to_datetime(_r.index).to_period("M").to_timestamp("M")
+                    _spy_r = utils.get_market_data()["monthly_returns"]["SPY"].dropna()
+                    _spy_r.index = pd.to_datetime(_spy_r.index).to_period("M").to_timestamp("M")
+                    if len(_r) > 12 and not _spy_r.empty:
+                        _aln = pd.concat([_r.tail(36).rename("strategy"), _spy_r.rename("spy")], axis=1).dropna()
+                        _aln.columns = ["strategy", "spy"]
+                        if len(_aln) > 12:
+                            _cov      = _aln.cov()
+                            _beta     = _cov.iloc[0, 1] / _cov.iloc[1, 1]
+                            _ann_s    = (1 + _aln["strategy"]).prod() ** (12 / len(_aln)) - 1
+                            _ann_spy  = (1 + _aln["spy"]).prod()      ** (12 / len(_aln)) - 1
+                            _alpha    = _ann_s - _beta * _ann_spy
+                            _beta_str  = f"{_beta:.2f}"
+                            _alpha_str = f"{_alpha:.1%}"
+            except Exception:
+                pass
+
+            _r1, _r2, _r3, _r4, _r5, _r6, _r7 = st.columns(7)
             with _r1: st.metric("Sharpe",       _num(_rm.get("sharpe")))
             with _r2: st.metric("Sortino",      _num(_rm.get("sortino")))
             with _r3: st.metric("Calmar",       _num(_rm.get("calmar")))
             with _r4: st.metric("Max Drawdown", _fmt_pct(_rm.get("max_drawdown")))
             with _r5: st.metric("5yr Return",   _fmt_pct(_rm.get("return_5yr")))
+            with _r6: st.metric("Beta (SPY)",   _beta_str)
+            with _r7: st.metric("Alpha (SPY)",  _alpha_str)
     except Exception:
         pass
 

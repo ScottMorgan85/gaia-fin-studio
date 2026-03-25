@@ -300,16 +300,10 @@ if route == "overview":
 
 elif route == "commentary":
     st.title("Commentary Co-Pilot")
-    try:
-        import commentary as _c
-        text = _c.generate_investment_commentary(
-            model_option, selected_client, selected_strategy, models
-        )
-    except Exception as e:
-        st.error("Commentary generation failed.")
-        st.exception(e)
-        st.stop()
-    pages.display(text, selected_client, model_option, selected_strategy)
+    if hasattr(pages, "display_quarterly_letter"):
+        pages.display_quarterly_letter(selected_client, selected_strategy)
+    else:
+        st.info("Quarterly Letter Engine is not available in this build.")
 
 
 elif route == "recs":

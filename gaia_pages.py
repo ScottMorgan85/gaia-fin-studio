@@ -2798,8 +2798,8 @@ if "_round_percents" not in globals():
                 return m.group(0)
         return re.sub(r"(-?\d+(?:\.\d+)?)(?=%)", _fmt, text)
 
-# --- Commentary Co-Pilot renderer (with single + batch export) ---------------
-def display_commentary(commentary_text, selected_client, model_option, selected_strategy):
+# --- Commentary Co-Pilot renderer (legacy — replaced by display_quarterly_letter) ---
+def display_commentary_legacy(commentary_text, selected_client, model_option, selected_strategy):
     import io, zipfile
     from datetime import datetime
     import streamlit as st
@@ -2892,7 +2892,7 @@ def display_commentary(commentary_text, selected_client, model_option, selected_
 
 # Backward-compat shim so app.py can call pages.display(...)
 def display(commentary_text, selected_client, model_option, selected_strategy):
-    return display_commentary(commentary_text, selected_client, model_option, selected_strategy)
+    return display_commentary_legacy(commentary_text, selected_client, model_option, selected_strategy)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3988,3 +3988,395 @@ def display_rag_research():
             "sources": results,
         })
         st.session_state["rag_history"] = history
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Quarterly Letter Engine
+# ─────────────────────────────────────────────────────────────────────────────
+
+_QL_LOG_PATH = "data/quarterly_letters.csv"
+
+_QL_QUARTER_MAP = {
+    "Q1 2026": (2026, [1, 2, 3]),
+    "Q4 2025": (2025, [10, 11, 12]),
+    "Q3 2025": (2025, [7, 8, 9]),
+    "Q2 2025": (2025, [4, 5, 6]),
+}
+
+_QL_SYSTEM_PROMPT = """You are a senior investment strategist writing a personalized quarterly letter \
+to a high-net-worth client. Your voice is warm but authoritative — think Ernie Ankrim of Russell Investments. \
+Write exactly 4 flowing prose paragraphs (400–550 words total, no bullets, no headers):
+
+Paragraph 1 — Market context. Open with the quarter's macro backdrop using the real numbers provided \
+(VIX, SPY return, Fed Funds, CPI, yield curve, gold, USD). Set the stage with confidence and precision.
+
+Paragraph 2 — Portfolio attribution. Discuss how the client's strategy performed vs. the benchmark this quarter \
+and YTD. Reference the macro regime and explain what drove returns. Be specific and honest.
+
+Paragraph 3 — Forward positioning. Given the current macro regime (GDP/CPI quadrant), explain how the portfolio \
+is positioned for the quarters ahead. Name 1–2 concrete tilts or actions. Avoid generic platitudes.
+
+Paragraph 4 — Personal note. Address THIS specific client by first name. Reference their actual situation: \
+any upcoming RSU vest, tax-loss harvesting opportunities, foundation review, next review date, or other \
+alerts from the data. Close warmly and invite a call.
+
+Rules:
+- Use real numbers from the data provided — do not invent figures.
+- No bullet points, no section headers, no markdown formatting in the output.
+- Sign off with "Warm regards," on a new line, then the advisor's name on the next line.
+- If data for an item is unavailable, skip that item gracefully without calling attention to the gap.
+"""
+
+
+def _ql_quarter_returns(returns_df: "pd.DataFrame", strategy: str, year: int, months: list) -> dict:
+    """Compute quarter and YTD returns for a strategy from a monthly returns DataFrame."""
+    result = {"quarter_return": None, "ytd_return": None, "available_thru": None}
+    if returns_df is None or returns_df.empty:
+        return result
+    if strategy not in returns_df.columns:
+        return result
+
+    series = returns_df[strategy].dropna()
+    # quarter return
+    q_mask = (series.index.year == year) & (series.index.month.isin(months))
+    q_vals = series[q_mask]
+    if not q_vals.empty:
+        result["quarter_return"] = float(((1 + q_vals).prod() - 1) * 100)
+        result["available_thru"] = q_vals.index.max().strftime("%b %Y")
+    # YTD: Jan through end of quarter
+    ytd_mask = (series.index.year == year) & (series.index.month <= max(months))
+    ytd_vals = series[ytd_mask]
+    if not ytd_vals.empty:
+        result["ytd_return"] = float(((1 + ytd_vals).prod() - 1) * 100)
+
+    return result
+
+
+def _ql_build_prompt_data(selected_client: str, selected_strategy: str, quarter_label: str) -> dict:
+    """Gather all data needed for the letter and return a structured dict."""
+    import pandas as pd
+
+    year, months = _QL_QUARTER_MAP[quarter_label]
+    data: dict = {
+        "client_name": selected_client,
+        "strategy": selected_strategy,
+        "quarter": quarter_label,
+    }
+
+    # Client profile
+    try:
+        client_df = utils.load_client_data_csv(selected_client)
+        if not client_df.empty:
+            r = client_df.iloc[0]
+            data["client_id"]        = str(r.get("client_id", ""))
+            data["risk_profile"]     = str(r.get("risk_profile", "—"))
+            data["tax_bracket"]      = str(r.get("tax_bracket", "—"))
+            data["time_horizon_yrs"] = str(r.get("time_horizon_yrs", "—"))
+            data["next_review_date"] = str(r.get("next_review_date", "—"))
+            data["advisor"]          = str(r.get("primary_advisor", "Your Advisor"))
+            data["aum"]              = r.get("aum", 0)
+        else:
+            data["client_id"] = ""
+            data["advisor"] = "Your Advisor"
+    except Exception:
+        data["client_id"] = ""
+        data["advisor"] = "Your Advisor"
+
+    # Strategy returns
+    try:
+        ret_df = utils.get_strategy_returns()
+        ret_info = _ql_quarter_returns(ret_df, selected_strategy, year, months)
+        data["quarter_return"]  = ret_info["quarter_return"]
+        data["ytd_return"]      = ret_info["ytd_return"]
+        data["available_thru"]  = ret_info["available_thru"]
+    except Exception:
+        data["quarter_return"] = data["ytd_return"] = data["available_thru"] = None
+
+    # Macro data (FRED)
+    try:
+        macro_df = utils.get_macro_data()
+        if not macro_df.empty:
+            last = macro_df.dropna(how="all").iloc[-1]
+            data["fed_funds"] = last.get("DFF",  last.get("fed_funds",  "N/A"))
+            data["cpi_yoy"]   = last.get("CPIAUCSL", last.get("cpi", "N/A"))
+            data["t10y2y"]    = last.get("T10Y2Y",   last.get("t10y2y", "N/A"))
+            data["gdp"]       = last.get("GDP",       last.get("gdp", "N/A"))
+        else:
+            data["fed_funds"] = data["cpi_yoy"] = data["t10y2y"] = data["gdp"] = "N/A"
+    except Exception:
+        data["fed_funds"] = data["cpi_yoy"] = data["t10y2y"] = data["gdp"] = "N/A"
+
+    # Live market context
+    try:
+        mkt = utils.get_live_market_context()
+        data["vix"]         = mkt.get("vix", "N/A")
+        data["spy_qtd"]     = mkt.get("spy_mtd", mkt.get("spy_qtd", "N/A"))
+        data["hy_mtd"]      = mkt.get("hy_mtd", "N/A")
+        data["gold_5d"]     = mkt.get("gold_5d", "N/A")
+        data["usd_5d"]      = mkt.get("usd_5d", "N/A")
+        data["curve_shape"] = mkt.get("curve_shape", "N/A")
+        data["as_of"]       = mkt.get("as_of", "N/A")
+    except Exception:
+        data["vix"] = data["spy_qtd"] = data["hy_mtd"] = "N/A"
+        data["gold_5d"] = data["usd_5d"] = data["curve_shape"] = data["as_of"] = "N/A"
+
+    # Market news — top 5 headlines
+    try:
+        news = utils.get_market_news(selected_strategy)
+        data["headlines"] = [
+            f"{n.get('title','')}" for n in (news or [])[:5] if n.get("title")
+        ]
+    except Exception:
+        data["headlines"] = []
+
+    # Client alerts
+    try:
+        alerts_df = utils.load_client_alerts(selected_client)
+        if not alerts_df.empty:
+            active = alerts_df[alerts_df.get("status", pd.Series(dtype=str)).str.lower().ne("dismissed")]
+            data["alerts"] = active[["alert_type", "title", "description", "priority", "due_date"]].to_dict("records")
+        else:
+            data["alerts"] = []
+    except Exception:
+        data["alerts"] = []
+
+    # RSU vesting — next vest
+    try:
+        client_id = data.get("client_id", "")
+        if client_id:
+            rsu_df = utils.load_rsu_schedule(client_id)
+            if not rsu_df.empty:
+                rsu_df["vest_date"] = pd.to_datetime(rsu_df["vest_date"], errors="coerce")
+                future = rsu_df[rsu_df["vest_date"] >= pd.Timestamp.today()].sort_values("vest_date")
+                if not future.empty:
+                    r = future.iloc[0]
+                    data["rsu_next_vest"] = {
+                        "date":            str(r.get("vest_date", ""))[:10],
+                        "shares":          r.get("shares_vesting", ""),
+                        "estimated_value": r.get("estimated_value", ""),
+                        "withholding_pct": r.get("tax_withheld_pct", ""),
+                    }
+    except Exception:
+        pass
+
+    # TLH opportunities
+    try:
+        client_id = data.get("client_id", "")
+        if client_id:
+            tlh_df = utils.get_client_tlh_opportunities(client_id)
+            if not tlh_df.empty:
+                data["tlh_total_loss"] = float(tlh_df["unrealized_gl_dollars"].sum())
+                data["tlh_lots"] = tlh_df[["ticker", "unrealized_gl_dollars", "term"]].head(3).to_dict("records")
+    except Exception:
+        pass
+
+    return data
+
+
+def _ql_build_user_message(d: dict) -> str:
+    """Convert gathered data dict into a structured LLM user message."""
+    lines = [
+        f"CLIENT: {d['client_name']}",
+        f"QUARTER: {d['quarter']}",
+        f"STRATEGY: {d['strategy']}",
+        f"RISK PROFILE: {d.get('risk_profile', '—')}",
+        f"TAX BRACKET: {d.get('tax_bracket', '—')}",
+        f"TIME HORIZON: {d.get('time_horizon_yrs', '—')} years",
+        f"NEXT REVIEW: {d.get('next_review_date', '—')}",
+        f"ADVISOR: {d.get('advisor', 'Your Advisor')}",
+        "",
+        "--- PERFORMANCE ---",
+    ]
+
+    qr = d.get("quarter_return")
+    yr = d.get("ytd_return")
+    thru = d.get("available_thru", "")
+    lines.append(f"Quarter return ({d['quarter']}{', through ' + thru if thru else ''}): "
+                 f"{f'{qr:.2f}%' if qr is not None else 'N/A'}")
+    lines.append(f"YTD return: {f'{yr:.2f}%' if yr is not None else 'N/A'}")
+
+    lines += [
+        "",
+        "--- MACRO DATA (latest available) ---",
+        f"Fed Funds Rate: {d.get('fed_funds', 'N/A')}",
+        f"CPI YoY: {d.get('cpi_yoy', 'N/A')}",
+        f"10Y-2Y Yield Spread: {d.get('t10y2y', 'N/A')}",
+        f"GDP: {d.get('gdp', 'N/A')}",
+        "",
+        "--- LIVE MARKET CONTEXT ---",
+        f"VIX: {d.get('vix', 'N/A')}",
+        f"SPY QTD: {d.get('spy_qtd', 'N/A')}",
+        f"HY MTD: {d.get('hy_mtd', 'N/A')}",
+        f"Gold (5-day): {d.get('gold_5d', 'N/A')}",
+        f"USD (5-day): {d.get('usd_5d', 'N/A')}",
+        f"Yield curve: {d.get('curve_shape', 'N/A')}",
+        f"As of: {d.get('as_of', 'N/A')}",
+    ]
+
+    if d.get("headlines"):
+        lines += ["", "--- RELEVANT MARKET HEADLINES ---"]
+        for h in d["headlines"]:
+            lines.append(f"• {h}")
+
+    if d.get("alerts"):
+        lines += ["", "--- CLIENT ALERTS ---"]
+        for a in d["alerts"]:
+            lines.append(f"[{a.get('priority','—')}] {a.get('alert_type','')}: {a.get('title','')} — {a.get('description','')} (due {a.get('due_date','—')})")
+
+    if d.get("rsu_next_vest"):
+        v = d["rsu_next_vest"]
+        lines += [
+            "",
+            "--- RSU VESTING (next vest) ---",
+            f"Date: {v.get('date','')}, Shares: {v.get('shares','')}, "
+            f"Est. Value: ${v.get('estimated_value','')}, Withholding: {v.get('withholding_pct','')}%",
+        ]
+
+    if d.get("tlh_lots"):
+        lines += ["", "--- TAX-LOSS HARVESTING OPPORTUNITIES ---",
+                  f"Total harvestable loss: ${d.get('tlh_total_loss', 0):,.0f}"]
+        for lot in d["tlh_lots"]:
+            lines.append(f"  {lot.get('ticker','')}: ${lot.get('unrealized_gl_dollars', 0):,.0f} ({lot.get('term','')})")
+
+    return "\n".join(lines)
+
+
+def _ql_append_log(d: dict, letter_text: str, status: str = "approved") -> None:
+    """Append one letter record to quarterly_letters.csv."""
+    import csv
+    from datetime import datetime as _dt
+
+    row = {
+        "letter_id":    f"QL-{_dt.now().strftime('%Y%m%d%H%M%S')}",
+        "client_id":    d.get("client_id", ""),
+        "client_name":  d.get("client_name", ""),
+        "quarter":      d.get("quarter", ""),
+        "generated_at": d.get("generated_at", _dt.now().isoformat(timespec="seconds")),
+        "approved_at":  _dt.now().isoformat(timespec="seconds"),
+        "advisor":      d.get("advisor", ""),
+        "model_used":   utils.DEFAULT_MODEL,
+        "letter_text":  letter_text.replace("\n", "\\n"),
+        "status":       status,
+    }
+    fieldnames = list(row.keys())
+    file_exists = os.path.isfile(_QL_LOG_PATH)
+    with open(_QL_LOG_PATH, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def display_quarterly_letter(selected_client: str, selected_strategy: str) -> None:
+    """Quarterly Letter Engine — generate, edit, approve, and log personalized client letters."""
+    from datetime import datetime as _dt
+
+    st.subheader("Quarterly Letter Engine")
+
+    # Quarter selector
+    quarters = list(_QL_QUARTER_MAP.keys())
+    quarter_label = st.selectbox("Quarter", quarters, key="ql_quarter")
+
+    col_gen, col_disc = st.columns([1, 6])
+    with col_gen:
+        generate_clicked = st.button("Generate Letter", key="ql_generate", type="primary")
+    with col_disc:
+        discard_clicked = st.button("Discard", key="ql_discard")
+
+    if discard_clicked:
+        for k in ["ql_letter_text", "ql_letter_data", "ql_approved"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+
+    if generate_clicked:
+        with st.spinner("Gathering data and drafting letter..."):
+            prompt_data = _ql_build_prompt_data(selected_client, selected_strategy, quarter_label)
+            prompt_data["generated_at"] = _dt.now().isoformat(timespec="seconds")
+            user_msg = _ql_build_user_message(prompt_data)
+            messages = [
+                {"role": "system",  "content": _QL_SYSTEM_PROMPT},
+                {"role": "user",    "content": user_msg},
+            ]
+            try:
+                resp = utils.groq_chat(
+                    messages,
+                    feature="quarterly_letter",
+                    max_tokens=2000,
+                    temperature=0.4,
+                )
+                letter_text = resp.choices[0].message.content.strip()
+            except Exception as e:
+                st.error(f"Letter generation failed: {e}")
+                return
+
+        st.session_state["ql_letter_text"] = letter_text
+        st.session_state["ql_letter_data"] = prompt_data
+        st.session_state.pop("ql_approved", None)
+
+    # Render letter if available
+    letter_text = st.session_state.get("ql_letter_text")
+    prompt_data  = st.session_state.get("ql_letter_data", {})
+
+    if letter_text:
+        edited_text = st.text_area(
+            "Letter (editable before approval)",
+            value=letter_text,
+            height=600,
+            key="ql_letter_editor",
+        )
+
+        col_approve, col_spacer = st.columns([1, 5])
+        with col_approve:
+            approve_clicked = st.button("Approve & Log", key="ql_approve", type="primary")
+
+        if approve_clicked:
+            final_text = edited_text
+            _ql_append_log(prompt_data, final_text, status="approved")
+            st.session_state["ql_approved"] = True
+            st.session_state["ql_letter_text"] = final_text
+            st.success("Letter approved and logged to quarterly_letters.csv")
+
+        # Data inputs expander
+        with st.expander("Data inputs used to generate this letter", expanded=False):
+            col_l, col_r = st.columns(2)
+            with col_l:
+                st.markdown("**Performance**")
+                qr = prompt_data.get("quarter_return")
+                yr = prompt_data.get("ytd_return")
+                st.write(f"Quarter return: {f'{qr:.2f}%' if qr is not None else 'N/A'}")
+                st.write(f"YTD return: {f'{yr:.2f}%' if yr is not None else 'N/A'}")
+                st.write(f"Available through: {prompt_data.get('available_thru', 'N/A')}")
+
+                st.markdown("**Macro**")
+                st.write(f"Fed Funds: {prompt_data.get('fed_funds', 'N/A')}")
+                st.write(f"CPI YoY: {prompt_data.get('cpi_yoy', 'N/A')}")
+                st.write(f"10Y-2Y spread: {prompt_data.get('t10y2y', 'N/A')}")
+                st.write(f"GDP: {prompt_data.get('gdp', 'N/A')}")
+
+            with col_r:
+                st.markdown("**Live Market**")
+                st.write(f"VIX: {prompt_data.get('vix', 'N/A')}")
+                st.write(f"SPY QTD: {prompt_data.get('spy_qtd', 'N/A')}")
+                st.write(f"HY MTD: {prompt_data.get('hy_mtd', 'N/A')}")
+                st.write(f"Yield curve: {prompt_data.get('curve_shape', 'N/A')}")
+                st.write(f"Gold 5d: {prompt_data.get('gold_5d', 'N/A')}")
+                st.write(f"USD 5d: {prompt_data.get('usd_5d', 'N/A')}")
+
+                if prompt_data.get("alerts"):
+                    st.markdown("**Active Alerts**")
+                    for a in prompt_data["alerts"]:
+                        st.write(f"[{a.get('priority','—')}] {a.get('title','')}")
+
+                if prompt_data.get("rsu_next_vest"):
+                    v = prompt_data["rsu_next_vest"]
+                    st.markdown("**Next RSU Vest**")
+                    st.write(f"{v.get('date','')} — {v.get('shares','')} shares (~${v.get('estimated_value',''):,})")
+
+                if prompt_data.get("tlh_lots"):
+                    st.markdown("**TLH Opportunities**")
+                    st.write(f"Total loss: ${prompt_data.get('tlh_total_loss', 0):,.0f}")
+
+            if prompt_data.get("headlines"):
+                st.markdown("**Headlines fed to model**")
+                for h in prompt_data["headlines"]:
+                    st.write(f"• {h}")

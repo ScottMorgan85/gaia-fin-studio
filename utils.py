@@ -2670,3 +2670,26 @@ def get_household_summary(client_name: str) -> dict:
     except Exception as e:
         print(f"[GAIA] household summary failed: {e}", flush=True)
         return {}
+
+
+@st.cache_data(ttl=3600)
+def get_client_accounts(client_name: str) -> pd.DataFrame:
+    """
+    Return accounts DataFrame for a given client name.
+    Columns: account_id, client_id, account_name, account_type,
+             custodian, strategy, aum, inception_date, is_taxable.
+    Returns empty DataFrame on any error.
+    """
+    try:
+        clients  = pd.read_csv("data/client_data.csv")
+        accounts = pd.read_csv("data/accounts.csv")
+        client_row = clients[clients["client_name"] == client_name]
+        if client_row.empty:
+            return pd.DataFrame()
+        client_id = client_row.iloc[0]["client_id"]
+        result = accounts[accounts["client_id"] == client_id].copy()
+        result["aum"] = pd.to_numeric(result["aum"], errors="coerce").fillna(0.0)
+        return result
+    except Exception as e:
+        print(f"[GAIA] get_client_accounts failed: {e}", flush=True)
+        return pd.DataFrame()

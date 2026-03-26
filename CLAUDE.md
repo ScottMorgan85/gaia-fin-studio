@@ -214,6 +214,7 @@ All functions are in `utils.py` (appended at end). All cache with `@st.cache_dat
 | `load_tax_lots(account_id, client_id)` | 1hr | Reads `data/client_transactions.csv` (lot-level schema). Filter by account_id or client_id. Coerces numerics, computes concentration_pct within account. |
 | `get_client_tlh_opportunities(client_id)` | — | Calls `load_tax_lots()` and filters for unrealized_gl_dollars < 0 and not wash_sale. Returns DataFrame of harvestable lots sorted by loss amount. |
 | `get_household_summary(client_name)` | — | Returns dict: total_aum, taxable_aum, tax_deferred_aum, n_accounts, total_gain_loss, tlh_opportunities, tlh_total_loss, risk_profile, advisor, next_review, notes. |
+| `get_client_accounts(client_name)` | 1hr | Reads `data/accounts.csv` filtered by client name (joins client_data.csv for client_id). Returns DataFrame: account_id, client_id, account_name, account_type, custodian, strategy, aum, inception_date, is_taxable. Used by Analytics Labs strategy selector and Rebalance Studio. |
 
 **Integrations:**
 - **Market Pulse sidebar** — added to `display_market_commentary_and_overview()`: VIX/vol regime badge, HY spread, yield curve shape, regime score, next FOMC countdown

@@ -1086,6 +1086,30 @@ def display_forecast_lab(selected_client, selected_strategy):
     model_primary  = "llama-3.3-70b-versatile"
     model_fallback = "meta-llama/llama-4-scout-17b-16e-instruct"
 
+    # ── Strategy selector ────────────────────────────────────────────────────
+    try:
+        accts = utils.get_client_accounts(client_name=selected_client)
+        if not accts.empty:
+            strategy_options = sorted(accts["strategy"].dropna().unique().tolist())
+            if selected_strategy not in strategy_options:
+                strategy_options.insert(0, selected_strategy)
+            if len(strategy_options) > 1:
+                selected_strategy = st.selectbox(
+                    "Analyze strategy:",
+                    strategy_options,
+                    index=strategy_options.index(selected_strategy)
+                    if selected_strategy in strategy_options else 0,
+                    key=f"lab_strat_{selected_client}_{selected_strategy[:8]}_fc",
+                )
+            matching_accts = accts[accts["strategy"] == selected_strategy]
+            total_in_strategy = matching_accts["aum"].sum()
+            st.caption(
+                f"Analyzing: {selected_client} · {selected_strategy} · "
+                f"${total_in_strategy/1e6:.2f}M across {len(matching_accts)} account(s)"
+            )
+    except Exception:
+        st.caption(f"Analyzing: {selected_client} · {selected_strategy}")
+
     # Client risk profile (best-effort)
     try:
         from data.client_mapping import get_client_info as _get_ci
@@ -2420,63 +2444,141 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     current = _jitter_mix(current_base, pp_sigma=jitter_pp, seed=seed,
                           bias_away_from_alts=True, alts_cap=40.0)
 
-    # ───────────────────────────────────────────────────────────────────────────
-    # Historical allocation (demo; anchored to current)
-    # ───────────────────────────────────────────────────────────────────────────
-    st.subheader("Historical allocation (demo)")
+    # ── Real Current Household Allocation ─────────────────────────────────────
+    st.subheader("Current Household Allocation")
 
-    if "alloc_hist_seed" not in st.session_state:
-        st.session_state["alloc_hist_seed"] = 1234
-    _hist_seed = int(st.session_state["alloc_hist_seed"])
-    HIST_MONTHS = 60  # fixed window
+    _ASSET_CLASS_MAP = {
+        "SPY": "Equity", "QQQ": "Equity", "IWM": "Equity", "VTI": "Equity",
+        "VXUS": "Intl Equity", "EFA": "Intl Equity",
+        "NVDA": "Concentrated Stock",
+        "AGG": "Fixed Income", "BND": "Fixed Income",
+        "TLT": "Fixed Income", "IEF": "Fixed Income",
+        "HYG": "High Yield", "JNK": "High Yield",
+        "LQD": "Investment Grade",
+        "BKLN": "Leveraged Loans",
+        "GLD": "Commodities", "USO": "Commodities",
+        "VNQ": "Real Estate", "IYR": "Real Estate",
+        "PSP": "Private Equity",
+    }
 
-    def _make_synth_history_anchored(current_mix: dict, months: int, seed: int) -> pd.DataFrame:
-        rng = np.random.default_rng(seed)
-        keys_local = ["Equities", "Fixed Income", "Alternatives", "Cash"]
-        w_now = np.array([float(current_mix.get(k, 0.0)) for k in keys_local], dtype=float)
-        w_now = w_now / (w_now.sum() or 1.0)
+    # Scope variables used by drift section below
+    _rebalance_allocation = pd.Series(dtype=float)
+    _rebalance_total = 0.0
+    _rebalance_target = {}
 
-        hist = [w_now]
-        for _ in range(months - 1):
-            step = rng.normal(0, 0.006, size=w_now.shape)
-            prev = np.clip(hist[-1] - step, 0, None)
-            prev = prev / (prev.sum() or 1.0)
-            hist.append(prev)
+    try:
+        _lots_rb = utils.load_tax_lots(client_id=_client_id_conc) if _client_id_conc else pd.DataFrame()
+        _accts_rb = utils.get_client_accounts(client_name=selected_client)
 
-        hist = np.array(hist[::-1]) * 100.0
-        dates = pd.date_range(end=pd.Timestamp.today().normalize(), periods=months, freq="M")
-        df = pd.DataFrame(hist, index=dates, columns=keys_local)
-        df.iloc[-1] = [float(current_mix.get(k, 0.0)) for k in keys_local]  # hard anchor
-        return df
+        if not _lots_rb.empty and not _accts_rb.empty:
+            _lots_rb_m = _lots_rb.merge(
+                _accts_rb[["account_id", "account_type", "strategy", "is_taxable"]],
+                on="account_id", how="left",
+            )
+            _lots_rb_m["is_taxable"] = (
+                _lots_rb_m["is_taxable"].astype(str).str.lower() == "true"
+            )
+            _lots_rb_m["asset_class"] = (
+                _lots_rb_m["ticker"].map(_ASSET_CLASS_MAP).fillna("Other")
+            )
+            _rebalance_allocation = (
+                _lots_rb_m.groupby("asset_class")["current_value"]
+                .sum()
+                .sort_values(ascending=False)
+            )
+            _rebalance_total = float(_rebalance_allocation.sum())
 
-    _hist_df = _make_synth_history_anchored(current, HIST_MONTHS, _hist_seed)
+            _alloc_df = pd.DataFrame({
+                "Asset Class": _rebalance_allocation.index,
+                "Value":       _rebalance_allocation.values,
+                "Weight":      _rebalance_allocation.values / (_rebalance_total or 1.0),
+            })
 
-    hist_fig = px.area(
-        _hist_df, x=_hist_df.index, y=list(_hist_df.columns),
-        labels={"value": "Allocation %", "x": ""}, title="Historical allocation (synthetic)",
-    )
-    hist_fig.update_layout(legend_title_text="Asset Class", yaxis_range=[0, 100])
-    st.plotly_chart(hist_fig, use_container_width=True)
+            _col_rb1, _col_rb2 = st.columns([1, 1])
+            with _col_rb1:
+                st.dataframe(
+                    _alloc_df.style.format({"Value": "${:,.0f}", "Weight": "{:.1%}"}),
+                    hide_index=True, use_container_width=True,
+                )
+            with _col_rb2:
+                _fig_rb = px.bar(
+                    _alloc_df, x="Weight", y="Asset Class", orientation="h",
+                    text=_alloc_df["Weight"].apply(lambda x: f"{x:.1%}"),
+                    title="Current Allocation",
+                )
+                _fig_rb.update_layout(
+                    height=300, margin=dict(l=20, r=20, t=40, b=20),
+                    xaxis_tickformat=".0%", showlegend=False,
+                )
+                st.plotly_chart(_fig_rb, use_container_width=True)
 
-    st.markdown("### Current allocation")
-    cc1, cc2 = st.columns([1.2, 1])
-    with cc1:
-        _asset_keys = list(_hist_df.columns)
-        donut_df = pd.DataFrame({
-            "Asset Class": _asset_keys,
-            "Allocation %": [float(current.get(k, 0.0)) for k in _asset_keys],
+            # Concentration / location warnings
+            _taxable_nvda = _lots_rb_m[
+                _lots_rb_m["is_taxable"] & (_lots_rb_m["ticker"] == "NVDA")
+            ]["current_value"].sum()
+            if _taxable_nvda > 0:
+                _nvda_pct = _taxable_nvda / (_rebalance_total or 1.0)
+                if _nvda_pct > 0.20:
+                    st.warning(
+                        f"⚠️ Concentrated Stock: NVDA = {_nvda_pct:.1%} of household — "
+                        "diversification recommended"
+                    )
+            _fi_tax_def = _lots_rb_m[
+                ~_lots_rb_m["is_taxable"] &
+                _lots_rb_m["asset_class"].isin([
+                    "Fixed Income", "High Yield", "Investment Grade", "Leveraged Loans"
+                ])
+            ]["current_value"].sum()
+            if _fi_tax_def > 0:
+                st.success(
+                    f"✓ Tax-efficient placement: ${_fi_tax_def/1e6:.2f}M "
+                    "fixed income in tax-deferred accounts"
+                )
+        else:
+            st.info("No holdings data available for this client.")
+    except Exception as _e:
+        st.warning(f"Could not load holdings: {_e}")
+
+    st.markdown("---")
+
+    # ── Target Allocation (IPS Policy) ────────────────────────────────────────
+    st.subheader("Target Allocation (IPS Policy)")
+
+    _RISK_TARGETS = {
+        "Conservative": {
+            "Equity": 0.30, "Intl Equity": 0.10, "Fixed Income": 0.40,
+            "High Yield": 0.10, "Commodities": 0.05, "Cash": 0.05,
+        },
+        "Moderate": {
+            "Equity": 0.45, "Intl Equity": 0.10, "Fixed Income": 0.25,
+            "High Yield": 0.10, "Commodities": 0.05, "Cash": 0.05,
+        },
+        "Aggressive": {
+            "Equity": 0.65, "Intl Equity": 0.15, "Fixed Income": 0.10,
+            "High Yield": 0.05, "Commodities": 0.05, "Cash": 0.00,
+        },
+    }
+
+    try:
+        _clients_ips = pd.read_csv("data/client_data.csv")
+        _risk_row = _clients_ips[_clients_ips["client_name"] == selected_client]
+        _risk_str = _risk_row.iloc[0]["risk_profile"] if not _risk_row.empty else "Moderate"
+        _rebalance_target = _RISK_TARGETS.get(_risk_str, _RISK_TARGETS["Moderate"])
+        _target_df = pd.DataFrame({
+            "Asset Class":   list(_rebalance_target.keys()),
+            "Target Weight": list(_rebalance_target.values()),
+            "Target Value":  [v * _rebalance_total for v in _rebalance_target.values()],
         })
-        fig_pie = px.pie(donut_df, values="Allocation %", names="Asset Class", hole=0.55,
-                         color_discrete_sequence=px.colors.qualitative.Set2)
-        fig_pie.update_traces(textposition="inside", texttemplate="%{label}<br>%{percent:.0%}")
-        fig_pie.update_layout(margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
-        st.plotly_chart(fig_pie, use_container_width=True)
-    with cc2:
-        exp_r, vol = _naive_return_vol(current)
-        st.metric("Expected return (naïve)", f"{exp_r*100:.1f}%")
-        st.metric("Volatility (naïve)",        f"{vol*100:.1f}%")
-        st.metric("Sharpe (rf=2%)",            f"{_sharpe(exp_r, vol, 0.02):.2f}")
-        st.caption("Illustrative only — coarse bucket assumptions.")
+        st.caption(f"Policy benchmark for {_risk_str} risk profile")
+        st.dataframe(
+            _target_df.style.format({
+                "Target Weight": "{:.0%}",
+                "Target Value":  "${:,.0f}",
+            }),
+            hide_index=True, use_container_width=True,
+        )
+    except Exception:
+        pass
 
     st.markdown("---")
 
@@ -2625,28 +2727,51 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
          for sc, d in scenarios.items() for a, pct in d.items()]
     )
 
-    st.subheader("Allocation mix across scenarios")
-    fig = px.bar(
-        df_long, x="Scenario", y="Allocation %", color="Asset Class",
-        barmode="stack", text="Allocation %",
-        category_orders={"Scenario": ["Current", "Recommended", "Alt 1", "Alt 2"]},
-        color_discrete_sequence=px.colors.qualitative.Set2,
-    )
-    fig.update_traces(texttemplate="%{y:.0f}%")
-    fig.update_layout(yaxis_range=[0, 100], legend_title="Asset Class")
-    st.plotly_chart(fig, use_container_width=True)
+    with st.expander("Allocation mix across scenarios", expanded=False):
+        fig = px.bar(
+            df_long, x="Scenario", y="Allocation %", color="Asset Class",
+            barmode="stack", text="Allocation %",
+            category_orders={"Scenario": ["Current", "Recommended", "Alt 1", "Alt 2"]},
+            color_discrete_sequence=px.colors.qualitative.Set2,
+        )
+        fig.update_traces(texttemplate="%{y:.0f}%")
+        fig.update_layout(yaxis_range=[0, 100], legend_title="Asset Class")
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Δ vs Current (percentage points)")
-    base = pd.Series(current)
-    df_delta = pd.DataFrame(
-        [{"Asset Class": a, "Scenario": name, "Δ (pp)": float(v)}
-         for name in ["Recommended", "Alt 1", "Alt 2"]
-         for a, v in (pd.Series(scenarios[name]) - base).items()]
-    )
-    fig2 = px.bar(df_delta, y="Asset Class", x="Δ (pp)", color="Scenario",
-                  barmode="group", orientation="h",
-                  color_discrete_sequence=px.colors.qualitative.Set2)
-    st.plotly_chart(fig2, use_container_width=True)
+    # ── Drift vs Policy Target ────────────────────────────────────────────────
+    st.subheader("Drift vs Policy Target")
+    try:
+        if _rebalance_total > 0 and _rebalance_target:
+            drift_rows = []
+            for _ac, _twt in _rebalance_target.items():
+                _cwt = (
+                    _rebalance_allocation.get(_ac, 0) / _rebalance_total
+                    if _rebalance_total > 0 else 0
+                )
+                _drift = _cwt - _twt
+                drift_rows.append({
+                    "Asset Class": _ac,
+                    "Current":     f"{_cwt:.1%}",
+                    "Target":      f"{_twt:.0%}",
+                    "Drift":       f"{_drift:+.1%}",
+                    "Action": (
+                        "▲ Overweight — reduce" if _drift > 0.05 else
+                        "▼ Underweight — add"   if _drift < -0.05 else
+                        "✓ On target"
+                    ),
+                })
+            drift_df = pd.DataFrame(drift_rows)
+            st.dataframe(drift_df, hide_index=True, use_container_width=True)
+            _rebal_needed = [r for r in drift_rows if "reduce" in r["Action"] or "add" in r["Action"]]
+            if _rebal_needed:
+                st.info(
+                    f"Rebalancing needed in {len(_rebal_needed)} asset class(es). "
+                    f"Largest drift: {_rebal_needed[0]['Asset Class']} ({_rebal_needed[0]['Drift']})"
+                )
+        else:
+            st.caption("Drift analysis requires holdings data.")
+    except Exception:
+        pass
 
     # ───────────────────────────────────────────────────────────────────────────
     # AI Trade Ideas (lightweight, scenario-aware)
@@ -3149,6 +3274,30 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
         "This is a PoC: classical data, quantum-style optimization logic."
     )
 
+    # ── Strategy selector ────────────────────────────────────────────────────
+    try:
+        accts = utils.get_client_accounts(client_name=selected_client)
+        if not accts.empty:
+            strategy_options = sorted(accts["strategy"].dropna().unique().tolist())
+            if selected_strategy not in strategy_options:
+                strategy_options.insert(0, selected_strategy)
+            if len(strategy_options) > 1:
+                selected_strategy = st.selectbox(
+                    "Analyze strategy:",
+                    strategy_options,
+                    index=strategy_options.index(selected_strategy)
+                    if selected_strategy in strategy_options else 0,
+                    key=f"lab_strat_{selected_client}_{selected_strategy[:8]}_qs",
+                )
+            matching_accts = accts[accts["strategy"] == selected_strategy]
+            total_in_strategy = matching_accts["aum"].sum()
+            st.caption(
+                f"Analyzing: {selected_client} · {selected_strategy} · "
+                f"${total_in_strategy/1e6:.2f}M across {len(matching_accts)} account(s)"
+            )
+    except Exception:
+        st.caption(f"Analyzing: {selected_client} · {selected_strategy}")
+
     with st.expander("About Optimization Lab — methods, parameters & interpretation", expanded=False):
         st.markdown("""
 ### What is Quantum Studio?
@@ -3564,6 +3713,30 @@ def display_factor_decomposition(selected_client: str, selected_strategy: str):
         at |t| > 1.96 (95% confidence).  Source: Ken French Data Library.
         """
     )
+
+    # ── Strategy selector ────────────────────────────────────────────────────
+    try:
+        accts = utils.get_client_accounts(client_name=selected_client)
+        if not accts.empty:
+            strategy_options = sorted(accts["strategy"].dropna().unique().tolist())
+            if selected_strategy not in strategy_options:
+                strategy_options.insert(0, selected_strategy)
+            if len(strategy_options) > 1:
+                selected_strategy = st.selectbox(
+                    "Analyze strategy:",
+                    strategy_options,
+                    index=strategy_options.index(selected_strategy)
+                    if selected_strategy in strategy_options else 0,
+                    key=f"lab_strat_{selected_client}_{selected_strategy[:8]}_fl",
+                )
+            matching_accts = accts[accts["strategy"] == selected_strategy]
+            total_in_strategy = matching_accts["aum"].sum()
+            st.caption(
+                f"Analyzing: {selected_client} · {selected_strategy} · "
+                f"${total_in_strategy/1e6:.2f}M across {len(matching_accts)} account(s)"
+            )
+    except Exception:
+        st.caption(f"Analyzing: {selected_client} · {selected_strategy}")
 
     with st.spinner("Running factor regression…"):
         result = utils.get_factor_exposures(selected_strategy)

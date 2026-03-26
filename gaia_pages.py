@@ -2780,7 +2780,6 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     _ideas_key = f"trade_ideas_{selected_client}"
     today_str = datetime.today().strftime("%Y-%m-%d")
     if st.button("Generate Trade Ideas", key="gen_trade_ideas"):
-        api_key = get_groq_key()
         prompt = (
             f"Today: {today_str}\n"
             f"Client: {selected_client} | Strategy: {selected_strategy}\n\n"
@@ -4642,7 +4641,6 @@ def _ql_build_prompt_data(selected_client: str, selected_strategy: str, quarter_
     try:
         macro_df = utils.get_macro_data()
         if not macro_df.empty:
-            last = macro_df.dropna(how="all").iloc[-1]
             # Fed Funds: FRED series is FEDFUNDS (not DFF); fallback to known current value
             data["fed_funds"] = (
                 macro_df["FEDFUNDS"].dropna().iloc[-1]

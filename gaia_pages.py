@@ -1078,7 +1078,6 @@ def display_forecast_lab(selected_client, selected_strategy):
     import plotly.graph_objects as go
     from datetime import datetime
     from pandas_datareader import data as web
-    from groq import Groq
     import utils
     import streamlit as st
 
@@ -1086,7 +1085,6 @@ def display_forecast_lab(selected_client, selected_strategy):
     api_key = get_groq_key()
     model_primary  = "llama-3.3-70b-versatile"
     model_fallback = "meta-llama/llama-4-scout-17b-16e-instruct"
-    groq_client = Groq(api_key=api_key) if api_key else None
 
     # Client risk profile (best-effort)
     try:
@@ -1509,7 +1507,7 @@ def display_forecast_lab(selected_client, selected_strategy):
             "Risk: [key risk] | Catalyst: [specific catalyst]"
         )
         rec = None
-        if groq_client:
+        if api_key:
             try:
                 rec = utils.groq_chat(
                     [{"role": "system", "content": system_prompt},
@@ -2321,7 +2319,6 @@ def _naive_return_vol(weights: Dict[str, float]) -> Tuple[float, float]:
 def display_scenario_allocator(selected_client: str, selected_strategy: str):
     import os, utils, pandas as pd, numpy as np, plotly.express as px, random
     from datetime import datetime
-    from groq import Groq
 
     try:
         utils.log_usage(page="Scenario Allocator", action="open",
@@ -2655,38 +2652,37 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     # AI Trade Ideas (lightweight, scenario-aware)
     # ───────────────────────────────────────────────────────────────────────────
     st.subheader("🧠 AI Trade Ideas (scenarios)")
-    try:
+    _ideas_key = f"trade_ideas_{selected_client}"
+    today_str = datetime.today().strftime("%Y-%m-%d")
+    if st.button("Generate Trade Ideas", key="gen_trade_ideas"):
         api_key = get_groq_key()
-        ideas_txt = None
-        if api_key:
-            client = Groq(api_key=api_key)
-            prompt = (
-                f"Client: {selected_client} | Strategy: {selected_strategy}\n\n"
-                f"Current mix: {current}\n"
-                f"Recommended: {recommended}\n"
-                f"Alt1: {alt1}\n"
-                f"Alt2: {alt2}\n\n"
-                "Give exactly 4 concise, dated trade ideas (YYYY-MM-DD) across these scenarios. "
-                "One-liners. Use this format:\n"
-                "- YYYY-MM-DD: <idea> — <rationale>"
-            )
-            ideas_txt = _chat_with_retries(
-                client,
+        prompt = (
+            f"Today: {today_str}\n"
+            f"Client: {selected_client} | Strategy: {selected_strategy}\n\n"
+            f"Current mix: {current}\n"
+            f"Recommended: {recommended}\n"
+            f"Alt1: {alt1}\n"
+            f"Alt2: {alt2}\n\n"
+            "Give exactly 4 concise, dated trade ideas (YYYY-MM-DD) across these scenarios. "
+            "One-liners. Use this format:\n"
+            "- YYYY-MM-DD: <idea> — <rationale>"
+        )
+        try:
+            response = utils.groq_chat(
                 messages=[{"role": "system", "content": "You are a pragmatic portfolio manager."},
                           {"role": "user",   "content": prompt}],
-                model="llama-3.3-70b-versatile", max_tokens=500, temperature=0.25,
                 feature="scenario_trade_ideas",
-            ).choices[0].message.content
-        if not ideas_txt:
-            ideas_txt = (
-                "- 2025-10-01: +2% IG credit — lock carry as spreads stable; trims equity beta.\n"
-                "- 2025-11-05: +1% TIPS — mild inflation risk, improves convexity.\n"
-                "- 2025-12-10: +2% Commodities — diversifier into cyclical upswing.\n"
-                "- 2026-01-15: +1% Gold hedge — policy-path uncertainty persists."
+                max_tokens=400,
+                temperature=0.3,
             )
-        st.markdown(ideas_txt)
-    except Exception:
-        st.info("Trade ideas unavailable right now; will show again once the LLM is reachable.")
+            st.session_state[_ideas_key] = response.choices[0].message.content
+        except Exception:
+            st.session_state[_ideas_key] = (
+                f"- {today_str}: Review allocation given current scenario mix — "
+                "consult portfolio manager for specific trade sizing."
+            )
+    if _ideas_key in st.session_state:
+        st.markdown(st.session_state[_ideas_key])
 
     # ── Concentration Reduction Planner ──────────────────────────────────────
     if _conc_triggered:
@@ -2845,9 +2841,9 @@ def display_portfolio(selected_client, selected_strategy):
 
     with c1:
         st.markdown("#### Trailing Returns")
-        dr = utils.load_trailing_returns(selected_client)
+        dr = utils.compute_trailing_returns(selected_strategy)
         if dr is not None:
-            utils.format_trailing_returns(dr)
+            st.dataframe(dr, hide_index=True)
 
     with c2:
         st.markdown("#### Characteristics")
@@ -2859,9 +2855,41 @@ def display_portfolio(selected_client, selected_strategy):
         df = pd.DataFrame(utils.get_sector_allocations(selected_strategy))
         st.dataframe(df)
 
-    st.subheader("Top Buys & Sells")
-    df = utils.get_top_transactions(selected_strategy)
-    st.dataframe(df)
+    # ── Holdings table (from tax lots) ────────────────────────────────────────
+    st.subheader("Holdings")
+    try:
+        _cinfo = client_strategy_risk_mapping.get(selected_client, {})
+        _client_id = _cinfo.get("client_id", "") if isinstance(_cinfo, dict) else ""
+        _lots = utils.load_tax_lots(client_id=_client_id) if _client_id else pd.DataFrame()
+        if not _lots.empty:
+            _display_cols = [c for c in [
+                "ticker", "shares", "cost_basis_per_share",
+                "current_price", "current_value", "unrealized_gl_dollars",
+                "unrealized_gl_pct", "term",
+            ] if c in _lots.columns]
+            _lots_disp = _lots[_display_cols].copy()
+            if "unrealized_gl_pct" in _lots_disp.columns:
+                _lots_disp["unrealized_gl_pct"] = pd.to_numeric(
+                    _lots_disp["unrealized_gl_pct"]
+                    .astype(str).str.replace("%", "", regex=False),
+                    errors="coerce",
+                )
+            _lots_disp = _lots_disp.sort_values("current_value", ascending=False)
+            _col_cfg = {}
+            for _col in ("current_value", "unrealized_gl_dollars"):
+                if _col in _lots_disp.columns:
+                    _col_cfg[_col] = st.column_config.NumberColumn(format="$%.2f")
+            if "unrealized_gl_pct" in _lots_disp.columns:
+                _col_cfg["unrealized_gl_pct"] = st.column_config.NumberColumn(format="%.1f%%")
+            if "cost_basis_per_share" in _lots_disp.columns:
+                _col_cfg["cost_basis_per_share"] = st.column_config.NumberColumn(format="$%.2f")
+            if "current_price" in _lots_disp.columns:
+                _col_cfg["current_price"] = st.column_config.NumberColumn(format="$%.2f")
+            st.dataframe(_lots_disp, hide_index=True, column_config=_col_cfg)
+        else:
+            st.info("No holdings data available for this client.")
+    except Exception as _e:
+        st.info(f"Holdings unavailable: {_e}")
 
 
 # ── LLM recommendations (titles + rationales) with JSON parsing ─────────────
@@ -2883,7 +2911,6 @@ def _llm_recs_for_strategy(strategy, n=4):
         return None
 
     import json, re
-    client = Groq(api_key=key)
 
     sys_prompt = (
         "You are a Chief Investment Strategist. "
@@ -2906,7 +2933,7 @@ def _llm_recs_for_strategy(strategy, n=4):
 
     try:
         resp = _chat_with_retries(
-            client,
+            None,
             messages=[{"role":"system","content":sys_prompt},
                       {"role":"user","content":user_prompt}],
             model="llama-3.3-70b-versatile",
@@ -2974,27 +3001,25 @@ def _llm_recs_for_strategy(strategy, n=4):
 
 def _build_card_pool(selected_client, selected_strategy) -> list:
     """
-    Return 10 synthetic recommendation dicts with an ML score.
-    (Used to pad the full-page deck to 10; top 4 now come from strategy-specific set.)
+    Return up to 10 strategy-specific recommendation dicts shaped as
+    {id, title, desc, score}.  Pulled from _static_strategy_recs so padding
+    cards are coherent rather than random verb+asset combos.
     """
     import hashlib
-    _rnd.seed(int(hashlib.sha256(f"{selected_client}{selected_strategy}".encode()).hexdigest(), 16))
+    static = _static_strategy_recs(selected_strategy)
     pool = []
-    verbs  = ["Trim", "Add", "Rotate to", "Hedge with", "Switch into"]
-    assets = ["EM small-cap ETF", "BB high-yield", "5-yr Treasuries",
-              "Quality factor", "Commodities", "Min-Vol ETF", "IG Corp credit",
-              "USD hedge", "Gold", "AI thematic basket"]
-    for i in range(10):
-        verb   = _rnd.choice(verbs)
-        asset  = _rnd.choice(assets)
-        tilt   = _rnd.randint(1, 3) / 10          # 0.1 → 0.3
-        score  = round(_rnd.uniform(0.50, 0.99), 3)
+    for i, item in enumerate(static):
+        # Deterministic score seeded on client+strategy+index
+        seed_hex = hashlib.sha256(
+            f"{selected_client}{selected_strategy}{i}".encode()
+        ).hexdigest()
+        score = 0.50 + (int(seed_hex[:8], 16) % 4900) / 10000.0  # 0.50–0.99
         pool.append(
             dict(
-                id    = f"idea_{i}",
-                title = f"{verb} {tilt:.0%} into {asset}",
-                desc  = f"Model confidence: {score:.2%}.",
-                score = score,
+                id    = f"static_{i}",
+                title = item.get("title", f"Idea {i}"),
+                desc  = item.get("rationale", ""),
+                score = round(score, 3),
             )
         )
     return sorted(pool, key=lambda x: x["score"], reverse=True)

@@ -441,6 +441,45 @@ def load_trailing_returns(client_name):
     return combined_df
 
 
+def compute_trailing_returns(selected_strategy: str):
+    """
+    Compute trailing returns dynamically from get_strategy_returns().
+    Returns a DataFrame with Period, Return columns or None on failure.
+    """
+    try:
+        sr = get_strategy_returns()
+        if selected_strategy not in sr.columns:
+            return None
+        r = sr.set_index("as_of_date")[selected_strategy].dropna()
+        r.index = pd.to_datetime(r.index)
+        today = pd.Timestamp.today()
+
+        def _period_ret(start):
+            mask = (r.index >= start) & (r.index <= today)
+            s = r[mask]
+            return float((1 + s).prod() - 1) if len(s) > 0 else None
+
+        q = (today.month - 1) // 3
+        qtd_start = pd.Timestamp(today.year, q * 3 + 1, 1)
+        ytd_start = pd.Timestamp(today.year, 1, 1)
+        cum_3yr = _period_ret(today - pd.DateOffset(years=3))
+        cum_5yr = _period_ret(today - pd.DateOffset(years=5))
+
+        rows = [
+            {"Period": "QTD",           "Return": _period_ret(qtd_start)},
+            {"Period": "YTD",           "Return": _period_ret(ytd_start)},
+            {"Period": "1 Year",        "Return": _period_ret(today - pd.DateOffset(years=1))},
+            {"Period": "3 Year (Ann.)", "Return": ((1 + cum_3yr) ** (1 / 3) - 1) if cum_3yr is not None else None},
+            {"Period": "5 Year (Ann.)", "Return": ((1 + cum_5yr) ** (1 / 5) - 1) if cum_5yr is not None else None},
+        ]
+        df = pd.DataFrame(rows)
+        df["Return"] = df["Return"].apply(lambda x: f"{x:.1%}" if x is not None else "—")
+        return df
+    except Exception as e:
+        print(f"[GAIA] compute_trailing_returns failed: {e}", flush=True)
+        return None
+
+
 def create_state_variable(key: str, default_value: any) -> None:
     if key not in st.session_state:
         st.session_state[key] = default_value

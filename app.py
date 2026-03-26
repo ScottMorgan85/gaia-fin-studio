@@ -234,11 +234,12 @@ def _strategy_abbrev_for(client_name: str) -> Optional[str]:
     }.get(s, s)
 
 client_names = get_client_names()
-_default_idx = (
-    client_names.index(_nav_client_pending)
-    if _nav_client_pending and _nav_client_pending in client_names
-    else 0
-)
+if _nav_client_pending and _nav_client_pending in client_names:
+    _default_idx = client_names.index(_nav_client_pending)
+elif "Patricia Huang" in client_names:
+    _default_idx = client_names.index("Patricia Huang")
+else:
+    _default_idx = 0
 selected_client = st.sidebar.selectbox(
     "Select Client",
     client_names,

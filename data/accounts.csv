@@ -1,25 +1,22 @@
 account_id,client_id,account_name,account_type,custodian,strategy,aum,inception_date,is_taxable,notes
-A001,C001,Miller Taxable Equity,Taxable,Schwab,Equity,1800000,2019-03-15,true,Core equity; TLH monitored
-A002,C001,Miller Traditional IRA,Traditional IRA,Schwab,Long Short High Yield Bond,900000,2019-03-15,false,Bond sleeve in tax-deferred — optimal asset location
-A003,C001,Miller Roth IRA,Roth IRA,Schwab,Equity,420000,2021-06-01,false,Growth equity; tax-free
-A004,C001,Miller Family Trust,Trust,Fidelity,Equity,1080000,2019-03-15,false,Irrevocable trust; estate planning; generation-skipping
-A005,C002,Huang Taxable — NVDA Concentrated,Taxable,Fidelity,Equity,4200000,2021-07-01,true,Primary taxable; holds concentrated NVDA RSU lots; TLH active on recent underwater lots
-A006,C002,Huang Diversified Taxable,Taxable,Fidelity,Equity,1850000,2021-07-01,true,Diversification account; systematic selling proceeds from NVDA
-A007,C002,Huang Traditional IRA,Traditional IRA,Fidelity,Long Short High Yield Bond,1200000,2021-07-01,false,Pre-tax retirement; bond-heavy for tax efficiency
-A008,C002,Huang Roth IRA,Roth IRA,Fidelity,Equity,500000,2022-03-15,false,Tax-free growth; aggressive equity; longest time horizon
-A009,C002,Huang Family Foundation,Foundation,Schwab,Equity,1000000,2021-09-01,false,501c3 DAF; ESG screened; board approval required for trades; NVDA donated shares with zero cost basis
-A010,C003,Brown Taxable,Taxable,Robinhood,Equity,480000,2023-01-10,true,Primary taxable
-A011,C003,Brown Roth IRA,Roth IRA,Robinhood,Equity,220000,2023-01-10,false,Max contribution annual
-A012,C003,Brown 529 — Child,529,Fidelity,Government Bonds,80000,2023-06-15,false,College savings; conservative allocation
-A013,C004,Rodriguez Taxable,Taxable,Schwab,Equity,840000,2020-09-22,true,Post-business-sale proceeds
-A014,C004,Rodriguez Traditional IRA,Traditional IRA,Schwab,Government Bonds,630000,2020-09-22,false,Pre-tax retirement
-A015,C004,Rodriguez Joint Taxable,Joint Taxable,Schwab,High Yield Bonds,420000,2020-09-22,true,Spouse joint account
-A016,C004,Rodriguez Annuity,Annuity,MetLife,Leveraged Loans,210000,2020-09-22,false,Variable annuity; legacy from business sale
-A017,C005,Whitfield Taxable Core,Taxable,Goldman,Equity,4560000,2017-04-03,true,Core equity; large-cap bias
-A018,C005,Whitfield Traditional IRA,Traditional IRA,Goldman,Long Short High Yield Bond,3040000,2017-04-03,false,Bond-heavy; RMD planning critical at age 71
-A019,C005,Whitfield Family LP,Partnership,Goldman,Private Equity,4560000,2017-04-03,false,Family limited partnership; estate planning vehicle
-A020,C005,Whitfield Foundation,Foundation,Schwab,Government Bonds,1520000,2017-04-03,false,Charitable giving; conservative; annual grant schedule
-A021,C005,Whitfield Commodities,Taxable,Goldman,Commodities,1520000,2017-04-03,true,Inflation hedge; real assets allocation
-A022,C006,Johnson Taxable,Taxable,Vanguard,Equity,500000,2022-06-15,true,Post-settlement rebuilding
-A023,C006,Johnson Roth IRA,Roth IRA,Vanguard,Equity,375000,2022-06-15,false,Tax-free growth priority
-A024,C006,Johnson 401k Rollover,Traditional IRA,Vanguard,High Yield Bonds,375000,2022-06-15,false,Rollover from former employer plan
+A005,C002,Huang Taxable — NVDA Concentrated,Taxable,Fidelity,Equity,4200000,2021-07-01,true,"Primary taxable; holds concentrated NVDA RSU lots; TLH active on recent underwater lots"
+A006,C002,Huang Diversified Taxable,Taxable,Fidelity,Equity,1850000,2021-07-01,true,"Diversification account; systematic selling proceeds from NVDA"
+A007,C002,Huang Traditional IRA,Traditional IRA,Fidelity,Long Short High Yield Bond,1200000,2021-07-01,false,"Pre-tax retirement; bond-heavy for tax efficiency"
+A008,C002,Huang Roth IRA,Roth IRA,Fidelity,Equity,500000,2022-03-15,false,"Tax-free growth; aggressive equity; longest time horizon"
+A009,C002,Huang Family Foundation,Foundation,Schwab,Equity,1000000,2021-09-01,false,"501c3 DAF; ESG screened; board approval required for trades; NVDA donated shares with zero cost basis"
+A012,C004,Rodriguez Taxable Growth,Taxable,Schwab,Equity,875000,2023-09-01,true,"Post-sale proceeds; VTI QQQM AAPL; income needs begin 2028"
+A013,C004,Rodriguez QOZ Fund,Alternative,Novogradac Partners,Private Equity,420000,2023-09-15,false,"Qualified Opportunity Zone; illiquid until 2033; defers $420K capital gain from business sale"
+A014,C004,Rodriguez Rollover IRA,Traditional IRA,Schwab,High Yield Bonds,480000,2023-11-01,false,"Rollover from SaaS co 401k; VWIAX DODIX; income-oriented; no RMD until 2029"
+A015,C004,Rodriguez Joint Taxable,Joint Taxable,Schwab,Government Bonds,225000,2024-01-15,true,"Spouse joint; AGG VTIP; inflation-protected income"
+A016,C004,Rodriguez DAF,Foundation,Fidelity Charitable,Equity,100000,2024-03-01,false,"Donor-advised fund; seeded with appreciated AAPL; charitable strategy in development"
+A017,C005,Whitfield Taxable Core,Taxable,Goldman Sachs,Equity,4800000,2017-04-03,true,"Institutional share class core; VFIAX DODFX PIMIX; primary taxable account"
+A018,C005,Whitfield Traditional IRA,Traditional IRA,Goldman Sachs,Government Bonds,3200000,2017-04-03,false,"RMD required this year ~$185K; Roth conversion candidate; VBTLX TPINX"
+A019,C005,Whitfield Family LP,Partnership,Goldman Sachs,Private Equity,4100000,2017-04-03,false,"Family limited partnership; private credit fund; REIT syndication; real estate; illiquid 3-7yr"
+A020,C005,Whitfield Foundation,Foundation,Schwab,Government Bonds,1600000,2017-04-03,false,"501c3; quarterly grant schedule $80K/quarter; VFWAX VBTLX; 5% annual distribution requirement"
+A021,C005,Whitfield Commodities,Taxable,Goldman Sachs,Commodities,1500000,2017-04-03,true,"Inflation hedge; GLD physical; PDBC; real assets allocation"
+A030,C007,Chen Taxable,Taxable,Fidelity,Equity,1200000,2023-08-15,true,"Standard diversified equity; MSFT VFIAX QQQ"
+A031,C007,Chen Rollover IRA,Traditional IRA,Fidelity,Government Bonds,650000,2023-08-15,false,"Bond-heavy tax-deferred; AGG TLT"
+A032,C008,Williams Taxable,Taxable,Vanguard,Equity,600000,2024-01-10,true,"Growth-oriented; VTI QQQM"
+A033,C008,Williams Roth IRA,Roth IRA,Vanguard,Equity,350000,2024-01-10,false,"Aggressive growth; QQQ VGT"
+A034,C009,Park Taxable,Taxable,Morgan Stanley,Equity,2100000,2021-05-20,true,"Conservative equity; SPY VYM dividend focus"
+A035,C009,Park Traditional IRA,Traditional IRA,Morgan Stanley,Government Bonds,1100000,2021-05-20,false,"Conservative; TLT IEF; approaching RMD age"

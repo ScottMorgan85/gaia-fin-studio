@@ -1,27 +1,39 @@
 lot_id,account_id,client_id,ticker,shares,cost_basis_per_share,current_price,cost_basis_total,current_value,unrealized_gl_dollars,unrealized_gl_pct,purchase_date,term,wash_sale_flag,replacement_ticker,asset_class,notes
-L001,A005,C002,NVDA,2500,5.60,115.00,14000,287500,273500,1953.57%,2021-03-15,Long-Term,false,,Equity,Q1 2021 vest; 1953% gain; harvesting would trigger massive tax
-L002,A005,C002,NVDA,2500,7.60,115.00,19000,287500,268500,1413.16%,2021-06-15,Long-Term,false,,Equity,Q2 2021 vest; 1413% gain; hold indefinitely
-L003,A005,C002,NVDA,2000,8.00,115.00,16000,230000,214000,1337.50%,2021-09-15,Long-Term,false,,Equity,Q3 2021 vest; high gain; candidate for charitable donation to foundation
-L004,A005,C002,NVDA,2000,11.80,115.00,23600,230000,206400,873.73%,2021-12-15,Long-Term,false,,Equity,Q4 2021 vest; still substantial gain
-L005,A005,C002,NVDA,1500,10.80,115.00,16200,172500,156300,964.81%,2022-03-15,Long-Term,false,,Equity,Q1 2022 vest; gain but smaller
-L006,A005,C002,NVDA,1500,6.20,115.00,9300,172500,163200,1754.84%,2022-06-15,Long-Term,false,,Equity,Q2 2022 vest at dip; large gain
-L007,A005,C002,NVDA,800,120.50,115.00,96400,92000,-4400,-4.56%,2025-09-15,Short-Term,false,SMCI,Equity,Q3 2025 vest; UNDERWATER -$4400; SHORT-TERM loss harvest candidate; replacement: SMCI
-L008,A005,C002,NVDA,800,118.20,115.00,94560,92000,-2560,-2.71%,2025-12-15,Short-Term,false,SMCI,Equity,Q4 2025 vest; UNDERWATER -$2560; SHORT-TERM loss harvest candidate
-L009,A005,C002,NVDA,600,130.40,115.00,78240,69000,-9240,-11.81%,2026-01-15,Short-Term,false,AMD,Equity,Q1 2026 vest; UNDERWATER -$9240; largest current TLH opportunity; replacement: AMD
-L010,A009,C002,NVDA,3000,0.00,115.00,0,345000,345000,N/A,2022-06-01,Long-Term,false,MSFT,Equity,Donated shares; zero cost basis; ESG board approval required; consider exchange fund or CRT
-L011,A006,C002,SPY,1200,380.00,565.00,456000,678000,222000,48.68%,2021-08-01,Long-Term,false,,Equity,Systematic NVDA sale proceeds reinvested
-L012,A006,C002,QQQ,800,310.00,480.00,248000,384000,136000,54.84%,2021-08-01,Long-Term,false,,Equity,Diversification; tech-heavy index
-L013,A006,C002,AGG,3000,108.00,97.50,324000,292500,-31500,-9.72%,2022-01-15,Long-Term,false,BND,Fixed Income,TLH eligible; bond loss from rate rises; replacement BND
-L014,A006,C002,VNQ,1500,98.00,88.40,147000,132600,-14400,-9.80%,2022-03-01,Long-Term,false,IYR,Real Estate,TLH eligible; REIT losses from rate environment; replacement IYR
-L015,A001,C001,SPY,800,399.00,565.00,319200,452000,132800,41.61%,2020-03-20,Long-Term,false,,Equity,Bought at COVID low
-L016,A001,C001,SPY,400,450.00,565.00,180000,226000,46000,25.56%,2021-06-15,Long-Term,false,,Equity,Additional purchase
-L017,A001,C001,QQQ,300,320.00,480.00,96000,144000,48000,50.00%,2020-06-01,Long-Term,false,,Equity,Tech allocation
-L018,A001,C001,TLT,2000,142.00,87.21,284000,174420,-109580,-38.58%,2021-01-15,Long-Term,false,IEF,Fixed Income,Significant TLH opportunity; bond losses from rate cycle
-L019,A001,C001,LQD,1500,120.00,108.69,180000,163035,-16965,-9.43%,2022-06-01,Long-Term,false,VCIT,Fixed Income,TLH eligible
-L020,A017,C005,SPY,3000,250.00,565.00,750000,1695000,945000,126.00%,2017-06-01,Long-Term,false,,Equity,Core long-term holding
-L021,A017,C005,QQQ,2000,155.00,480.00,310000,960000,650000,209.68%,2018-03-01,Long-Term,false,,Equity,Tech growth
-L022,A017,C005,MSFT,1500,85.00,415.00,127500,622500,495000,388.24%,2017-04-03,Long-Term,false,,Equity,Long-term holding
-L023,A017,C005,NVDA,500,45.00,115.00,22500,57500,35000,155.56%,2019-01-15,Long-Term,false,,Equity,Early AI position
-L024,A010,C003,VTI,1200,185.00,258.00,222000,309600,87600,39.46%,2023-01-10,Long-Term,false,,Equity,Core total market
-L025,A010,C003,VXUS,800,52.00,58.40,41600,46720,5120,12.31%,2023-01-10,Long-Term,false,,Equity,International diversification
-L026,A010,C003,BND,1500,72.00,74.20,108000,111300,3300,3.06%,2023-01-10,Long-Term,false,,Fixed Income,Bond core
+L001,A005,C002,NVDA,2500,5.60,115.00,14000,287500,273500,1953.57%,2021-03-15,Long-Term,false,,Equity,"Q1 2021 vest; 1953% gain; harvesting would trigger massive tax"
+L002,A005,C002,NVDA,2500,7.60,115.00,19000,287500,268500,1413.16%,2021-06-15,Long-Term,false,,Equity,"Q2 2021 vest; 1413% gain; hold indefinitely"
+L003,A005,C002,NVDA,2000,8.00,115.00,16000,230000,214000,1337.50%,2021-09-15,Long-Term,false,,Equity,"Q3 2021 vest; candidate for charitable donation to foundation"
+L004,A005,C002,NVDA,2000,11.80,115.00,23600,230000,206400,873.73%,2021-12-15,Long-Term,false,,Equity,"Q4 2021 vest; substantial gain"
+L005,A005,C002,NVDA,1500,10.80,115.00,16200,172500,156300,964.81%,2022-03-15,Long-Term,false,,Equity,"Q1 2022 vest"
+L006,A005,C002,NVDA,1500,6.20,115.00,9300,172500,163200,1754.84%,2022-06-15,Long-Term,false,,Equity,"Q2 2022 vest at dip; large gain"
+L007,A005,C002,NVDA,800,120.50,115.00,96400,92000,-4400,-4.56%,2025-09-15,Short-Term,false,SMCI,Equity,"Q3 2025 vest; UNDERWATER; TLH candidate; replacement SMCI"
+L008,A005,C002,NVDA,800,118.20,115.00,94560,92000,-2560,-2.71%,2025-12-15,Short-Term,false,SMCI,Equity,"Q4 2025 vest; UNDERWATER; TLH candidate"
+L009,A005,C002,NVDA,600,130.40,115.00,78240,69000,-9240,-11.81%,2026-01-15,Short-Term,false,AMD,Equity,"Q1 2026 vest; largest current TLH opportunity; replacement AMD"
+L010,A009,C002,NVDA,3000,0.00,115.00,0,345000,345000,N/A,2022-06-01,Long-Term,false,MSFT,Equity,"Donated shares; zero cost basis; ESG board approval required"
+L011,A006,C002,SPY,1200,380.00,565.00,456000,678000,222000,48.68%,2021-08-01,Long-Term,false,,Equity,"Systematic NVDA sale proceeds reinvested"
+L012,A006,C002,QQQ,800,310.00,480.00,248000,384000,136000,54.84%,2021-08-01,Long-Term,false,,Equity,"Diversification; tech-heavy index"
+L013,A006,C002,AGG,3000,108.00,97.50,324000,292500,-31500,-9.72%,2022-01-15,Long-Term,false,BND,Fixed Income,"TLH eligible; bond loss from rate rises"
+L014,A006,C002,VNQ,1500,98.00,88.40,147000,132600,-14400,-9.80%,2022-03-01,Long-Term,false,IYR,Real Estate,"TLH eligible; REIT losses from rate environment"
+L020,A012,C004,VTI,2800,195.00,258.00,546000,722400,176400,32.31%,2023-09-01,Long-Term,false,,Equity,"Core total market; post-sale reinvestment"
+L021,A012,C004,QQQM,1500,135.00,190.50,202500,285750,83250,41.11%,2023-09-01,Long-Term,false,,Equity,"Nasdaq growth; tech overweight post-sale"
+L022,A012,C004,AAPL,800,175.00,213.50,140000,170800,30800,22.00%,2023-10-15,Long-Term,false,,Equity,"Retained from pre-sale comp; DAF donation candidate"
+L023,A014,C004,VWIAX,1200,62.50,58.20,75000,69840,-5160,-6.88%,2023-11-01,Long-Term,false,VWINX,Fixed Income,"Vanguard Wellesley; TLH eligible; income-oriented"
+L024,A014,C004,DODIX,8500,13.80,13.15,117300,111775,-5525,-4.71%,2024-02-01,Long-Term,false,PTTRX,Fixed Income,"Dodge & Cox Income; TLH eligible"
+L025,A015,C004,AGG,2500,98.50,97.50,246250,243750,-2500,-1.02%,2024-01-15,Long-Term,false,BND,Fixed Income,"Core bond; slight loss; TLH marginal"
+L026,A015,C004,VTIP,3000,48.20,49.80,144600,149400,4800,3.32%,2024-01-15,Long-Term,false,,Fixed Income,"TIPS; inflation protection"
+L030,A017,C005,VFIAX,8500,185.00,595.00,1572500,5057500,3485000,221.60%,2017-06-01,Long-Term,false,,Equity,"Vanguard 500 Inst; core holding since inception"
+L031,A017,C005,DODFX,12000,38.50,46.20,462000,554400,92400,20.00%,2021-03-15,Long-Term,false,,Intl Equity,"Dodge & Cox Intl; active value intl"
+L032,A017,C005,PIMIX,45000,10.20,9.85,459000,443250,-15750,-3.43%,2022-06-01,Long-Term,false,PTTRX,Fixed Income,"PIMCO Income Inst; TLH eligible"
+L033,A017,C005,GLD,2800,155.00,198.50,434000,555800,121800,28.06%,2020-01-15,Long-Term,false,,Commodities,"Physical gold ETF; inflation hedge"
+L034,A018,C005,VBTLX,85000,11.20,9.65,952000,820250,-131750,-13.84%,2019-08-01,Long-Term,false,BND,Fixed Income,"Vanguard Total Bond Inst; significant TLH opp; RMD source"
+L035,A018,C005,TPINX,35000,12.80,10.95,448000,383250,-64750,-14.45%,2020-11-01,Long-Term,false,PIGLX,Fixed Income,"Templeton Global Bond; TLH eligible"
+L036,A021,C005,PDBC,18000,14.20,16.85,255600,303300,47700,18.66%,2021-09-15,Long-Term,false,,Commodities,"Invesco commodity ETF"
+L037,A021,C005,GLD,1500,158.00,198.50,237000,297750,60750,25.63%,2022-01-10,Long-Term,false,,Commodities,"Additional gold position"
+L040,A030,C007,MSFT,1800,245.00,415.00,441000,747000,306000,69.39%,2021-06-01,Long-Term,false,,Equity,"Core holding"
+L041,A030,C007,VFIAX,2200,320.00,595.00,704000,1309000,605000,85.94%,2021-06-01,Long-Term,false,,Equity,"Index core"
+L042,A031,C007,AGG,4500,108.00,97.50,486000,438750,-47250,-9.72%,2022-01-01,Long-Term,false,BND,Fixed Income,"TLH eligible"
+L043,A032,C008,VTI,2000,185.00,258.00,370000,516000,146000,39.46%,2024-01-10,Long-Term,false,,Equity,
+L044,A032,C008,QQQM,800,130.00,190.50,104000,152400,48400,46.54%,2024-01-10,Long-Term,false,,Equity,
+L045,A033,C008,QQQ,300,350.00,480.00,105000,144000,39000,37.14%,2024-01-10,Long-Term,false,,Equity,
+L046,A034,C009,SPY,3500,350.00,565.00,1225000,1977500,752500,61.43%,2019-05-20,Long-Term,false,,Equity,
+L047,A034,C009,VYM,4000,95.00,128.50,380000,514000,134000,35.26%,2019-05-20,Long-Term,false,,Equity,"Dividend-focused; income generation"
+L048,A035,C009,TLT,3000,142.00,87.21,426000,261630,-164370,-38.58%,2021-01-15,Long-Term,false,IEF,Fixed Income,"Largest TLH in book; rate cycle losses"

@@ -1,5 +1,5 @@
 client_id,account_id,ticker,vest_date,shares_vesting,estimated_price,estimated_value,tax_withheld_pct,net_shares_after_tax,notes
-C002,A005,NVDA,2026-03-31,600,115.00,69000,37,378,Q1 2026 vest IMMINENT — 14 days away; triggers concentration alert; sell or hold decision needed
-C002,A005,NVDA,2026-06-30,600,115.00,69000,37,378,Q2 2026 scheduled vest
-C002,A005,NVDA,2026-09-30,600,115.00,69000,37,378,Q3 2026 scheduled vest
-C002,A005,NVDA,2026-12-31,600,115.00,69000,37,378,Q4 2026 scheduled vest; full year = 2400 shares ~$276k gross
+C002,A005,NVDA,2026-03-31,600,115.00,69000,37,378,"Q1 2026 vest IMMINENT — 14 days away; triggers concentration alert; sell or hold decision needed"
+C002,A005,NVDA,2026-06-30,600,115.00,69000,37,378,"Q2 2026 scheduled vest"
+C002,A005,NVDA,2026-09-30,600,115.00,69000,37,378,"Q3 2026 scheduled vest"
+C002,A005,NVDA,2026-12-31,600,115.00,69000,37,378,"Q4 2026 scheduled vest; full year = 2400 shares ~$276K gross"

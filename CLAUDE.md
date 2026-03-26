@@ -73,6 +73,36 @@ DigitalOcean: Settings → Environment Variables (flat `GROQ_API_KEY=...`).
 
 ---
 
+## Navigation structure (app.py sidebar)
+
+Five zones defined with `st.sidebar.caption()` dividers. Route keys are stored in
+`st.session_state["route"]`. Default on first load: `"overview"` (Morning Brief).
+
+| Zone | Nav label | Route key | Function |
+|------|-----------|-----------|----------|
+| MORNING BRIEF | Morning Brief | `overview` | `display_morning_brief(selected_client)` |
+| CLIENT WORKSPACE | Client 360 | `client` | `display_client_360(selected_client)` |
+| CLIENT WORKSPACE | Portfolio | `portfolio` | `display_portfolio(selected_client, selected_strategy)` |
+| CLIENT WORKSPACE | Tax-Loss Harvesting | `tlh` | `display_tax_loss_harvesting(selected_client, selected_strategy)` |
+| CLIENT WORKSPACE | Rebalance Studio | `allocator` | `display_scenario_allocator(selected_client, selected_strategy)` |
+| ADVISORY | Commentary Co-Pilot | `commentary` | `display_quarterly_letter(selected_client, selected_strategy)` |
+| ADVISORY | Recommendations | `recs` | `display_recommendations(selected_client, selected_strategy)` |
+| ANALYTICS LAB | Forecast Lab | `forecast` | `display_forecast_lab(selected_client, selected_strategy)` |
+| ANALYTICS LAB | Factor Lab | `factor_lab` | `display_factor_decomposition(selected_client, selected_strategy)` |
+| ANALYTICS LAB | Optimization Lab | `quantum` | `display_quantum_studio(selected_client, selected_strategy)` |
+| SYSTEM | AI Monitor | `llm_obs` | `display_llm_observatory()` |
+| SYSTEM | Research Assistant | `rag` | `display_rag_research()` |
+
+**Backward-compat routes** (not in nav, still handled by router):
+- `"log"` → Recommendations page with Decision Log pre-selected (`_recs_default_log=True`)
+- `"overview_legacy"` → legacy Portfolio Pulse (linked from Morning Brief footer)
+
+**Recommendations page** (`display_recommendations`): combines Predictive Recs + Decision Log
+behind a selectbox toggle. Calls `display_recommendations_legacy(full_page=True)` or
+`display_recommendation_log()` depending on selection.
+
+---
+
 ## Features
 
 ### Morning Brief (default landing page)
@@ -81,7 +111,7 @@ Three-column advisor dashboard — the first thing seen when opening GAIA.
 | Field | Value |
 |-------|-------|
 | Function | `display_morning_brief(selected_client)` in `gaia_pages.py` |
-| Tab name | `Portfolio Pulse` (route key `overview`) |
+| Tab name | `Morning Brief` (route key `overview`) |
 | Left column | `_mb_render_alerts()` — all client alerts sorted Critical→High→Medium, selected client highlighted with ▶, upcoming reviews (30-day window), pending letters |
 | Center column | `_mb_render_markets()` — VIX/curve/regime/HY badges, `display_performance_snapshot()` table, 3-sentence AI summary (cached in session state, `feature="morning_brief_summary"`) |
 | Right column | `_mb_render_your_day()` — FOMC countdown, book summary (AUM/clients/alerts/pipeline), quick actions (batch letters, alert log, practice intel), AI usage counter |
@@ -92,14 +122,14 @@ Three-column advisor dashboard — the first thing seen when opening GAIA.
 **AI usage counter**: uses `utils.get_llm_stats(days=1)["summary"]["total_calls"]` — no `GroqUsageTracker` class exists.
 **Batch letter generation**: calls `_ql_build_prompt_data()` + `_ql_build_user_message()` + `utils.groq_chat()` + `_ql_append_log()` directly (does not call `display_quarterly_letter()` UI function). Status saved as `"pending"`.
 
-### Quantum Studio
+### Optimization Lab (formerly Quantum Studio)
 A quantum-inspired portfolio optimization PoC that uses simulated annealing to mimic
 QUBO-style optimization across six synthetic sleeve allocations anchored to live strategy returns.
 
 | Field | Value |
 |-------|-------|
 | Function | `display_quantum_studio()` in `gaia_pages.py` |
-| Tab name | `Quantum Studio` |
+| Tab name | `Optimization Lab` |
 | Route key | `quantum` |
 | Dependencies | `numpy`, `plotly` (already in requirements.txt) |
 | Status | PoC — simulated annealing mimicking QUBO-style optimization; no new pip packages |

@@ -251,34 +251,37 @@ groq_client = Groq(api_key=groq_key) if groq_key else None
 # ── Market Pulse sidebar widget (always visible, below client selector) ──────
 pages.render_market_pulse_sidebar()
 
-# ── Navigation — 4 grouped zones ─────────────────────────────────────────────
+# ── Navigation — 5 grouped zones ─────────────────────────────────────────────
 if "route" not in st.session_state:
     st.session_state["route"] = "overview"
+if "selected_page" not in st.session_state:
+    st.session_state["selected_page"] = "Morning Brief"
 
 def _nav(label: str, route_key: str):
     if st.sidebar.button(label, use_container_width=True, key=f"nav_{route_key}"):
         st.session_state["route"] = route_key
 
 st.sidebar.caption("MORNING BRIEF")
-if SHOW_PORTFOLIO_PULSE:   _nav("Portfolio Pulse",       "overview")
+_nav("Morning Brief",                                     "overview")
 
 st.sidebar.caption("CLIENT WORKSPACE")
-if SHOW_CLIENT:            _nav("Client",                "client")
-if SHOW_PORTFOLIO:         _nav("Portfolio",             "portfolio")
-if SHOW_COMMENTARY:        _nav("Commentary Co-Pilot",   "commentary")
-if SHOW_TLH:               _nav("Tax-Loss Harvesting",   "tlh")
-if SHOW_DECISION_TRACKING: _nav("Decision Tracker",      "log")
+if SHOW_CLIENT:            _nav("Client 360",             "client")
+if SHOW_PORTFOLIO:         _nav("Portfolio",              "portfolio")
+if SHOW_TLH:               _nav("Tax-Loss Harvesting",    "tlh")
+if SHOW_ALLOCATOR:         _nav("Rebalance Studio",       "allocator")
+
+st.sidebar.caption("ADVISORY")
+if SHOW_COMMENTARY:        _nav("Commentary Co-Pilot",    "commentary")
+if SHOW_PREDICTIVE_RECS:   _nav("Recommendations",        "recs")
 
 st.sidebar.caption("ANALYTICS LAB")
-if SHOW_FORECAST_LAB:      _nav("Forecast Lab",          "forecast")
-if SHOW_FACTOR_LAB:        _nav("Factor Lab",            "factor_lab")
-_nav("Quantum Studio",                                    "quantum")
-if SHOW_PREDICTIVE_RECS:   _nav("Predictive Recs",       "recs")
+if SHOW_FORECAST_LAB:      _nav("Forecast Lab",           "forecast")
+if SHOW_FACTOR_LAB:        _nav("Factor Lab",             "factor_lab")
+_nav("Optimization Lab",                                  "quantum")
 
-st.sidebar.caption("PRACTICE")
-if SHOW_ALLOCATOR:         _nav("Allocator",             "allocator")
-if SHOW_LLM_OBS:           _nav("LLM Observatory",       "llm_obs")
-if SHOW_RAG:               _nav("Research Assistant",    "rag")
+st.sidebar.caption("SYSTEM")
+if SHOW_LLM_OBS:           _nav("AI Monitor",             "llm_obs")
+if SHOW_RAG:               _nav("Research Assistant",     "rag")
 
 route = st.session_state["route"]
 
@@ -294,12 +297,42 @@ if route == "overview":
     if hasattr(pages, "display_morning_brief"):
         pages.display_morning_brief(selected_client)
     else:
-        st.title("Portfolio Pulse")
+        st.title("Morning Brief")
         pages.display_portfolio_pulse_legacy(selected_client, selected_strategy, show_recs=True)
 
 elif route == "overview_legacy":
     st.title("Portfolio Pulse")
     pages.display_portfolio_pulse_legacy(selected_client, selected_strategy, show_recs=True)
+
+elif route == "client":
+    st.title("Client 360")
+    if hasattr(pages, "display_client_360"):
+        pages.display_client_360(selected_client)
+    elif hasattr(pages, "display_client_page"):
+        pages.display_client_page(selected_client)
+    else:
+        st.info("Client 360 is not available in this build.")
+
+elif route == "portfolio":
+    st.title("Portfolio")
+    if hasattr(pages, "display_portfolio"):
+        pages.display_portfolio(selected_client, selected_strategy)
+    else:
+        st.info("Portfolio page is not available in this build.")
+
+elif route == "tlh":
+    st.title("Tax-Loss Harvesting")
+    if hasattr(pages, "display_tax_loss_harvesting"):
+        pages.display_tax_loss_harvesting(selected_client, selected_strategy)
+    else:
+        st.info("Tax-Loss Harvesting is not available in this build.")
+
+elif route == "allocator":
+    st.title("Rebalance Studio")
+    if hasattr(pages, "display_scenario_allocator"):
+        pages.display_scenario_allocator(selected_client, selected_strategy)
+    else:
+        st.info("Rebalance Studio is not available in this build.")
 
 elif route == "commentary":
     st.title("Commentary Co-Pilot")
@@ -308,29 +341,14 @@ elif route == "commentary":
     else:
         st.info("Quarterly Letter Engine is not available in this build.")
 
-
-elif route == "recs":
-    st.title("Predictive Recs")
-    pages.display_recommendations(selected_client, selected_strategy, full_page=True, key_prefix="recs")
-
-
-elif route == "log":
-    st.title("Decision Tracker")
-    pages.display_recommendation_log()
-
-elif route == "allocator":
-    st.title("Allocator")
-    if hasattr(pages, "display_scenario_allocator"):
-        pages.display_scenario_allocator(selected_client, selected_strategy)
+elif route in ("recs", "log"):
+    st.title("Recommendations")
+    if route == "log":
+        st.session_state["_recs_default_log"] = True
+    if hasattr(pages, "display_recommendations"):
+        pages.display_recommendations(selected_client, selected_strategy)
     else:
-        st.info("Allocator module is not available in this build.")
-
-elif route == "portfolio":
-    st.title("Portfolio")
-    if hasattr(pages, "display_portfolio"):
-        pages.display_portfolio(selected_client, selected_strategy)
-    else:
-        st.info("Portfolio page is not available in this build.")
+        st.info("Recommendations is not available in this build.")
 
 elif route == "forecast":
     st.title("Forecast Lab")
@@ -346,19 +364,15 @@ elif route == "factor_lab":
     else:
         st.info("Factor Lab is not available in this build.")
 
-elif route == "tlh":
-    st.title("Tax-Loss Harvesting")
-    if hasattr(pages, "display_tax_loss_harvesting"):
-        pages.display_tax_loss_harvesting(selected_client, selected_strategy)
-    else:
-        st.info("Tax-Loss Harvesting is not available in this build.")
+elif route == "quantum":
+    pages.display_quantum_studio(selected_client, selected_strategy)
 
 elif route == "llm_obs":
-    st.title("LLM Observatory")
+    st.title("AI Monitor")
     if hasattr(pages, "display_llm_observatory"):
         pages.display_llm_observatory()
     else:
-        st.info("LLM Observatory is not available in this build.")
+        st.info("AI Monitor is not available in this build.")
 
 elif route == "rag":
     st.title("Research Assistant")
@@ -366,18 +380,6 @@ elif route == "rag":
         pages.display_rag_research()
     else:
         st.info("Research Assistant is not available in this build.")
-
-elif route == "quantum":
-    pages.display_quantum_studio(selected_client, selected_strategy)
-
-elif route == "client":
-    st.title("Client 360")
-    if hasattr(pages, "display_client_360"):
-        pages.display_client_360(selected_client)
-    elif hasattr(pages, "display_client_page"):
-        pages.display_client_page(selected_client)
-    else:
-        st.info("Client page is not available in this build.")
 
 else:
     st.error("Page not found")

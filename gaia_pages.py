@@ -726,7 +726,7 @@ def get_recommendations_for_strategy(strategy, n=4):
     return cards
 
 
-def display_recommendations(selected_client, selected_strategy, full_page=False, key_prefix="pulse", n=None):
+def display_recommendations_legacy(selected_client, selected_strategy, full_page=False, key_prefix="pulse", n=None):
     """
     When full_page=False: show top `n` (default 4) strategy-aware cards.
     When full_page=True: show top 4 strategy-aware + 6 synthetic (total 10) and analytics.
@@ -914,7 +914,7 @@ def display_portfolio_pulse_legacy(selected_client, selected_strategy, show_recs
         pass
     # ---------- Optional: show strategy-aware LLM cards on this page ----------
     if show_recs:
-        display_recommendations(
+        display_recommendations_legacy(
             selected_client=selected_client,
             selected_strategy=selected_strategy,
             full_page=False,
@@ -1044,6 +1044,24 @@ def display_recommendation_log():
         c1, c2 = st.columns(2)
         c1.metric("Accepts", accepts)
         c2.metric("Rejects", rejects)
+
+def display_recommendations(selected_client: str, selected_strategy: str) -> None:
+    """Combined Recommendations page — Active Recommendations + Decision Log."""
+    default_log = st.session_state.pop("_recs_default_log", False)
+    view = st.selectbox(
+        "View",
+        ["Active Recommendations", "Decision Log"],
+        label_visibility="collapsed",
+        index=1 if default_log else 0,
+        key="recs_view_selector",
+    )
+    if view == "Active Recommendations":
+        display_recommendations_legacy(
+            selected_client, selected_strategy, full_page=True, key_prefix="recs_combined"
+        )
+    else:
+        display_recommendation_log()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Import the Forecast Lab submodule
@@ -2909,13 +2927,13 @@ def display_quantum_studio(selected_client: str, selected_strategy: str):
     routine to mimic a QUBO-style optimizer without introducing heavy new deps.
     """
 
-    st.title("⚛️ Quantum Studio")
+    st.title("⚛️ Optimization Lab")
     st.caption(
         "A visually rich, quantum-inspired allocation sandbox for advisor demos. "
         "This is a PoC: classical data, quantum-style optimization logic."
     )
 
-    with st.expander("About Quantum Studio — methods, parameters & interpretation", expanded=False):
+    with st.expander("About Optimization Lab — methods, parameters & interpretation", expanded=False):
         st.markdown("""
 ### What is Quantum Studio?
 Quantum Studio is an experimental decision-support layer that explores

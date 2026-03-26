@@ -5542,7 +5542,7 @@ Paragraph 3: What needs a decision at this meeting (be specific — name the act
             feature="meeting_prep_summary",
             max_tokens=500,
             temperature=0.3,
-        )
+        ).choices[0].message.content.strip()
     except Exception:
         summary_text = (
             f"{selected_client} has ${aum_val:,.0f} under management across multiple accounts. "
@@ -5582,7 +5582,7 @@ Each should be a specific, actionable next step with a clear owner (advisor vs c
             feature="meeting_prep_actions",
             max_tokens=500,
             temperature=0.3,
-        )
+        ).choices[0].message.content.strip()
     except Exception:
         talking_points_text = (
             "1. Review NVDA RSU vest decision\n"
@@ -5660,13 +5660,13 @@ def _render_meeting_briefing(
 
     # ── Situation summary ──
     st.subheader("Situation Summary")
-    st.markdown(briefing["summary"])
+    st.write(briefing["summary"])
 
     st.divider()
 
     # ── Talking points & actions ──
     st.subheader("Talking Points & Recommended Actions")
-    st.markdown(briefing["talking_points"])
+    st.write(briefing["talking_points"])
 
     st.divider()
 

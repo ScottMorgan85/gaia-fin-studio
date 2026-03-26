@@ -392,7 +392,7 @@ elif route == "llm_obs":
 elif route == "rag":
     st.title("Research Assistant")
     if hasattr(pages, "display_rag_research"):
-        pages.display_rag_research()
+        pages.display_rag_research(selected_client, selected_strategy)
     else:
         st.info("Research Assistant is not available in this build.")
 

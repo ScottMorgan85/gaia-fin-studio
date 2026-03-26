@@ -3839,47 +3839,191 @@ from the text. If the answer is not clearly supported by the excerpts, say so ex
 rather than speculating. Format your answer in clear, professional prose."""
 
 
-def display_rag_research():
+def build_client_context(
+    selected_client: str, selected_strategy: str
+) -> "tuple[str, dict, pd.DataFrame]":
     """
-    RAG-powered document research assistant.
-    Upload a fund prospectus, earnings transcript, or 10-K → ask questions → get
-    grounded answers with source chunks shown.
+    Build a client context string for the Research Assistant system prompt.
+    Returns (context_str, meta_dict, active_alerts_df).
+    meta keys: n_alerts (int), total_aum (float).
     """
-    # ── Session state initialisation ─────────────────────────────────────────
+    empty_alerts: pd.DataFrame = pd.DataFrame()
+    meta: dict = {"n_alerts": 0, "total_aum": 0.0}
+    try:
+        clients = pd.read_csv("data/client_data.csv")
+        row_df = clients[clients["client_name"] == selected_client]
+        if row_df.empty:
+            return f"Client: {selected_client}, Strategy: {selected_strategy}", meta, empty_alerts
+        row = row_df.iloc[0]
+        client_id = str(row["client_id"])
+
+        # Accounts
+        try:
+            accounts = pd.read_csv("data/accounts.csv")
+            accts = accounts[accounts["client_id"] == client_id].copy()
+            show_cols = [c for c in ["account_name", "account_type", "strategy", "aum"]
+                         if c in accts.columns]
+            accts_str = accts[show_cols].to_string(index=False) if not accts.empty else "None"
+        except Exception:
+            accts = pd.DataFrame()
+            accts_str = "None"
+
+        # Alerts
+        try:
+            alerts_df = utils.load_client_alerts(selected_client)
+            active_alerts = (
+                alerts_df[alerts_df["status"].str.lower() != "dismissed"]
+                if not alerts_df.empty else pd.DataFrame()
+            )
+            alert_summary = (
+                "; ".join(active_alerts["title"].tolist())
+                if not active_alerts.empty else "None"
+            )
+            n_alerts = len(active_alerts)
+        except Exception:
+            active_alerts = pd.DataFrame()
+            alert_summary = "None"
+            n_alerts = 0
+
+        # TLH
+        try:
+            tlh = utils.get_client_tlh_opportunities(client_id)
+            tlh_summary = (
+                f"{len(tlh)} lots, ${tlh['unrealized_gl_dollars'].sum():,.0f} total loss"
+                if not tlh.empty else "None"
+            )
+        except Exception:
+            tlh_summary = "None"
+
+        # RSU
+        try:
+            rsu = utils.load_rsu_schedule(client_id)
+            rsu_summary = (
+                f"Next vest: {rsu.iloc[0]['vest_date']} — "
+                f"{rsu.iloc[0]['shares_vesting']} shares"
+                if not rsu.empty else "None"
+            )
+        except Exception:
+            rsu_summary = "None"
+
+        total_aum = float(row.get("total_aum", 0))
+        meta = {"n_alerts": n_alerts, "total_aum": total_aum}
+
+        context_str = (
+            f"CLIENT: {selected_client}\n"
+            f"Employer: {row.get('employer', 'N/A')}\n"
+            f"AUM: ${total_aum:,.0f}\n"
+            f"Age: {row.get('age', 'N/A')} | Risk: {row.get('risk_profile', 'N/A')}\n"
+            f"Tax Bracket: {row.get('tax_bracket', 'N/A')}%\n"
+            f"Time Horizon: {row.get('time_horizon_yrs', 'N/A')} years\n"
+            f"State: {row.get('state', 'N/A')}\n"
+            f"Primary Strategy: {selected_strategy}\n"
+            f"Next Review: {row.get('next_review_date', 'N/A')}\n"
+            f"\nACCOUNTS ({len(accts)} total):\n{accts_str}\n"
+            f"\nACTIVE ALERTS:\n{alert_summary}\n"
+            f"\nTLH OPPORTUNITIES: {tlh_summary}\n"
+            f"RSU VESTING: {rsu_summary}\n"
+        )
+        return context_str, meta, active_alerts
+
+    except Exception:
+        return f"Client: {selected_client}, Strategy: {selected_strategy}", meta, empty_alerts
+
+
+def display_rag_research(selected_client: str = "", selected_strategy: str = ""):
+    """
+    Research Assistant — client-aware chat with optional document grounding.
+    Without a document: uses client context only.
+    With a document indexed: augments answers with RAG excerpts.
+    """
+    # ── Build client context ──────────────────────────────────────────────────
+    client_ctx, meta, active_alerts = build_client_context(selected_client, selected_strategy)
+    n_alerts  = meta["n_alerts"]
+    total_aum = meta["total_aum"]
+
+    # ── Context banner + Clear chat button ────────────────────────────────────
+    banner_col, clear_col = st.columns([4, 1])
+    history_key = f"ra_history_{selected_client}"
+    if history_key not in st.session_state:
+        st.session_state[history_key] = []
+    with banner_col:
+        aum_str = f"${total_aum/1e6:.2f}M AUM" if total_aum else "AUM unavailable"
+        st.caption(
+            f"Context loaded: **{selected_client}** · {selected_strategy} · "
+            f"{aum_str} · {n_alerts} active alert{'s' if n_alerts != 1 else ''}"
+        )
+    with clear_col:
+        if st.button("Clear chat", key="ra_clear"):
+            st.session_state[history_key] = []
+            st.rerun()
+
+    # ── Suggested questions ───────────────────────────────────────────────────
+    alert_types  = set(active_alerts["alert_type"].tolist()) if not active_alerts.empty else set()
+    alert_titles = " ".join(active_alerts["title"].tolist()) if not active_alerts.empty else ""
+
+    suggested = []
+    if "RSU_VEST" in alert_types:
+        suggested.append(
+            f"What are the tax implications of selling {selected_client}'s RSU shares vs holding them?"
+        )
+    if "TLH_OPPORTUNITY" in alert_types:
+        suggested.append(
+            "Explain the wash sale rule and how it applies to harvesting losses "
+            "while maintaining market exposure."
+        )
+    if "FOUNDATION_REVIEW" in alert_types or "Foundation" in alert_titles:
+        suggested.append(
+            "What are the options for diversifying a foundation's concentrated "
+            "stock position without triggering tax?"
+        )
+    if not suggested:
+        suggested = [
+            f"What is the current macro regime and how does it affect {selected_strategy}?",
+            f"What are the key risks for {selected_client}'s portfolio this quarter?",
+            "What rebalancing actions should I consider?",
+        ]
+
+    st.markdown("**Suggested questions:**")
+    q_cols = st.columns(len(suggested))
+    for i, (col, q) in enumerate(zip(q_cols, suggested)):
+        label = (q[:60] + "…") if len(q) > 60 else q
+        if col.button(label, key=f"ra_suggest_{i}", use_container_width=True):
+            st.session_state["ra_prefill"] = q
+            st.rerun()
+
+    # Pop prefill set by suggested question buttons
+    prefill_q = st.session_state.pop("ra_prefill", None)
+
+    st.markdown("---")
+
+    # ── Session state: document index (global — not per-client) ──────────────
     if "rag_index" not in st.session_state:
         st.session_state["rag_index"] = {}
-    if "rag_history" not in st.session_state:
-        st.session_state["rag_history"] = []
-
     idx = st.session_state["rag_index"]
 
     # ── Layout ────────────────────────────────────────────────────────────────
     left, right = st.columns([1, 2])
 
-    # ── LEFT: document upload ─────────────────────────────────────────────────
+    # ── LEFT: document upload (optional) ─────────────────────────────────────
     with left:
-        st.subheader("Document")
+        st.subheader("Document (Optional)")
+        st.caption("Upload a document to ground answers in its content.")
         uploaded = st.file_uploader(
             "Upload PDF or TXT",
             type=["pdf", "txt"],
             help="Fund prospectus, earnings transcript, 10-K/Q, research note.",
         )
-
         st.markdown("**— or paste text directly —**")
-        pasted = st.text_area("Paste document text", height=160, key="rag_paste")
+        pasted = st.text_area("Paste document text", height=120, key="rag_paste")
         index_btn = st.button("Index document", type="primary", use_container_width=True)
 
         if index_btn:
             with st.spinner("Parsing and indexing…"):
                 if uploaded is not None:
-                    chunks = utils.parse_document_chunks(
-                        uploaded.read(), uploaded.name
-                    )
+                    chunks = utils.parse_document_chunks(uploaded.read(), uploaded.name)
                     filename = uploaded.name
                 elif pasted.strip():
-                    chunks = utils.parse_document_chunks(
-                        pasted.encode(), "pasted_document.txt"
-                    )
+                    chunks = utils.parse_document_chunks(pasted.encode(), "pasted_document.txt")
                     filename = "pasted_document.txt"
                 else:
                     chunks = []
@@ -3889,7 +4033,6 @@ def display_rag_research():
                     new_idx = utils.build_rag_index(chunks, filename)
                     if new_idx:
                         st.session_state["rag_index"] = new_idx
-                        st.session_state["rag_history"] = []
                         idx = new_idx
                         st.success(
                             f"Indexed **{new_idx['n_chunks']}** chunks from "
@@ -3909,37 +4052,14 @@ def display_rag_research():
             )
             if st.button("Clear document", use_container_width=True):
                 st.session_state["rag_index"] = {}
-                st.session_state["rag_history"] = []
                 st.rerun()
 
     # ── RIGHT: chat interface ─────────────────────────────────────────────────
     with right:
         st.subheader("Research Chat")
 
-        if not idx:
-            st.info(
-                "Upload a document on the left to get started.  \n"
-                "Supported: fund prospectuses, earnings call transcripts, 10-K/Q filings, "
-                "research notes (PDF or plain text)."
-            )
-            return
-
-        # Quick question buttons
-        doc_type  = idx.get("doc_type", "financial_document")
-        questions = _RAG_QUICK_QUESTIONS.get(doc_type, _RAG_QUICK_QUESTIONS["financial_document"])
-        st.markdown("**Quick questions:**")
-        cols = st.columns(len(questions))
-        quick_q = None
-        for i, q in enumerate(questions):
-            if cols[i].button(q[:40] + ("…" if len(q) > 40 else ""), key=f"qq_{i}",
-                              use_container_width=True, help=q):
-                quick_q = q
-
-        st.markdown("---")
-
-        # Conversation history
-        history = st.session_state["rag_history"]
-        for turn in history:
+        messages = st.session_state[history_key]
+        for turn in messages:
             with st.chat_message(turn["role"]):
                 st.markdown(turn["content"])
                 if turn["role"] == "assistant" and turn.get("sources"):
@@ -3950,74 +4070,75 @@ def display_rag_research():
                                 f"> {chunk[:400]}{'…' if len(chunk) > 400 else ''}"
                             )
 
-        # Query input
-        user_query = st.chat_input("Ask a question about the document…") or quick_q
+        user_query = st.chat_input("Ask about this client, market conditions, strategy…") or prefill_q
         if not user_query:
             return
 
-        # Show user message immediately
         with st.chat_message("user"):
             st.markdown(user_query)
-        history.append({"role": "user", "content": user_query, "sources": []})
+        messages.append({"role": "user", "content": user_query, "sources": []})
 
-        # Retrieve + generate
         with st.chat_message("assistant"):
-            with st.spinner("Retrieving relevant sections…"):
-                results = utils.retrieve_chunks(user_query, idx, top_k=5)
+            today = pd.Timestamp.today().strftime("%B %d, %Y")
+            results = []
 
-            if not results:
-                answer = (
-                    "I couldn't find relevant sections in this document for that question. "
-                    "Try rephrasing or ask something more specific to the document content."
-                )
-                st.markdown(answer)
-                history.append({"role": "assistant", "content": answer, "sources": []})
-                return
+            # Retrieve document chunks if a document is indexed
+            doc_section = ""
+            if idx:
+                with st.spinner("Retrieving relevant sections…"):
+                    results = utils.retrieve_chunks(user_query, idx, top_k=5)
+                if results:
+                    parts = [f"[Excerpt {i+1}]\n{chunk}" for i, (chunk, _) in enumerate(results)]
+                    doc_section = "\n\nDOCUMENT EXCERPTS:\n\n" + "\n\n---\n\n".join(parts)
 
-            # Build context from retrieved chunks
-            context_parts = []
-            for i, (chunk, _score) in enumerate(results, 1):
-                context_parts.append(f"[Excerpt {i}]\n{chunk}")
-            context = "\n\n---\n\n".join(context_parts)
+            system_prompt = (
+                "You are GAIA — an AI research assistant embedded in a wealth management platform.\n"
+                "You have full context about the advisor's current client and their portfolio situation.\n\n"
+                "You help advisors with:\n"
+                "- Investment research and market analysis\n"
+                "- Tax strategy questions (TLH, RSU planning, etc.)\n"
+                "- Portfolio construction and risk analysis\n"
+                "- Client communication drafting\n"
+                "- Regulatory and compliance questions\n\n"
+                "Always ground your answers in the client context below. When relevant, reference "
+                "specific numbers from their portfolio. Be concise and actionable.\n\n"
+                f"{client_ctx}\n"
+                f"Today's date: {today}"
+                f"{doc_section}"
+            )
 
-            # Build conversation context (last 3 turns for brevity)
-            convo = []
-            for turn in history[-6:]:
-                if turn["role"] in ("user", "assistant"):
-                    convo.append({"role": turn["role"], "content": turn["content"]})
-
-            messages = [
-                {"role": "system",
-                 "content": f"{_RAG_SYS_PROMPT}\n\n"
-                            f"DOCUMENT EXCERPTS:\n\n{context}"},
-            ] + convo
+            # Last 6 turns for context window efficiency
+            convo = [
+                {"role": t["role"], "content": t["content"]}
+                for t in messages[-6:]
+                if t["role"] in ("user", "assistant")
+            ]
+            api_messages = [{"role": "system", "content": system_prompt}] + convo
 
             try:
-                resp = utils.groq_chat(
-                    messages,
-                    feature="rag_research",
-                    model="llama-3.3-70b-versatile",
-                    max_tokens=900,
-                    temperature=0.2,
-                )
+                with st.spinner("Thinking…"):
+                    resp = utils.groq_chat(
+                        api_messages,
+                        feature="research_assistant",
+                        model="llama-3.3-70b-versatile",
+                        max_tokens=900,
+                        temperature=0.3,
+                    )
                 answer = resp.choices[0].message.content.strip()
             except Exception as e:
                 answer = f"Generation failed: {e}"
 
             st.markdown(answer)
-            with st.expander(f"Sources ({len(results)} chunks retrieved)", expanded=False):
-                for j, (chunk, score) in enumerate(results, 1):
-                    st.markdown(
-                        f"**Chunk {j}** — relevance `{score:.3f}`\n\n"
-                        f"> {chunk[:400]}{'…' if len(chunk) > 400 else ''}"
-                    )
+            if results:
+                with st.expander(f"Sources ({len(results)} chunks retrieved)", expanded=False):
+                    for j, (chunk, score) in enumerate(results, 1):
+                        st.markdown(
+                            f"**Chunk {j}** — relevance `{score:.3f}`\n\n"
+                            f"> {chunk[:400]}{'…' if len(chunk) > 400 else ''}"
+                        )
 
-        history.append({
-            "role":    "assistant",
-            "content": answer,
-            "sources": results,
-        })
-        st.session_state["rag_history"] = history
+        messages.append({"role": "assistant", "content": answer, "sources": results})
+        st.session_state[history_key] = messages
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -226,10 +226,15 @@ def _strategy_abbrev_for(client_name: str) -> Optional[str]:
     }.get(s, s)
 
 client_names = get_client_names()
+if "nav_client" in st.session_state:
+    _nav_client = st.session_state.pop("nav_client")
+    _default_idx = client_names.index(_nav_client) if _nav_client in client_names else 0
+else:
+    _default_idx = 0
 selected_client = st.sidebar.selectbox(
     "Select Client",
     client_names,
-    key="selected_client",
+    index=_default_idx,
 )
 
 # Resolve selected_strategy string

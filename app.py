@@ -51,6 +51,14 @@ if GATE_ON and not st.session_state.get("gate_passed"):
     landing.render_form()  # (alias of render_gate) shows contact form
     st.stop()
 
+# ── Consume programmatic navigation state BEFORE any widgets are created ─────
+# _navigate_to() in gaia_pages.py writes _nav_client (underscore-prefixed).
+# Pop it here — before ANY st.sidebar.* calls — so the key is never alive
+# at the same time as a widget, which would trigger StreamlitAPIException.
+# Route is set directly on st.session_state["route"] by _navigate_to(), so
+# no separate pending-route key is needed.
+_nav_client_pending = st.session_state.pop("_nav_client", None)
+
 # ── Page flags (set via environment variables) ───────────────────────────────
 SHOW_PORTFOLIO_PULSE   = _flag("SHOW_PORTFOLIO_PULSE",   "true")
 SHOW_COMMENTARY        = _flag("SHOW_COMMENTARY",        "true")
@@ -226,11 +234,11 @@ def _strategy_abbrev_for(client_name: str) -> Optional[str]:
     }.get(s, s)
 
 client_names = get_client_names()
-if "nav_client" in st.session_state:
-    _nav_client = st.session_state.pop("nav_client")
-    _default_idx = client_names.index(_nav_client) if _nav_client in client_names else 0
-else:
-    _default_idx = 0
+_default_idx = (
+    client_names.index(_nav_client_pending)
+    if _nav_client_pending and _nav_client_pending in client_names
+    else 0
+)
 selected_client = st.sidebar.selectbox(
     "Select Client",
     client_names,
@@ -260,11 +268,11 @@ pages.render_market_pulse_sidebar()
 # ── Navigation — 5 grouped zones ─────────────────────────────────────────────
 if "route" not in st.session_state:
     st.session_state["route"] = "overview"
-if "selected_page" not in st.session_state:
-    st.session_state["selected_page"] = "Morning Brief"
+# (Route is already set directly by _navigate_to() — no pending key needed)
 
 def _nav(label: str, route_key: str):
-    if st.sidebar.button(label, use_container_width=True, key=f"nav_{route_key}"):
+    # Key prefix "_nb_" (nav-button) never matches any programmatic nav key
+    if st.sidebar.button(label, use_container_width=True, key=f"_nb_{route_key}"):
         st.session_state["route"] = route_key
 
 st.sidebar.caption("MORNING BRIEF")

@@ -4493,11 +4493,12 @@ _PAGE_ROUTES = {
 def _navigate_to(page_label: str, client_name: str = None) -> None:
     """Navigate to a page by label, optionally switching the selected client.
 
-    Uses intermediary nav_client/nav_page keys (consumed via .pop() on next
-    render) to avoid the Streamlit widget-bound session_state conflict.
+    Uses _nav_client (underscore-prefixed) so it never collides with any
+    widget key= parameter.  app.py pops it before any widgets are created.
+    Route is set directly on session_state["route"] — no widget owns that key.
     """
     if client_name:
-        st.session_state["nav_client"] = client_name
+        st.session_state["_nav_client"] = client_name
     st.session_state["route"] = _PAGE_ROUTES.get(page_label, "overview")
     st.rerun()
 

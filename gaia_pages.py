@@ -1756,20 +1756,30 @@ def display_client_360(selected_client: str):
     # ── SECTION 1: Household Header ────────────────────────────────────────────
     risk = hh.get("risk_profile", "—")
     risk_color = {"Conservative": "#3b82f6", "Moderate": "#10b981", "Aggressive": "#ef4444"}.get(str(risk), "#6b7280")
-    st.markdown(
-        f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:4px;'>"
-        f"<span style='font-size:22px;font-weight:700;'>{selected_client}</span>"
-        f"<span style='background:{risk_color};color:white;border-radius:4px;"
-        f"padding:2px 10px;font-size:12px;font-weight:600;'>{risk}</span>"
-        f"</div>"
-        f"<div style='color:#6b7280;font-size:13px;margin-bottom:12px;'>"
-        f"{'Employer: ' + str(employer) + ' · ' if employer and employer != '—' else ''}"
-        f"Advisor: {hh.get('advisor','—')} · "
-        f"Next Review: {hh.get('next_review','—')} · "
-        f"State: {state} · Age: {age} · Horizon: {time_horizon} yrs · Tax Bracket: {tax_bracket}%"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    header_col1, header_col2 = st.columns([3, 1])
+    with header_col1:
+        st.markdown(
+            f"<div style='display:flex;align-items:center;gap:12px;margin-bottom:4px;'>"
+            f"<span style='font-size:22px;font-weight:700;'>{selected_client}</span>"
+            f"<span style='background:{risk_color};color:white;border-radius:4px;"
+            f"padding:2px 10px;font-size:12px;font-weight:600;'>{risk}</span>"
+            f"</div>"
+            f"<div style='color:#6b7280;font-size:13px;margin-bottom:12px;'>"
+            f"{'Employer: ' + str(employer) + ' · ' if employer and employer != '—' else ''}"
+            f"Advisor: {hh.get('advisor','—')} · "
+            f"Next Review: {hh.get('next_review','—')} · "
+            f"State: {state} · Age: {age} · Horizon: {time_horizon} yrs · Tax Bracket: {tax_bracket}%"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with header_col2:
+        if st.button(
+            "📋 Meeting Prep",
+            key="meeting_prep_btn",
+            type="primary",
+            use_container_width=True,
+        ):
+            _navigate_to("Meeting Prep", selected_client)
 
     # Outside assets for header card (cached — fast second call)
     try:
@@ -4986,6 +4996,7 @@ _PAGE_ROUTES = {
     "Optimization Lab":    "quantum",
     "AI Monitor":          "llm_obs",
     "Research Assistant":  "rag",
+    "Meeting Prep":        "meeting_prep",
 }
 
 
@@ -5356,3 +5367,394 @@ def display_morning_brief(selected_client: str) -> None:
     if st.button("View detailed market commentary →", key="mb_legacy_link"):
         st.session_state["route"] = "overview_legacy"
         st.rerun()
+
+
+# ── Meeting Prep ─────────────────────────────────────────────────────────────
+
+def _generate_meeting_briefing(
+    selected_client: str,
+    selected_strategy: str,
+    meeting_date,
+    meeting_type: str,
+) -> dict:
+    """Assemble client context and generate a structured meeting briefing via two Groq calls."""
+    today = pd.Timestamp.today()
+
+    # ── Client profile ──
+    try:
+        clients = pd.read_csv("data/client_data.csv")
+        _match = clients[clients["client_name"] == selected_client]
+        client_row = _match.iloc[0].to_dict() if not _match.empty else {}
+    except Exception:
+        client_row = {}
+
+    # ── Resolve client_id early so all data blocks can use it ──
+    try:
+        from data.client_mapping import client_strategy_risk_mapping as _csrm
+        client_id = _csrm.get(selected_client, {}).get("client_id", "")
+    except Exception:
+        client_id = client_row.get("client_id", "")
+
+    # ── Accounts ──
+    try:
+        accts = utils.get_client_accounts(client_name=selected_client)
+        acct_summary = (
+            accts[["account_name", "account_type", "strategy", "aum"]].to_string(index=False)
+            if not accts.empty
+            else "No accounts"
+        )
+    except Exception:
+        acct_summary = "Unavailable"
+
+    # ── Alerts ── (initialize before try so it is always defined)
+    alerts = pd.DataFrame()
+    try:
+        alerts = utils.load_client_alerts(selected_client)
+        alert_lines = (
+            "\n".join([
+                f"- [{r['priority']}] {r['title']}: {str(r['description'])[:100]}"
+                for _, r in alerts.iterrows()
+            ])
+            if not alerts.empty
+            else "None"
+        )
+    except Exception:
+        alert_lines = "Unavailable"
+
+    # ── TLH ──
+    try:
+        tlh = utils.get_client_tlh_opportunities(client_id)
+        if not tlh.empty:
+            tlh_total = tlh["unrealized_gl_dollars"].sum()
+            tlh_summary = f"{len(tlh)} lots eligible, ${abs(tlh_total):,.0f} harvestable loss"
+        else:
+            tlh_summary = "No TLH opportunities"
+    except Exception:
+        tlh_summary = "Unavailable"
+
+    # ── RSU ──
+    try:
+        rsu = utils.load_rsu_schedule(client_id)
+        if not rsu.empty:
+            nv = rsu.iloc[0]
+            rsu_summary = (
+                f"Next vest: {nv['vest_date']} — "
+                f"{int(nv['shares_vesting']):,} shares (~${float(nv['estimated_value']):,.0f})"
+            )
+        else:
+            rsu_summary = "No upcoming vests"
+    except Exception:
+        rsu_summary = "Unavailable"
+
+    # ── Outside assets ──
+    try:
+        outside = utils.load_outside_assets(client_id=client_id)
+        if not outside.empty:
+            total_outside = outside["estimated_aum"].sum()
+            institutions = ", ".join(outside["institution"].tolist())
+            outside_summary = f"${total_outside:,.0f} estimated at {institutions}"
+        else:
+            outside_summary = "None on record"
+    except Exception:
+        outside_summary = "Unavailable"
+
+    # ── Performance ──
+    try:
+        sr = utils.get_strategy_returns()
+        if selected_strategy in sr.columns:
+            r = sr[selected_strategy].dropna()
+            if "as_of_date" in sr.columns:
+                r.index = pd.to_datetime(sr["as_of_date"])
+            ytd_start = pd.Timestamp(today.year, 1, 1)
+            ytd_mask = r.index >= ytd_start
+            ytd_ret = ((1 + r[ytd_mask]).prod() - 1) if ytd_mask.any() else None
+            perf_summary = f"YTD: {ytd_ret:.1%}" if ytd_ret is not None else "YTD: N/A"
+        else:
+            perf_summary = "N/A"
+    except Exception:
+        perf_summary = "Unavailable"
+
+    # ── Prior letter context ──
+    try:
+        letters = pd.read_csv("data/quarterly_letters.csv")
+        cl = letters[letters["client_name"] == selected_client]
+        if not cl.empty:
+            last_letter = cl.iloc[-1]
+            last_contact = (
+                f"Last quarterly letter: {last_letter['quarter']} ({last_letter['status']})"
+            )
+        else:
+            last_contact = "No letters on record"
+    except Exception:
+        last_contact = "Unavailable"
+
+    # ── Live market ──
+    try:
+        mkt = utils.get_live_market_context()
+        market_summary = (
+            f"VIX {mkt.get('vix', 'N/A')}, "
+            f"SPY YTD {mkt.get('spy_mtd', 'N/A')}, "
+            f"Curve {mkt.get('curve_shape', 'N/A')}"
+        )
+    except Exception:
+        market_summary = "Unavailable"
+
+    # Use numeric default to avoid format-spec errors if client_row is empty
+    aum_val = client_row.get("total_aum", 0) or 0
+
+    # ── Groq Call 1: Situation Summary ──
+    sys1 = (
+        "You are a senior wealth advisor preparing for a client meeting. "
+        "Write clearly and concisely. Use specific numbers. No generic platitudes."
+    )
+    user1 = f"""Prepare a situation summary for a {meeting_type} with {selected_client} on {meeting_date}.
+
+CLIENT PROFILE:
+- AUM: ${aum_val:,.0f}
+- Age: {client_row.get('age', 'N/A')} | Risk: {client_row.get('risk_profile', 'N/A')}
+- Tax Bracket: {client_row.get('tax_bracket', 'N/A')}%
+- Employer: {client_row.get('employer', 'N/A')}
+- Strategy: {selected_strategy}
+- Performance: {perf_summary}
+
+ACCOUNTS:
+{acct_summary}
+
+KEY CONTEXT:
+- Active Alerts: {alert_lines}
+- TLH: {tlh_summary}
+- RSU Schedule: {rsu_summary}
+- Outside Assets: {outside_summary}
+- {last_contact}
+- Market: {market_summary}
+
+Write 3 SHORT paragraphs (2-3 sentences each):
+Paragraph 1: Where the client stands today (portfolio, key positions, recent performance)
+Paragraph 2: What has changed since last contact (market moves, alerts triggered, RSU/tax events)
+Paragraph 3: What needs a decision at this meeting (be specific — name the actual issue)
+"""
+    try:
+        summary_text = utils.groq_chat(
+            messages=[
+                {"role": "system", "content": sys1},
+                {"role": "user", "content": user1},
+            ],
+            feature="meeting_prep_summary",
+            max_tokens=500,
+            temperature=0.3,
+        )
+    except Exception:
+        summary_text = (
+            f"{selected_client} has ${aum_val:,.0f} under management across multiple accounts. "
+            "Review active alerts and TLH opportunities before the meeting."
+        )
+
+    # ── Groq Call 2: Talking Points & Actions ──
+    sys2 = (
+        "You are a senior wealth advisor. Generate specific, actionable talking points. "
+        "Each point must reference a real dollar amount or specific action. No vague generalities."
+    )
+    user2 = f"""Generate meeting talking points for {selected_client}.
+Meeting type: {meeting_type}
+Date: {meeting_date}
+
+Context:
+- Alerts: {alert_lines}
+- TLH opportunity: {tlh_summary}
+- RSU: {rsu_summary}
+- Outside assets: {outside_summary}
+- Performance: {perf_summary}
+
+Generate exactly 3 talking points and 3 recommended actions:
+
+TALKING POINTS (what to discuss):
+Each should be 1-2 sentences, specific to this client's situation with real numbers.
+
+RECOMMENDED ACTIONS (what to propose):
+Each should be a specific, actionable next step with a clear owner (advisor vs client) and rough timeline.
+"""
+    try:
+        talking_points_text = utils.groq_chat(
+            messages=[
+                {"role": "system", "content": sys2},
+                {"role": "user", "content": user2},
+            ],
+            feature="meeting_prep_actions",
+            max_tokens=500,
+            temperature=0.3,
+        )
+    except Exception:
+        talking_points_text = (
+            "1. Review NVDA RSU vest decision\n"
+            "2. Discuss TLH opportunities\n"
+            "3. Review Q1 performance vs benchmark"
+        )
+
+    return {
+        "client":          selected_client,
+        "strategy":        selected_strategy,
+        "meeting_date":    str(meeting_date),
+        "meeting_type":    meeting_type,
+        "summary":         summary_text,
+        "talking_points":  talking_points_text,
+        "total_aum":       aum_val,
+        "risk_profile":    client_row.get("risk_profile", ""),
+        "next_review":     client_row.get("next_review_date", ""),
+        "tlh_summary":     tlh_summary,
+        "rsu_summary":     rsu_summary,
+        "outside_summary": outside_summary,
+        "perf_summary":    perf_summary,
+        "alert_count":     len(alerts) if not alerts.empty else 0,
+        "generated_at":    today.strftime("%B %d, %Y %H:%M"),
+    }
+
+
+def _render_meeting_briefing(
+    briefing: dict,
+    selected_client: str,
+    meeting_date,
+    meeting_type: str,
+) -> None:
+    """Render the meeting briefing as a clean one-page layout with download option."""
+
+    # ── Header card ──
+    st.markdown(
+        f"<div style='border:1px solid #333;border-radius:8px;padding:20px;margin-bottom:20px;'>"
+        f"<h2 style='margin:0'>{selected_client}</h2>"
+        f"<p style='margin:4px 0;color:#888;'>"
+        f"{meeting_type} · {meeting_date} · Prepared {briefing['generated_at']}"
+        f"</p>"
+        f"<p style='margin:4px 0;'>"
+        f"<strong>AUM:</strong> ${briefing['total_aum']:,.0f} · "
+        f"<strong>Risk:</strong> {briefing['risk_profile']} · "
+        f"<strong>Strategy:</strong> {briefing['strategy']} · "
+        f"<strong>Performance:</strong> {briefing['perf_summary']}"
+        f"</p>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Key facts row ──
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Active Alerts", briefing["alert_count"])
+    c2.metric(
+        "TLH",
+        briefing["tlh_summary"].split(",")[0]
+        if "," in briefing["tlh_summary"]
+        else briefing["tlh_summary"],
+    )
+    c3.metric(
+        "Next RSU",
+        briefing["rsu_summary"].split("—")[0].replace("Next vest: ", "").strip()
+        if "—" in briefing["rsu_summary"]
+        else "None",
+    )
+    c4.metric(
+        "Outside Assets",
+        briefing["outside_summary"].split(" at")[0]
+        if " at " in briefing["outside_summary"]
+        else briefing["outside_summary"],
+    )
+
+    st.divider()
+
+    # ── Situation summary ──
+    st.subheader("Situation Summary")
+    st.markdown(briefing["summary"])
+
+    st.divider()
+
+    # ── Talking points & actions ──
+    st.subheader("Talking Points & Recommended Actions")
+    st.markdown(briefing["talking_points"])
+
+    st.divider()
+
+    # ── Download ──
+    st.subheader("Export")
+    txt = f"""MEETING BRIEFING
+================
+Client: {selected_client}
+Meeting: {meeting_type} on {meeting_date}
+Prepared: {briefing['generated_at']}
+AUM: ${briefing['total_aum']:,.0f}
+Risk Profile: {briefing['risk_profile']}
+Strategy: {briefing['strategy']}
+Performance: {briefing['perf_summary']}
+
+KEY FACTS
+---------
+Active Alerts: {briefing['alert_count']}
+TLH: {briefing['tlh_summary']}
+RSU: {briefing['rsu_summary']}
+Outside Assets: {briefing['outside_summary']}
+
+SITUATION SUMMARY
+-----------------
+{briefing['summary']}
+
+TALKING POINTS & ACTIONS
+------------------------
+{briefing['talking_points']}
+
+---
+Generated by GAIA · {briefing['generated_at']}
+"""
+    dl_col, regen_col = st.columns(2)
+    with dl_col:
+        st.download_button(
+            label="⬇ Download Briefing (.txt)",
+            data=txt,
+            file_name=f"meeting_prep_{selected_client.replace(' ', '_')}_{meeting_date}.txt",
+            mime="text/plain",
+            key="download_briefing",
+        )
+    with regen_col:
+        if st.button("↻ Regenerate", key="regen_briefing"):
+            key = f"briefing_{selected_client}"
+            if key in st.session_state:
+                del st.session_state[key]
+            st.rerun()
+
+
+def display_meeting_prep(selected_client: str, selected_strategy: str) -> None:
+    """AI-generated one-page advisor briefing for an upcoming client meeting."""
+    st.title("Meeting Prep")
+    st.subheader(f"{selected_client} — Advisor Briefing")
+
+    if st.button("← Back to Client 360", key="back_to_360"):
+        _navigate_to("Client 360")
+
+    st.divider()
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        meeting_date = st.date_input(
+            "Meeting date",
+            value=pd.Timestamp.today() + pd.DateOffset(days=1),
+        )
+    with col2:
+        meeting_type = st.selectbox(
+            "Meeting type",
+            ["Quarterly Review", "Annual Review", "Ad-hoc Call",
+             "Portfolio Review", "Tax Planning", "Estate Planning"],
+            index=0,
+        )
+
+    st.divider()
+
+    if st.button("Generate Briefing", key="gen_briefing", type="primary"):
+        with st.spinner("Preparing your briefing..."):
+            briefing = _generate_meeting_briefing(
+                selected_client, selected_strategy, meeting_date, meeting_type
+            )
+            st.session_state[f"briefing_{selected_client}"] = briefing
+
+    briefing_key = f"briefing_{selected_client}"
+    if briefing_key in st.session_state:
+        _render_meeting_briefing(
+            st.session_state[briefing_key],
+            selected_client,
+            meeting_date,
+            meeting_type,
+        )

@@ -93,6 +93,9 @@ Five zones defined with `st.sidebar.caption()` dividers. Route keys are stored i
 | SYSTEM | AI Monitor | `llm_obs` | `display_llm_observatory()` |
 | SYSTEM | Research Assistant | `rag` | `display_rag_research()` |
 
+**Contextual routes** (not in sidebar nav — accessible only via in-page buttons):
+- `"meeting_prep"` → `display_meeting_prep(selected_client, selected_strategy)` — reached via "📋 Meeting Prep" button on Client 360 header
+
 **Backward-compat routes** (not in nav, still handled by router):
 - `"log"` → Recommendations page with Decision Log pre-selected (`_recs_default_log=True`)
 - `"overview_legacy"` → legacy Portfolio Pulse (linked from Morning Brief footer)
@@ -126,6 +129,23 @@ The sidebar `Select Client` selectbox uses `key="selected_client"` so setting
 ---
 
 ## Features
+
+### Meeting Prep (contextual — Client 360 button only)
+AI-generated one-page advisor briefing for an upcoming client meeting.
+
+| Field | Value |
+|-------|-------|
+| Function | `display_meeting_prep(selected_client, selected_strategy)` in `gaia_pages.py` |
+| Route key | `meeting_prep` (not in sidebar — reached via "📋 Meeting Prep" button on Client 360) |
+| Entry point | `display_client_360()` header → `_navigate_to("Meeting Prep", selected_client)` |
+| LLM calls | 2 — `feature="meeting_prep_summary"` (situation summary) and `feature="meeting_prep_actions"` (talking points + recommended actions) |
+| Data sources | `client_data.csv`, `accounts.csv`, `client_alerts.csv`, `rsu_vesting_schedule.csv`, `outside_assets.csv`, `quarterly_letters.csv`, `get_strategy_returns()`, `get_live_market_context()` |
+| Output | Header card, 4-metric row, situation summary, talking points/actions, `.txt` download |
+| State key | `st.session_state[f"briefing_{selected_client}"]` — persists until Regenerate is clicked |
+
+**Helper functions:**
+- `_generate_meeting_briefing()` — assembles context, runs two Groq calls, returns dict
+- `_render_meeting_briefing()` — renders layout + download button + Regenerate button
 
 ### Morning Brief (default landing page)
 Three-column advisor dashboard — the first thing seen when opening GAIA.

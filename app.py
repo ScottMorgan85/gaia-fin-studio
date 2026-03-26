@@ -396,5 +396,11 @@ elif route == "rag":
     else:
         st.info("Research Assistant is not available in this build.")
 
+elif route == "meeting_prep":
+    if hasattr(pages, "display_meeting_prep"):
+        pages.display_meeting_prep(selected_client, selected_strategy)
+    else:
+        st.info("Meeting Prep is not available in this build.")
+
 else:
     st.error("Page not found")

@@ -2329,6 +2329,58 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
     except Exception:
         pass
 
+    # ── Concentration detection ───────────────────────────────────────────────
+    _conc_triggered = False
+    _top_ticker = ""
+    _top_value = 0.0
+    _taxable_aum = 0.0
+    _conc_pct = 0.0
+    _ticker_lots: pd.DataFrame = pd.DataFrame()
+    _embedded_gain = 0.0
+    _gain_pct = 0.0
+    _client_id_conc = ""
+
+    try:
+        _clients_df = pd.read_csv("data/client_data.csv")
+        _client_row_df = _clients_df[_clients_df["client_name"] == selected_client]
+        if not _client_row_df.empty:
+            _client_id_conc = str(_client_row_df.iloc[0]["client_id"])
+            _all_lots = utils.load_tax_lots(client_id=_client_id_conc)
+            _accounts_df = pd.read_csv("data/accounts.csv")
+            _taxable_accts = _accounts_df[
+                (_accounts_df["client_id"] == _client_id_conc) &
+                (_accounts_df["is_taxable"].astype(str).str.lower() == "true")
+            ]
+            _taxable_aum = float(_taxable_accts["aum"].sum())
+            if not _all_lots.empty and _taxable_aum > 0:
+                _pos_totals = (
+                    _all_lots.groupby("ticker")["current_value"]
+                    .sum()
+                    .sort_values(ascending=False)
+                )
+                _top_ticker = _pos_totals.index[0]
+                _top_value = float(_pos_totals.iloc[0])
+                _conc_pct = _top_value / _taxable_aum * 100
+                if _conc_pct > 30:
+                    _conc_triggered = True
+                    _ticker_lots = _all_lots[_all_lots["ticker"] == _top_ticker].copy()
+                    _ticker_lots["unrealized_gl_pct"] = pd.to_numeric(
+                        _ticker_lots["unrealized_gl_pct"].astype(str).str.rstrip("%"),
+                        errors="coerce",
+                    )
+                    _current_basis = float(_ticker_lots["cost_basis_total"].sum())
+                    _embedded_gain = _top_value - _current_basis
+                    _gain_pct = (
+                        (_embedded_gain / _current_basis * 100) if _current_basis > 0 else 0.0
+                    )
+                    st.warning(
+                        f"⚠️ **Concentration Alert** — "
+                        f"{_top_ticker} represents {_conc_pct:.1f}% of taxable account "
+                        f"(IPS limit: 30%). Systematic diversification plan recommended."
+                    )
+    except Exception:
+        pass
+
     # st.header("⚖️ Scenario Allocator")
     st.caption("Compare the **current** mix with a **recommended** mix and two alternatives. "
                "Use the inputs below, then export or apply. Jitter applies small, random tweaks to the current allocation weights to mimic real-world “wiggle” and test sensitivity. You control the magnitude (e.g., ±3 percentage points), and we keep totals coherent by normalizing back to ~100%. It’s useful for stress-testing recommendations: if an idea only works for one exact mix but breaks with tiny perturbations, it’s probably fragile. Jitter is demo-style randomness (seeded for reproducibility), not a view on markets or a formal scenario.")
@@ -2635,6 +2687,136 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
         st.markdown(ideas_txt)
     except Exception:
         st.info("Trade ideas unavailable right now; will show again once the LLM is reachable.")
+
+    # ── Concentration Reduction Planner ──────────────────────────────────────
+    if _conc_triggered:
+        st.markdown("---")
+        st.subheader("Concentration Reduction Planner")
+        st.caption(
+            "Model the tax impact of systematically reducing a concentrated position over time."
+        )
+
+        _plan_col1, _plan_col2 = st.columns(2)
+
+        with _plan_col1:
+            _target_pct = st.slider(
+                "Target concentration %",
+                min_value=5, max_value=30, value=20, step=5,
+                help="IPS guideline maximum is 30%",
+                key="conc_target_pct",
+            )
+            _years = st.slider(
+                "Reduction timeline (years)",
+                min_value=1, max_value=10, value=3, step=1,
+                key="conc_years",
+            )
+            _tax_rate = st.slider(
+                "Blended capital gains rate %",
+                min_value=15, max_value=50, value=37, step=1,
+                key="conc_tax_rate",
+            )
+
+        with _plan_col2:
+            _target_value = _taxable_aum * (_target_pct / 100)
+            _excess_value = max(0.0, _top_value - _target_value)
+            _annual_sale = _excess_value / _years if _years > 0 else _excess_value
+            _gain_on_sale = (_embedded_gain / _top_value) if _top_value > 0 else 0.0
+            _annual_tax = _annual_sale * _gain_on_sale * (_tax_rate / 100)
+            _total_tax = _annual_tax * _years
+            _net_proceeds = _excess_value - _total_tax
+
+            st.metric(
+                "Shares to sell",
+                f"${_excess_value:,.0f} total",
+                f"${_annual_sale:,.0f}/year",
+            )
+            st.metric(
+                "Est. total tax cost",
+                f"${_total_tax:,.0f}",
+                f"${_annual_tax:,.0f}/year",
+            )
+            st.metric(
+                "Net proceeds after tax",
+                f"${_net_proceeds:,.0f}",
+                f"{_net_proceeds / _excess_value * 100:.0f}% kept" if _excess_value > 0 else "—",
+            )
+            st.metric(
+                "Embedded gain rate",
+                f"{_gain_pct:.0f}%",
+                f"${_embedded_gain:,.0f} total gain",
+            )
+
+        # ── Recommended lot sequence ──────────────────────────────────────────
+        st.subheader("Recommended Lot Sequence")
+        st.caption("Sell lowest-gain lots first to minimize tax impact. Long-term lots preferred.")
+
+        if not _ticker_lots.empty:
+            _sorted_lots = _ticker_lots.sort_values("unrealized_gl_pct", ascending=True)
+            _display_cols = [
+                c for c in [
+                    "lot_id", "shares", "cost_basis_per_share", "current_price",
+                    "unrealized_gl_dollars", "unrealized_gl_pct", "term",
+                ]
+                if c in _sorted_lots.columns
+            ]
+            st.dataframe(
+                _sorted_lots[_display_cols],
+                use_container_width=True,
+                column_config={
+                    "unrealized_gl_dollars": st.column_config.NumberColumn(
+                        "G/L $", format="$%,.0f"
+                    ),
+                    "unrealized_gl_pct": st.column_config.NumberColumn(
+                        "G/L %", format="%.1f%%"
+                    ),
+                },
+            )
+
+        # ── AI diversification strategy ───────────────────────────────────────
+        if st.button(
+            "Generate Diversification Strategy",
+            key="rebalance_ai_diversify",
+            type="primary",
+        ):
+            with st.spinner("Analyzing…"):
+                _div_prompt = (
+                    f"{selected_client} holds {_top_ticker} at {_conc_pct:.1f}% of their "
+                    f"taxable account (IPS limit 30%).\n\n"
+                    f"Position details:\n"
+                    f"- Current value: ${_top_value:,.0f}\n"
+                    f"- Embedded gain: ${_embedded_gain:,.0f} ({_gain_pct:.0f}%)\n"
+                    f"- Tax bracket: {_tax_rate}%\n"
+                    f"- Target concentration: {_target_pct}%\n"
+                    f"- Timeline: {_years} years\n\n"
+                    f"Write a 3-paragraph diversification strategy:\n"
+                    f"1. Why act now (market conditions, risk assessment)\n"
+                    f"2. Recommended approach (which lots, what sequence, "
+                    f"tax-loss harvesting coordination)\n"
+                    f"3. What to buy with proceeds (replacement allocation "
+                    f"given their {selected_strategy} strategy and moderate risk profile)\n\n"
+                    f"Be specific with dollar amounts. Reference the actual lot structure."
+                )
+                try:
+                    _div_resp = utils.groq_chat(
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are a senior portfolio manager specializing in "
+                                    "concentrated stock management for HNW clients."
+                                ),
+                            },
+                            {"role": "user", "content": _div_prompt},
+                        ],
+                        feature="rebalance_strategy",
+                        model="llama-3.3-70b-versatile",
+                        max_tokens=600,
+                        temperature=0.3,
+                    )
+                    st.markdown(_div_resp.choices[0].message.content)
+                except Exception as _e:
+                    st.error(f"Generation failed: {_e}")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Portfolio Page

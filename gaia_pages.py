@@ -1785,22 +1785,31 @@ def display_client_360(selected_client: str):
     if not active_alerts.empty:
         _pc = {"Critical": "#dc2626", "High": "#ea580c", "Medium": "#ca8a04"}
         _bc = {"Critical": "#fef2f2", "High": "#fff7ed", "Medium": "#fefce8"}
-        for _, alert in active_alerts.iterrows():
-            p      = str(alert.get("priority", "Medium"))
-            bg     = _bc.get(p, "#f3f4f6")
-            border = _pc.get(p, "#6b7280")
-            tc     = _pc.get(p, "#374151")
-            title  = alert.get("title", "Alert")
-            desc   = alert.get("description", "")
+        for idx, alert in active_alerts.iterrows():
+            p          = str(alert.get("priority", "Medium"))
+            bg         = _bc.get(p, "#f3f4f6")
+            border     = _pc.get(p, "#6b7280")
+            tc         = _pc.get(p, "#374151")
+            title      = alert.get("title", "Alert")
+            desc       = alert.get("description", "")
+            alert_type = str(alert.get("alert_type", ""))
+            alert_id   = str(alert.get("alert_id", idx))
+            destination = ALERT_DESTINATIONS.get(alert_type, "Client 360")
             st.markdown(
                 f"<div style='background:{bg};border-left:4px solid "
-                f"{border};padding:8px 14px;margin-bottom:6px;"
+                f"{border};padding:8px 14px;margin-bottom:4px;"
                 f"border-radius:4px;font-size:13px;'>"
                 f"<strong style='color:{tc};'>[{p}] {title}</strong> — "
                 f"{desc}"
                 f"</div>",
                 unsafe_allow_html=True,
             )
+            if st.button(
+                f"→ Take Action: {destination}",
+                key=f"c360_alert_{alert_id}",
+                type="secondary",
+            ):
+                _navigate_to(destination, selected_client)
         st.markdown("")
 
     # ── SECTION 3: Accounts Table ──────────────────────────────────────────────
@@ -4453,6 +4462,42 @@ def display_quarterly_letter(selected_client: str, selected_strategy: str) -> No
 # Morning Brief — advisor landing page
 # ═════════════════════════════════════════════════════════════════════════════
 
+# ── Alert destination mapping (page label → route key) ───────────────────────
+ALERT_DESTINATIONS = {
+    "RSU_VEST":           "Client 360",
+    "TLH_OPPORTUNITY":    "Tax-Loss Harvesting",
+    "CONCENTRATION_RISK": "Client 360",
+    "FOUNDATION_REVIEW":  "Client 360",
+    "QUARTERLY_LETTER":   "Commentary Co-Pilot",
+    "OUTSIDE_ASSETS":     "Recommendations",
+    "DRIFT":              "Rebalance Studio",
+    "DRAWDOWN":           "Portfolio",
+}
+
+_PAGE_ROUTES = {
+    "Morning Brief":       "overview",
+    "Client 360":          "client",
+    "Portfolio":           "portfolio",
+    "Tax-Loss Harvesting": "tlh",
+    "Rebalance Studio":    "allocator",
+    "Commentary Co-Pilot": "commentary",
+    "Recommendations":     "recs",
+    "Forecast Lab":        "forecast",
+    "Factor Lab":          "factor_lab",
+    "Optimization Lab":    "quantum",
+    "AI Monitor":          "llm_obs",
+    "Research Assistant":  "rag",
+}
+
+
+def _navigate_to(page_label: str, client_name: str = None) -> None:
+    """Navigate to a page by label, optionally switching the selected client."""
+    if client_name:
+        st.session_state["selected_client"] = client_name
+    st.session_state["route"] = _PAGE_ROUTES.get(page_label, "overview")
+    st.rerun()
+
+
 def _mb_priority_order(priority: str) -> int:
     return {"Critical": 0, "High": 1, "Medium": 2}.get(priority, 3)
 
@@ -4488,29 +4533,36 @@ def _mb_render_alerts(selected_client: str) -> None:
         st.info("No alerts configured — add alerts to data/client_alerts.csv")
         active = pd.DataFrame()
 
+    _priority_emoji = {"Critical": "🔴", "High": "🟡", "Medium": "🔵"}
+
     if not active.empty:
-        for _, row in active.iterrows():
+        for idx, row in active.iterrows():
             client_name = str(row.get("client_name", ""))
             is_selected = client_name == selected_client
-            prefix = "▶ " if is_selected else ""
-            title = str(row.get("title", ""))
-            desc  = str(row.get("description", ""))
-            desc_short = desc[:100] + ("…" if len(desc) > 100 else "")
-            action = str(row.get("action_required", ""))
-            due    = str(row.get("due_date", ""))
+            prefix   = "▶ " if is_selected else ""
+            title    = str(row.get("title", ""))
+            desc     = str(row.get("description", ""))
+            desc_short = desc[:150] + ("…" if len(desc) > 150 else "")
+            action   = str(row.get("action_required", ""))
+            due      = str(row.get("due_date", ""))
             priority = str(row.get("priority", "Medium"))
+            alert_type = str(row.get("alert_type", ""))
+            alert_id   = str(row.get("alert_id", idx))
+            destination = ALERT_DESTINATIONS.get(alert_type, "Client 360")
+            emoji = _priority_emoji.get(priority, "🔵")
 
-            body = (
-                f"**{prefix}{client_name}** — {title}\n\n"
-                f"{desc_short}\n\n"
-                f"*Action:* {action}   *Due:* {due}"
-            )
-            if priority == "Critical":
-                st.error(body)
-            elif priority == "High":
-                st.warning(body)
-            else:
-                st.info(body)
+            with st.expander(
+                f"{emoji} {prefix}{client_name} — {title}",
+                expanded=True,
+            ):
+                st.caption(desc_short)
+                st.caption(f"Action: {action}   ·   Due: {due}")
+                if st.button(
+                    f"→ Go to {destination}",
+                    key=f"mb_alert_{alert_id}",
+                    type="secondary",
+                ):
+                    _navigate_to(destination, client_name)
 
     st.markdown("---")
 
@@ -4736,12 +4788,10 @@ def _mb_render_your_day(selected_client: str) -> None:
                 st.success(f"Generated {len(all_clients)} letters — review in Commentary Co-Pilot.")
 
     if st.button("View Full Alert Log", key="mb_alert_log", use_container_width=True):
-        st.session_state["route"] = "log"
-        st.rerun()
+        _navigate_to("Recommendations")
 
     if st.button("Practice Intelligence", key="mb_practice", use_container_width=True):
-        st.session_state["route"] = "client"
-        st.rerun()
+        _navigate_to("Recommendations")
 
     st.markdown("---")
 

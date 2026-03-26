@@ -101,6 +101,28 @@ Five zones defined with `st.sidebar.caption()` dividers. Route keys are stored i
 behind a selectbox toggle. Calls `display_recommendations_legacy(full_page=True)` or
 `display_recommendation_log()` depending on selection.
 
+### Alert routing
+
+`ALERT_DESTINATIONS` dict in `gaia_pages.py` maps `alert_type` → destination page label:
+
+| alert_type | Destination |
+|------------|-------------|
+| RSU_VEST | Client 360 |
+| TLH_OPPORTUNITY | Tax-Loss Harvesting |
+| CONCENTRATION_RISK | Client 360 |
+| FOUNDATION_REVIEW | Client 360 |
+| QUARTERLY_LETTER | Commentary Co-Pilot |
+| OUTSIDE_ASSETS | Recommendations |
+| DRIFT | Rebalance Studio |
+| DRAWDOWN | Portfolio |
+
+`_navigate_to(page_label, client_name)` in `gaia_pages.py` translates a page label to a
+route key via `_PAGE_ROUTES`, sets `st.session_state["selected_client"]` if provided,
+then calls `st.rerun()`.
+
+The sidebar `Select Client` selectbox uses `key="selected_client"` so setting
+`st.session_state["selected_client"]` before a rerun changes the active client.
+
 ---
 
 ## Features

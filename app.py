@@ -229,6 +229,7 @@ client_names = get_client_names()
 selected_client = st.sidebar.selectbox(
     "Select Client",
     client_names,
+    key="selected_client",
 )
 
 # Resolve selected_strategy string

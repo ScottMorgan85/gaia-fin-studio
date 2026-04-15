@@ -2953,75 +2953,168 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def display_portfolio(selected_client, selected_strategy):
-    st.header(f"{selected_strategy} — Portfolio Overview")
+    st.header("Performance & Holdings")
 
     info = get_client_info(selected_client) or {}
-    strat = info.get("strategy_name")
+    strat = info.get("strategy_name") or selected_strategy
     bench = info.get("benchmark_name")
+    client_id = info.get("client_id", "")
 
-    if not (strat and bench):
-        st.error("Missing strategy or benchmark")
+    if not strat:
+        st.error("Strategy not configured for this client.")
         return
 
-    # Strategy and benchmark returns
-    sr = utils.get_strategy_returns()[["as_of_date", strat]]
-    br = utils.load_benchmark_returns()[["as_of_date", bench]]
+    # ── Section 1: Growth of $10,000 ─────────────────────────────────────────
+    try:
+        import plotly.graph_objects as go
 
-    utils.plot_cumulative_returns(sr, br, strat, bench)
+        cutoff = pd.Timestamp("2026-03-31")
+        sr_all = utils.get_strategy_returns()
+        s_ret = pd.DataFrame()
+        b_ret = pd.DataFrame()
 
-    # Details columns
-    st.subheader("Portfolio Details")
-    c1, c2, c3 = st.columns(3)
+        if strat in sr_all.columns:
+            s_ret = sr_all[["as_of_date", strat]].copy()
+            s_ret["as_of_date"] = pd.to_datetime(s_ret["as_of_date"])
+            s_ret = s_ret[s_ret["as_of_date"] <= cutoff].dropna()
+            s_ret["growth"] = (1 + s_ret[strat]).cumprod() * 10000
 
-    with c1:
-        st.markdown("#### Trailing Returns")
-        dr = utils.compute_trailing_returns(selected_strategy)
-        if dr is not None:
-            st.dataframe(dr, hide_index=True)
+        if bench:
+            br_all = utils.load_benchmark_returns()
+            if bench in br_all.columns:
+                b_ret = br_all[["as_of_date", bench]].copy()
+                b_ret["as_of_date"] = pd.to_datetime(b_ret["as_of_date"])
+                b_ret = b_ret[b_ret["as_of_date"] <= cutoff].dropna()
+                b_ret["growth"] = (1 + b_ret[bench]).cumprod() * 10000
 
-    with c2:
-        st.markdown("#### Characteristics")
-        df = pd.DataFrame(utils.get_portfolio_characteristics(selected_strategy))
-        st.dataframe(df)
+        if not s_ret.empty or not b_ret.empty:
+            fig = go.Figure()
+            if not s_ret.empty:
+                fig.add_trace(go.Scatter(
+                    x=s_ret["as_of_date"], y=s_ret["growth"],
+                    name=strat, line=dict(color="#005A9C", width=2),
+                    hovertemplate="%{x|%b %Y}: $%{y:,.0f}<extra></extra>",
+                ))
+            if not b_ret.empty:
+                fig.add_trace(go.Scatter(
+                    x=b_ret["as_of_date"], y=b_ret["growth"],
+                    name=bench, line=dict(color="#999999", width=1.5, dash="dot"),
+                    hovertemplate="%{x|%b %Y}: $%{y:,.0f}<extra></extra>",
+                ))
+            fig.update_layout(
+                height=400,
+                yaxis=dict(tickformat="$,.0f", range=[8000, 20000], title="Portfolio Value"),
+                xaxis_title=None,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(l=10, r=10, t=40, b=10),
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Returns data not available for chart.")
+    except Exception as _e:
+        st.warning(f"Chart unavailable: {_e}")
 
-    with c3:
-        st.markdown("#### Allocations")
-        df = pd.DataFrame(utils.get_sector_allocations(selected_strategy))
-        st.dataframe(df)
+    # ── Section 2: Trailing-return metric cards ───────────────────────────────
+    def _trailing_raw(ret_series, today):
+        r = ret_series.copy()
+        r.index = pd.to_datetime(r.index)
 
-    # ── Holdings table (from tax lots) ────────────────────────────────────────
+        def _pr(start):
+            s = r[(r.index >= start) & (r.index <= today)]
+            return float((1 + s).prod() - 1) if len(s) > 0 else None
+
+        q = (today.month - 1) // 3
+        qtd_start = pd.Timestamp(today.year, q * 3 + 1, 1)
+        cum_3 = _pr(today - pd.DateOffset(years=3))
+        cum_5 = _pr(today - pd.DateOffset(years=5))
+        return {
+            "QTD":           _pr(qtd_start),
+            "YTD":           _pr(pd.Timestamp(today.year, 1, 1)),
+            "1 Year":        _pr(today - pd.DateOffset(years=1)),
+            "3 Year (Ann.)": ((1 + cum_3) ** (1 / 3) - 1) if cum_3 is not None else None,
+            "5 Year (Ann.)": ((1 + cum_5) ** (1 / 5) - 1) if cum_5 is not None else None,
+        }
+
+    today = pd.Timestamp.today()
+    strat_vals = {}
+    bench_vals = {}
+
+    try:
+        sr_all2 = utils.get_strategy_returns()
+        if strat in sr_all2.columns:
+            strat_vals = _trailing_raw(sr_all2.set_index("as_of_date")[strat].dropna(), today)
+    except Exception:
+        pass
+
+    try:
+        if bench:
+            br_all2 = utils.load_benchmark_returns()
+            if bench in br_all2.columns:
+                bench_vals = _trailing_raw(br_all2.set_index("as_of_date")[bench].dropna(), today)
+    except Exception:
+        pass
+
+    periods = ["QTD", "YTD", "1 Year", "3 Year (Ann.)", "5 Year (Ann.)"]
+    metric_cols = st.columns(5)
+    for i, period in enumerate(periods):
+        val = strat_vals.get(period)
+        bval = bench_vals.get(period)
+        delta_str = None
+        if val is not None and bval is not None:
+            delta_str = f"{val - bval:+.1%} vs bmk"
+        with metric_cols[i]:
+            st.metric(
+                label=period,
+                value=f"{val:.1%}" if val is not None else "—",
+                delta=delta_str,
+            )
+
+    st.divider()
+
+    # ── Section 3: Holdings aggregated by ticker ──────────────────────────────
     st.subheader("Holdings")
     try:
-        _cinfo = client_strategy_risk_mapping.get(selected_client, {})
-        _client_id = _cinfo.get("client_id", "") if isinstance(_cinfo, dict) else ""
-        _lots = utils.load_tax_lots(client_id=_client_id) if _client_id else pd.DataFrame()
-        if not _lots.empty:
-            _display_cols = [c for c in [
-                "ticker", "shares", "cost_basis_per_share",
-                "current_price", "current_value", "unrealized_gl_dollars",
-                "unrealized_gl_pct", "term",
-            ] if c in _lots.columns]
-            _lots_disp = _lots[_display_cols].copy()
-            if "unrealized_gl_pct" in _lots_disp.columns:
-                _lots_disp["unrealized_gl_pct"] = pd.to_numeric(
-                    _lots_disp["unrealized_gl_pct"]
-                    .astype(str).str.replace("%", "", regex=False),
-                    errors="coerce",
-                )
-            _lots_disp = _lots_disp.sort_values("current_value", ascending=False)
-            _col_cfg = {}
-            for _col in ("current_value", "unrealized_gl_dollars"):
-                if _col in _lots_disp.columns:
-                    _col_cfg[_col] = st.column_config.NumberColumn(format="$%.2f")
-            if "unrealized_gl_pct" in _lots_disp.columns:
-                _col_cfg["unrealized_gl_pct"] = st.column_config.NumberColumn(format="%.1f%%")
-            if "cost_basis_per_share" in _lots_disp.columns:
-                _col_cfg["cost_basis_per_share"] = st.column_config.NumberColumn(format="$%.2f")
-            if "current_price" in _lots_disp.columns:
-                _col_cfg["current_price"] = st.column_config.NumberColumn(format="$%.2f")
-            st.dataframe(_lots_disp, hide_index=True, column_config=_col_cfg)
-        else:
+        lots = utils.load_tax_lots(client_id=client_id) if client_id else pd.DataFrame()
+        if lots.empty:
             st.info("No holdings data available for this client.")
+        else:
+            for _col in ("shares", "cost_basis_total", "current_value", "unrealized_gl_dollars"):
+                lots[_col] = pd.to_numeric(lots[_col], errors="coerce")
+
+            total_mv = lots["current_value"].sum()
+            holdings = (
+                lots.groupby("ticker", as_index=False)
+                .agg(
+                    Shares=("shares", "sum"),
+                    **{"Market Value": ("current_value", "sum")},
+                    **{"Cost Basis": ("cost_basis_total", "sum")},
+                    **{"G/L $": ("unrealized_gl_dollars", "sum")},
+                )
+                .sort_values("Market Value", ascending=False)
+                .reset_index(drop=True)
+            )
+            holdings["G/L %"] = (holdings["G/L $"] / holdings["Cost Basis"]) * 100
+            holdings["Weight %"] = (holdings["Market Value"] / total_mv) * 100
+            holdings = holdings.rename(columns={"ticker": "Ticker"})
+
+            col_cfg = {
+                "Shares":       st.column_config.NumberColumn(format="%,.0f"),
+                "Market Value": st.column_config.NumberColumn(format="$%,.0f"),
+                "Cost Basis":   st.column_config.NumberColumn(format="$%,.0f"),
+                "G/L $":        st.column_config.NumberColumn(format="$%+,.0f"),
+                "G/L %":        st.column_config.NumberColumn(format="%.1f%%"),
+                "Weight %":     st.column_config.NumberColumn(format="%.1f%%"),
+            }
+            st.dataframe(holdings, hide_index=True, use_container_width=True, column_config=col_cfg)
+
+            total_gl = lots["unrealized_gl_dollars"].sum()
+            n_pos = len(holdings)
+            st.caption(
+                f"Total Market Value: ${total_mv:,.0f}  ·  "
+                f"Total G/L: ${total_gl:+,.0f}  ·  "
+                f"{n_pos} position{'s' if n_pos != 1 else ''}"
+            )
     except Exception as _e:
         st.info(f"Holdings unavailable: {_e}")
 

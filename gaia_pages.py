@@ -2967,13 +2967,106 @@ def display_portfolio(selected_client, selected_strategy):
     except Exception:
         risk_profile = "Moderate"
 
+    _today_label = pd.Timestamp.today().strftime("%B %d, %Y")
+
+    # Fixed IPS policy benchmark labels (FIX 1)
     POLICY_LABELS = {
-        "Moderate":     "Policy benchmark: 60% SPY / 20% AGG / 10% EFA / 5% VNQ / 5% PDBC",
-        "Conservative": "Policy benchmark: 35% SPY / 40% AGG / 10% EFA / 10% PDBC / 5% VNQ",
-        "Aggressive":   "Policy benchmark: 80% SPY / 10% EFA / 5% AGG / 5% VNQ",
+        "Moderate":     "60% SPY / 20% AGG / 10% EFA / 5% VNQ / 5% PDBC",
+        "Conservative": "35% SPY / 40% AGG / 10% EFA / 10% PDBC / 5% VNQ",
+        "Aggressive":   "80% SPY / 10% EFA / 5% AGG / 5% VNQ",
     }
 
-    # ── Section 1: Blended Growth of $10,000 ──────────────────────────────────
+    # ── Period selector buttons (ADD 1) ────────────────────────────────────────
+    PERIODS = ["1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "All"]
+    if "port_period" not in st.session_state:
+        st.session_state["port_period"] = "3Y"
+
+    _p_cols = st.columns(len(PERIODS))
+    for _pc, _period in zip(_p_cols, PERIODS):
+        _is_active = st.session_state["port_period"] == _period
+        if _pc.button(
+            _period,
+            key=f"period_{_period}",
+            type="primary" if _is_active else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["port_period"] = _period
+            st.rerun()
+
+    selected_period = st.session_state["port_period"]
+
+    def _period_start(period):
+        _t = pd.Timestamp.today()
+        return {
+            "1M":  _t - pd.DateOffset(months=1),
+            "3M":  _t - pd.DateOffset(months=3),
+            "6M":  _t - pd.DateOffset(months=6),
+            "YTD": pd.Timestamp(_t.year, 1, 1),
+            "1Y":  _t - pd.DateOffset(years=1),
+            "3Y":  _t - pd.DateOffset(years=3),
+            "5Y":  _t - pd.DateOffset(years=5),
+            "All": pd.Timestamp("2015-01-01"),
+        }.get(period, _t - pd.DateOffset(years=3))
+
+    # ── Section 0: Allocation sunburst (ADD 2) ─────────────────────────────────
+    try:
+        _lots_sun = utils.load_tax_lots(client_id=client_id) if client_id else pd.DataFrame()
+        if not _lots_sun.empty:
+            _lots_sun["current_value"] = pd.to_numeric(
+                _lots_sun["current_value"], errors="coerce"
+            ).fillna(0)
+            _total_val_sun = float(_lots_sun["current_value"].sum())
+
+            _sleeve_vals = (
+                _lots_sun.groupby("asset_class")["current_value"].sum().reset_index()
+            )
+            _pos_vals = (
+                _lots_sun.groupby(["asset_class", "ticker"])["current_value"]
+                .sum().reset_index()
+            )
+
+            _labels  = (["Portfolio"]
+                        + _sleeve_vals["asset_class"].tolist()
+                        + _pos_vals["ticker"].tolist())
+            _parents = ([""]
+                        + ["Portfolio"] * len(_sleeve_vals)
+                        + _pos_vals["asset_class"].tolist())
+            _values  = ([_total_val_sun]
+                        + _sleeve_vals["current_value"].tolist()
+                        + _pos_vals["current_value"].tolist())
+
+            _fig_sun = go.Figure(go.Sunburst(
+                labels=_labels,
+                parents=_parents,
+                values=_values,
+                branchvalues="total",
+                hovertemplate=(
+                    "<b>%{label}</b><br>"
+                    "Value: $%{value:,.0f}<br>"
+                    "Weight: %{percentRoot:.1%}"
+                    "<extra></extra>"
+                ),
+                maxdepth=2,
+                insidetextorientation="radial",
+            ))
+            _fig_sun.update_layout(
+                title=dict(
+                    text=f"Portfolio Allocation — As of {_today_label}",
+                    font=dict(size=14),
+                ),
+                height=380,
+                margin=dict(t=40, l=0, r=0, b=0),
+            )
+            st.plotly_chart(_fig_sun, use_container_width=True,
+                            config={"displayModeBar": False})
+            st.caption(
+                f"Click any segment to drill into holdings · "
+                f"Total: ${_total_val_sun:,.0f} · As of {_today_label}"
+            )
+    except Exception as _e_sun:
+        st.info(f"Allocation chart unavailable: {_e_sun}")
+
+    # ── Section 1: Blended Growth of $10,000 ───────────────────────────────────
     with st.spinner("Loading portfolio returns..."):
         port_r, bench_r = utils.get_blended_portfolio_returns(client_id, risk_profile)
 
@@ -2981,17 +3074,21 @@ def display_portfolio(selected_client, selected_strategy):
         combined = pd.concat([port_r, bench_r], axis=1).dropna()
         combined.columns = ["Portfolio", "Policy Benchmark"]
         growth = (1 + combined).cumprod() * 10_000
-        growth_plot = growth.reset_index()
+
+        # Filter to selected period (ADD 1)
+        _start_date = _period_start(selected_period)
+        growth_filtered = growth[growth.index >= _start_date]
+        growth_plot = growth_filtered.reset_index()
         growth_plot = growth_plot.rename(columns={growth_plot.columns[0]: "Date"})
 
         fig = px.line(
             growth_plot,
             x="Date",
             y=["Portfolio", "Policy Benchmark"],
-            title=f"{selected_client} — Blended Portfolio vs Policy Benchmark (Growth of $10,000)",
+            title=f"Growth of $10,000 · {selected_period} · As of {_today_label}",
             labels={"value": "Portfolio Value ($)", "Date": "", "variable": ""},
             color_discrete_map={
-                "Portfolio":       "#1f77b4",
+                "Portfolio":        "#1f77b4",
                 "Policy Benchmark": "#aaaaaa",
             },
         )
@@ -3006,12 +3103,16 @@ def display_portfolio(selected_client, selected_strategy):
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.caption(POLICY_LABELS.get(risk_profile, "") + " · Weighted by actual holdings")
+        # FIX 1 — fixed IPS caption
+        st.caption(
+            f"IPS Policy Benchmark (fixed): {POLICY_LABELS.get(risk_profile, '')} · "
+            f"Portfolio weighted by actual holdings · As of {_today_label}"
+        )
     else:
         st.info("Portfolio return data loading... yfinance may be rate-limited.")
 
-    # ── Section 2: Trailing Returns vs Policy Benchmark ───────────────────────
-    st.subheader("Trailing Returns")
+    # ── Section 2: Trailing Returns (ADD 4 — as of date + vs Policy Benchmark) ─
+    st.subheader(f"Trailing Returns · As of {_today_label}")
 
     if not port_r.empty:
         _today = pd.Timestamp.today()
@@ -3022,7 +3123,7 @@ def display_portfolio(selected_client, selected_strategy):
             return float((1 + s).prod() - 1) if len(s) > 0 else None
 
         _q = (_today.month - 1) // 3
-        _periods = {
+        _fixed_periods = {
             "QTD":    pd.Timestamp(_today.year, _q * 3 + 1, 1),
             "YTD":    pd.Timestamp(_today.year, 1, 1),
             "1 Year": _today - pd.DateOffset(years=1),
@@ -3030,8 +3131,8 @@ def display_portfolio(selected_client, selected_strategy):
             "5 Year": _today - pd.DateOffset(years=5),
         }
 
-        _tr_cols = st.columns(len(_periods))
-        for _col, (_label, _start) in zip(_tr_cols, _periods.items()):
+        _tr_cols = st.columns(len(_fixed_periods))
+        for _col, (_label, _start) in zip(_tr_cols, _fixed_periods.items()):
             pr = _ret(port_r, _start)
             br = _ret(bench_r, _start) if not bench_r.empty else None
 
@@ -3043,16 +3144,17 @@ def display_portfolio(selected_client, selected_strategy):
                 br = (1 + br) ** (1 / 5) - 1 if br is not None else None
 
             if pr is not None:
-                _delta = f"{pr - br:+.1%} vs bmk" if br is not None else None
+                _delta = (f"{pr - br:+.1%} vs Policy Benchmark"
+                          if br is not None else None)
                 _col.metric(_label, f"{pr:.1%}", delta=_delta)
             else:
                 _col.metric(_label, "—")
 
     st.divider()
 
-    # ── Section 3: Sleeve Performance Cards ───────────────────────────────────
+    # ── Section 3: Sleeve Performance Cards (ADD 3 — period returns + as of) ───
     st.subheader("Performance by Asset Class")
-    st.caption("Each sleeve shown vs its natural benchmark ETF · 3-year trailing")
+    st.caption(f"Each sleeve vs its natural benchmark ETF · {selected_period} period")
 
     with st.spinner("Loading sleeve returns..."):
         sleeves = utils.get_sleeve_returns(client_id)
@@ -3084,11 +3186,12 @@ def display_portfolio(selected_client, selected_strategy):
         except Exception:
             iwv = pd.Series(dtype=float)
 
-        sleeve_list  = list(sleeves.items())
-        cols_per_row = 3
+        _sleeve_start = _period_start(selected_period)
+        sleeve_list   = list(sleeves.items())
+        cols_per_row  = 3
 
         for _i in range(0, len(sleeve_list), cols_per_row):
-            _row = sleeve_list[_i : _i + cols_per_row]
+            _row   = sleeve_list[_i : _i + cols_per_row]
             _scols = st.columns(len(_row))
 
             for _scol, (asset_class, _data) in zip(_scols, _row):
@@ -3097,15 +3200,25 @@ def display_portfolio(selected_client, selected_strategy):
                 _value = _data["value"]
 
                 _bench_name, _ = SLEEVE_BENCHMARKS.get(asset_class, ("Benchmark", _etf))
-                _bench_r_s = iwv if asset_class in ("Equity", "Concentrated Stock") and not iwv.empty else _r
+                _bench_r_s = (iwv
+                              if asset_class in ("Equity", "Concentrated Stock") and not iwv.empty
+                              else _r)
 
-                _yr1_start = pd.Timestamp.today() - pd.DateOffset(years=1)
-                _mask      = _r.index >= _yr1_start
-                _yr1       = float((1 + _r[_mask]).prod() - 1) if _mask.any() else None
-                _mask_b    = _bench_r_s.index >= _yr1_start
-                _yr1_b     = float((1 + _bench_r_s[_mask_b]).prod() - 1) if _mask_b.any() else None
+                # Last data date for "as of" caption (ADD 4)
+                _last_date = (_r.index[-1].strftime("%b %d, %Y")
+                              if not _r.empty else "N/A")
 
-                _spark = ((1 + _r).cumprod() * 100).reset_index()
+                # Period return for selected period (ADD 3)
+                _mask_p  = _r.index >= _sleeve_start
+                _r_filt  = _r[_mask_p] if _mask_p.any() else _r  # fallback to full
+                _pret    = float((1 + _r_filt).prod() - 1) if not _r_filt.empty else None
+
+                _mask_pb = _bench_r_s.index >= _sleeve_start
+                _pbret   = (float((1 + _bench_r_s[_mask_pb]).prod() - 1)
+                            if _mask_pb.any() else None)
+
+                # Filtered sparkline (ADD 1 applied to sleeves)
+                _spark = ((1 + _r_filt).cumprod() * 100).reset_index()
                 _spark.columns = ["date", "value"]
 
                 _fig = px.line(_spark, x="date", y="value", height=120)
@@ -3118,28 +3231,30 @@ def display_portfolio(selected_client, selected_strategy):
                     paper_bgcolor="rgba(0,0,0,0)",
                 )
                 _fig.update_traces(
-                    line_color="#2ecc71" if _yr1 is not None and _yr1 > 0 else "#e74c3c",
+                    line_color="#2ecc71" if _pret is not None and _pret > 0 else "#e74c3c",
                     line_width=2,
                 )
 
                 with _scol:
                     st.markdown(f"**{asset_class}**")
-                    st.caption(f"${_value / 1e6:.2f}M · vs {_bench_name}")
+                    st.caption(
+                        f"${_value / 1e6:.2f}M · vs {_bench_name} · As of {_last_date}"
+                    )
                     st.plotly_chart(_fig, use_container_width=True,
                                     config={"displayModeBar": False})
-                    if _yr1 is not None:
-                        _d = (f"{_yr1 - _yr1_b:+.1%} vs {_bench_name}"
-                              if _yr1_b is not None else None)
-                        st.metric("1yr Return", f"{_yr1:.1%}", delta=_d)
+                    if _pret is not None:
+                        _d = (f"{_pret - _pbret:+.1%} vs {_bench_name}"
+                              if _pbret is not None else None)
+                        st.metric(f"{selected_period} Return", f"{_pret:.1%}", delta=_d)
                     else:
-                        st.metric("1yr Return", "—")
+                        st.metric(f"{selected_period} Return", "—")
     else:
         st.info("Sleeve data loading...")
 
     st.divider()
 
-    # ── Section 4: Holdings Table ─────────────────────────────────────────────
-    st.subheader("Holdings")
+    # ── Section 4: Holdings Table (ADD 4 — as of date) ─────────────────────────
+    st.subheader(f"Holdings · As of {_today_label}")
     try:
         lots = utils.load_tax_lots(client_id=client_id) if client_id else pd.DataFrame()
         if lots.empty:

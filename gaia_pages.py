@@ -456,7 +456,32 @@ def initialize_theme():
             }
         }
 
+def _ensure_themes():
+    """Initialize themes state if absent — safe to call from callbacks."""
+    if "themes" not in st.session_state:
+        st.session_state.themes = {
+            "current_theme": "light",
+            "refreshed": True,
+            "light": {
+                "theme.base": "light",
+                "theme.backgroundColor": "#FFFFFF",
+                "theme.primaryColor": "#005A9C",
+                "theme.secondaryBackgroundColor": "#2C3E50",
+                "theme.textColor": "#000000",
+                "button_face": "🌑"
+            },
+            "dark": {
+                "theme.base": "dark",
+                "theme.backgroundColor": "#000000",
+                "theme.primaryColor": "#FF9900",
+                "theme.secondaryBackgroundColor": "#2C3E50",
+                "theme.textColor": "#E0E0E0",
+                "button_face": "🌕"
+            }
+        }
+
 def change_theme():
+    _ensure_themes()  # guard — callback fires before script body on fresh sessions
     prev = st.session_state.themes["current_theme"]
     nxt  = "dark" if prev == "light" else "light"
     cfg  = st.session_state.themes[nxt]
@@ -468,12 +493,13 @@ def change_theme():
     st.markdown(f"<body class='{'dark-mode' if nxt=='dark' else ''}'></body>", unsafe_allow_html=True)
 
 def render_theme_toggle_button():
+    _ensure_themes()  # guard — themes must exist before widget reads it
     key = st.session_state.themes["current_theme"]
     face = st.session_state.themes[key]["button_face"]
     if st.sidebar.button(face, on_click=change_theme):
         if not st.session_state.themes["refreshed"]:
             st.session_state.themes["refreshed"] = True
-            st.rerun() 
+            st.rerun()
 
 def _styled_price_df(df: pd.DataFrame):
     """

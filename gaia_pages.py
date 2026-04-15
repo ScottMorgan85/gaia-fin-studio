@@ -2999,19 +2999,19 @@ def display_portfolio(selected_client, selected_strategy):
     # ── Period helper ──────────────────────────────────────────────────────────
     def _period_start(period, _inception=None):
         _t = pd.Timestamp.today()
+        _q = (_t.month - 1) // 3
         return {
-            "1M":     _t - pd.DateOffset(months=1),
-            "3M":     _t - pd.DateOffset(months=3),
-            "6M":     _t - pd.DateOffset(months=6),
+            "MTD":    pd.Timestamp(_t.year, _t.month, 1),
+            "QTD":    pd.Timestamp(_t.year, _q * 3 + 1, 1),
             "YTD":    pd.Timestamp(_t.year, 1, 1),
-            "1Y":     _t - pd.DateOffset(years=1),
-            "3Y":     _t - pd.DateOffset(years=3),
-            "5Y":     _t - pd.DateOffset(years=5),
+            "1 Year": _t - pd.DateOffset(years=1),
+            "3 Year": _t - pd.DateOffset(years=3),
+            "5 Year": _t - pd.DateOffset(years=5),
             "Incept.": _inception or pd.Timestamp("2015-01-01"),
-        }.get(period, _t - pd.DateOffset(years=3))
+        }.get(period, _t - pd.DateOffset(months=3))
 
     # Pre-read current period from session state (needed for insights cache key before buttons render)
-    _current_period = st.session_state.get("port_period", "3Y")
+    _current_period = st.session_state.get("port_period", "QTD")
 
     # ── Section 0: Donut + LLM Insights side-by-side ───────────────────────────
     try:
@@ -3185,9 +3185,9 @@ def display_portfolio(selected_client, selected_strategy):
         st.info(f"Allocation chart unavailable: {_e_sun}")
 
     # ── Period selector buttons (FIX 1 — below donut, above chart) ────────────
-    PERIODS = ["1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "Incept."]
+    PERIODS = ["MTD", "QTD", "YTD", "1 Year", "3 Year", "5 Year", "Incept."]
     if "port_period" not in st.session_state:
-        st.session_state["port_period"] = "3Y"
+        st.session_state["port_period"] = "QTD"
 
     _p_cols = st.columns(len(PERIODS))
     for _pc, _period in zip(_p_cols, PERIODS):
@@ -3255,13 +3255,15 @@ def display_portfolio(selected_client, selected_strategy):
             return float((1 + s).prod() - 1) if len(s) > 0 else None
 
         _q    = (_today.month - 1) // 3
+        _mtd_s = pd.Timestamp(_today.year, _today.month, 1)
         _qtd_s = pd.Timestamp(_today.year, _q * 3 + 1, 1)
         _ytd_s = pd.Timestamp(_today.year, 1, 1)
 
         _period_defs = [
+            ("MTD",                                   _mtd_s,                            False),
             ("QTD",                                   _qtd_s,                            False),
             ("YTD",                                   _ytd_s,                            False),
-            ("1 Year",                                _today - pd.DateOffset(years=1),   False),
+            ("1 Year",                                _today - pd.DateOffset(years=1),   True),
             ("3 Year",                                _today - pd.DateOffset(years=3),   True),
             ("5 Year",                                _today - pd.DateOffset(years=5),   True),
             (f"Since Inception ({inception_str})",    inception_date,                    True),
@@ -3283,24 +3285,54 @@ def display_portfolio(selected_client, selected_strategy):
                 "Portfolio":        f"{pr:.1%}" if pr is not None else "—",
                 "Policy Benchmark": f"{br:.1%}" if br is not None else "—",
                 "_active":          _active,
+                "_ann":             _ann,
             })
 
         _rows_html = ""
         for _row in _perf_rows:
-            _ar    = _row["_active"]
-            _color = ("#2ECC71" if (_ar is not None and _ar > 0)
-                      else "#E74C3C" if (_ar is not None and _ar < 0)
-                      else "#888888")
-            _ar_str = (f"+{_ar:.1%}" if (_ar is not None and _ar > 0)
-                       else f"{_ar:.1%}" if _ar is not None
-                       else "—")
-            _border = "border-top:1px solid #333;" if "Inception" in _row["Period"] else ""
+            _ar = _row["_active"]
+            if _ar is not None and _ar > 0:
+                _color  = "#2ECC71"
+                _ar_str = f"▲ +{_ar:.1%}"
+            elif _ar is not None and _ar < 0:
+                _color  = "#E74C3C"
+                _ar_str = f"▼ {_ar:.1%}"
+            else:
+                _color  = "#888888"
+                _ar_str = "— 0.0%" if _ar is not None else "—"
+
+            _border      = "border-top:1px solid #333;" if "Inception" in _row["Period"] else ""
+            _is_sel      = (selected_period in _row["Period"] or
+                            _row["Period"].startswith(selected_period))
+            _row_bg      = "background:rgba(76,155,232,0.08);" if _is_sel else ""
+            _period_disp = _row["Period"]
+            if _row["_ann"]:
+                _period_disp += (
+                    "<br><small style='color:#888;font-size:10px'>annualized</small>"
+                )
             _rows_html += (
-                f"<tr style='{_border}'>"
-                f"<td style='padding:8px 16px'>{_row['Period']}</td>"
+                f"<tr style='{_border}{_row_bg}'>"
+                f"<td style='padding:8px 16px'>{_period_disp}</td>"
                 f"<td style='padding:8px 16px'>{_row['Portfolio']}</td>"
                 f"<td style='padding:8px 16px'>{_row['Policy Benchmark']}</td>"
                 f"<td style='padding:8px 16px;color:{_color};font-weight:600'>{_ar_str}</td>"
+                f"</tr>"
+            )
+
+        # Average active return footer
+        _valid_actives = [r["_active"] for r in _perf_rows if r["_active"] is not None]
+        _avg_active    = sum(_valid_actives) / len(_valid_actives) if _valid_actives else None
+        _footer_html   = ""
+        if _avg_active is not None:
+            _avg_color  = "#2ECC71" if _avg_active > 0 else "#E74C3C"
+            _avg_arrow  = "▲" if _avg_active > 0 else "▼"
+            _footer_html = (
+                f"<tr style='border-top:2px solid #333;font-style:italic;color:#888'>"
+                f"<td style='padding:8px 16px'>Avg. Active Return</td>"
+                f"<td style='padding:8px 16px'>—</td>"
+                f"<td style='padding:8px 16px'>—</td>"
+                f"<td style='padding:8px 16px;color:{_avg_color};font-weight:600'>"
+                f"{_avg_arrow} {_avg_active:+.1%}</td>"
                 f"</tr>"
             )
 
@@ -3312,7 +3344,7 @@ def display_portfolio(selected_client, selected_strategy):
             "<th style='padding:8px 16px;text-align:left'>Policy Benchmark</th>"
             "<th style='padding:8px 16px;text-align:left'>Active Return</th>"
             "</tr></thead>"
-            f"<tbody>{_rows_html}</tbody>"
+            f"<tbody>{_rows_html}{_footer_html}</tbody>"
             "</table>",
             unsafe_allow_html=True,
         )
@@ -3469,6 +3501,12 @@ def display_portfolio(selected_client, selected_strategy):
         from plotly.subplots import make_subplots as _make_subplots
         sleeve_list = list(sleeves.items())
 
+        # Legend row
+        _leg1, _leg2, _leg3, _ = st.columns([1, 1, 1, 3])
+        _leg1.markdown("🔵 **Portfolio**")
+        _leg2.markdown("⚫ **- - Benchmark**")
+        _leg3.markdown("🟢🔴 **· · Active**")
+
         for _si in range(0, len(sleeve_list), 3):
             _row_items = sleeve_list[_si: _si + 3]
             _scols     = st.columns(3)
@@ -3607,10 +3645,17 @@ def display_portfolio(selected_client, selected_strategy):
                     hovermode="x unified",
                 )
 
+                _n_months   = len(_r_f)
+                _is_ann     = _n_months > 12
                 _period_ret = float((1 + _r_f).prod() - 1) if not _r_f.empty else None
                 _bench_ret  = float((1 + _br_f).prod() - 1) if not _br_f.empty else None
+                if _is_ann and _period_ret is not None and _n_months > 0:
+                    _period_ret = (1 + _period_ret) ** (12 / _n_months) - 1
+                if _is_ann and _bench_ret is not None and _n_months > 0:
+                    _bench_ret  = (1 + _bench_ret)  ** (12 / _n_months) - 1
                 _active_ret = ((_period_ret - _bench_ret)
                                if (_period_ret is not None and _bench_ret is not None) else None)
+                _ann_note   = " (Ann.)" if _is_ann else ""
                 _last_date  = _r.index[-1].strftime("%b %d, %Y") if not _r.empty else "N/A"
 
                 with _scol:
@@ -3624,14 +3669,32 @@ def display_portfolio(selected_client, selected_strategy):
                             if _active_ret is not None else None
                         )
                         st.metric(
-                            f"{selected_period} Return (Gross)",
+                            f"{selected_period} Return{_ann_note} (Gross)",
                             f"{_period_ret:.1%}",
                             delta=_delta_str
                         )
                     else:
-                        st.metric(f"{selected_period} Return (Gross)", "—")
+                        st.metric(f"{selected_period} Return{_ann_note} (Gross)", "—")
+                    # Sleeve Sharpe ratio
+                    if len(_r_f) >= 6:
+                        _rf_mo_s   = 0.05 / 12
+                        _exc_f     = _r_f - _rf_mo_s
+                        _sl_sharpe = (
+                            _exc_f.mean() / _exc_f.std() * (12 ** 0.5)
+                            if _exc_f.std() > 0 else None
+                        )
+                        if _sl_sharpe is not None:
+                            st.metric("Sharpe (Gross)", f"{_sl_sharpe:.2f}")
     else:
         st.info("Sleeve data loading...")
+
+    st.caption(
+        "📊 Shaded bands show ±2 standard deviations of rolling 6-month realized volatility — "
+        "wider bands indicate higher risk periods · "
+        "Dotted lines show active return vs benchmark "
+        "(green = outperforming, red = underperforming) · "
+        "All returns gross of fees"
+    )
 
     st.divider()
 

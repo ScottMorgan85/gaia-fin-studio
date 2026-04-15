@@ -2693,3 +2693,149 @@ def get_client_accounts(client_name: str) -> pd.DataFrame:
     except Exception as e:
         print(f"[GAIA] get_client_accounts failed: {e}", flush=True)
         return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def get_blended_portfolio_returns(
+    client_id: str,
+    risk_profile: str = "Moderate",
+) -> tuple:
+    """
+    Returns (portfolio_returns, benchmark_returns) as monthly pd.Series.
+
+    Portfolio: weighted by actual lot market values across asset-class ETF proxies.
+    Benchmark: policy weights for the client's risk profile.
+    """
+    import yfinance as yf
+
+    ASSET_ETF = {
+        "Equity":             "SPY",
+        "Concentrated Stock": "SPY",
+        "Intl Equity":        "EFA",
+        "Fixed Income":       "AGG",
+        "High Yield":         "HYG",
+        "Real Estate":        "VNQ",
+        "Commodities":        "PDBC",
+        "Private Equity":     "PSP",
+        "Cash":               "SHV",
+    }
+
+    POLICY_WEIGHTS = {
+        "Moderate":     {"SPY": 0.60, "AGG": 0.20, "EFA": 0.10, "VNQ": 0.05, "PDBC": 0.05},
+        "Conservative": {"SPY": 0.35, "AGG": 0.40, "EFA": 0.10, "PDBC": 0.10, "VNQ": 0.05},
+        "Aggressive":   {"SPY": 0.80, "EFA": 0.10, "AGG": 0.05, "VNQ": 0.05},
+    }
+
+    try:
+        lots = load_tax_lots(client_id=client_id)
+        if lots.empty:
+            return pd.Series(dtype=float), pd.Series(dtype=float)
+
+        lots["current_value"] = pd.to_numeric(lots["current_value"], errors="coerce").fillna(0)
+        lots["etf_proxy"] = lots["asset_class"].map(ASSET_ETF).fillna("SPY")
+
+        weights = lots.groupby("etf_proxy")["current_value"].sum()
+        weights = weights / weights.sum()
+
+        policy = POLICY_WEIGHTS.get(risk_profile, POLICY_WEIGHTS["Moderate"])
+        all_etfs = list(set(weights.index.tolist()) | set(policy.keys()))
+
+        end   = pd.Timestamp.today()
+        start = end - pd.DateOffset(years=5)
+
+        prices: dict = {}
+        for etf in all_etfs:
+            try:
+                raw = yf.download(
+                    etf, start=start, end=end,
+                    interval="1mo", progress=False, auto_adjust=True,
+                )
+                if not raw.empty:
+                    close = raw["Close"].squeeze()
+                    if hasattr(close.index, "tz") and close.index.tz is not None:
+                        close.index = close.index.tz_convert(None)
+                    prices[etf] = close
+            except Exception:
+                pass
+
+        if not prices:
+            return pd.Series(dtype=float), pd.Series(dtype=float)
+
+        price_df   = pd.DataFrame(prices).dropna(how="all")
+        returns_df = price_df.pct_change().dropna(how="all")
+
+        port_returns  = pd.Series(0.0, index=returns_df.index)
+        bench_returns = pd.Series(0.0, index=returns_df.index)
+
+        for etf, weight in weights.items():
+            if etf in returns_df.columns:
+                port_returns += returns_df[etf] * weight
+
+        for etf, weight in policy.items():
+            if etf in returns_df.columns:
+                bench_returns += returns_df[etf] * weight
+
+        return port_returns, bench_returns
+
+    except Exception as e:
+        print(f"[GAIA] blended returns failed: {e}", flush=True)
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+
+
+@st.cache_data(ttl=3600)
+def get_sleeve_returns(client_id: str) -> dict:
+    """
+    Returns monthly returns per asset-class sleeve using ETF proxies.
+    Return shape: {asset_class: {"returns": pd.Series, "etf": str, "value": float}}
+    """
+    import yfinance as yf
+
+    ASSET_ETF = {
+        "Equity":             "SPY",
+        "Concentrated Stock": "SPY",
+        "Intl Equity":        "EFA",
+        "Fixed Income":       "AGG",
+        "High Yield":         "HYG",
+        "Real Estate":        "VNQ",
+        "Commodities":        "PDBC",
+    }
+
+    try:
+        lots = load_tax_lots(client_id=client_id)
+        if lots.empty:
+            return {}
+
+        lots["current_value"] = pd.to_numeric(lots["current_value"], errors="coerce").fillna(0)
+        sleeve_values = lots.groupby("asset_class")["current_value"].sum()
+
+        end   = pd.Timestamp.today()
+        start = end - pd.DateOffset(years=3)
+
+        result: dict = {}
+        for asset_class, value in sleeve_values.items():
+            etf = ASSET_ETF.get(asset_class)
+            if not etf:
+                continue
+            try:
+                raw = yf.download(
+                    etf, start=start, end=end,
+                    interval="1mo", progress=False, auto_adjust=True,
+                )
+                if not raw.empty:
+                    close = raw["Close"].squeeze()
+                    if hasattr(close.index, "tz") and close.index.tz is not None:
+                        close.index = close.index.tz_convert(None)
+                    r = close.pct_change().dropna()
+                    result[asset_class] = {
+                        "returns": r,
+                        "etf":     etf,
+                        "value":   float(value),
+                    }
+            except Exception:
+                pass
+
+        return result
+
+    except Exception as e:
+        print(f"[GAIA] sleeve returns failed: {e}", flush=True)
+        return {}

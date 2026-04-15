@@ -2953,126 +2953,192 @@ def display_scenario_allocator(selected_client: str, selected_strategy: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def display_portfolio(selected_client, selected_strategy):
-    st.header("Performance & Holdings")
+    st.title("Performance & Holdings")
+    st.subheader(f"{selected_client} · Blended Household Portfolio")
 
-    info = get_client_info(selected_client) or {}
-    strat = info.get("strategy_name") or selected_strategy
-    bench = info.get("benchmark_name")
-    client_id = info.get("client_id", "")
+    # ── Client context ─────────────────────────────────────────────────────────
+    _mapping = client_strategy_risk_mapping.get(selected_client, {})
+    client_id = _mapping.get("client_id", "") if isinstance(_mapping, dict) else ""
 
-    if not strat:
-        st.error("Strategy not configured for this client.")
-        return
-
-    # ── Section 1: Growth of $10,000 ─────────────────────────────────────────
     try:
-        import plotly.graph_objects as go
+        _clients_df = pd.read_csv("data/client_data.csv")
+        _crow = _clients_df[_clients_df["client_name"] == selected_client]
+        risk_profile = str(_crow.iloc[0]["risk_profile"]) if not _crow.empty else "Moderate"
+    except Exception:
+        risk_profile = "Moderate"
 
-        cutoff = pd.Timestamp("2026-03-31")
-        sr_all = utils.get_strategy_returns()
-        s_ret = pd.DataFrame()
-        b_ret = pd.DataFrame()
+    POLICY_LABELS = {
+        "Moderate":     "Policy benchmark: 60% SPY / 20% AGG / 10% EFA / 5% VNQ / 5% PDBC",
+        "Conservative": "Policy benchmark: 35% SPY / 40% AGG / 10% EFA / 10% PDBC / 5% VNQ",
+        "Aggressive":   "Policy benchmark: 80% SPY / 10% EFA / 5% AGG / 5% VNQ",
+    }
 
-        if strat in sr_all.columns:
-            s_ret = sr_all[["as_of_date", strat]].copy()
-            s_ret["as_of_date"] = pd.to_datetime(s_ret["as_of_date"])
-            s_ret = s_ret[s_ret["as_of_date"] <= cutoff].dropna()
-            s_ret["growth"] = (1 + s_ret[strat]).cumprod() * 10000
+    # ── Section 1: Blended Growth of $10,000 ──────────────────────────────────
+    with st.spinner("Loading portfolio returns..."):
+        port_r, bench_r = utils.get_blended_portfolio_returns(client_id, risk_profile)
 
-        if bench:
-            br_all = utils.load_benchmark_returns()
-            if bench in br_all.columns:
-                b_ret = br_all[["as_of_date", bench]].copy()
-                b_ret["as_of_date"] = pd.to_datetime(b_ret["as_of_date"])
-                b_ret = b_ret[b_ret["as_of_date"] <= cutoff].dropna()
-                b_ret["growth"] = (1 + b_ret[bench]).cumprod() * 10000
+    if not port_r.empty and not bench_r.empty:
+        combined = pd.concat([port_r, bench_r], axis=1).dropna()
+        combined.columns = ["Portfolio", "Policy Benchmark"]
+        growth = (1 + combined).cumprod() * 10_000
+        growth_plot = growth.reset_index()
+        growth_plot = growth_plot.rename(columns={growth_plot.columns[0]: "Date"})
 
-        if not s_ret.empty or not b_ret.empty:
-            fig = go.Figure()
-            if not s_ret.empty:
-                fig.add_trace(go.Scatter(
-                    x=s_ret["as_of_date"], y=s_ret["growth"],
-                    name=strat, line=dict(color="#005A9C", width=2),
-                    hovertemplate="%{x|%b %Y}: $%{y:,.0f}<extra></extra>",
-                ))
-            if not b_ret.empty:
-                fig.add_trace(go.Scatter(
-                    x=b_ret["as_of_date"], y=b_ret["growth"],
-                    name=bench, line=dict(color="#999999", width=1.5, dash="dot"),
-                    hovertemplate="%{x|%b %Y}: $%{y:,.0f}<extra></extra>",
-                ))
-            fig.update_layout(
-                height=400,
-                yaxis=dict(tickformat="$,.0f", range=[8000, 20000], title="Portfolio Value"),
-                xaxis_title=None,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(l=10, r=10, t=40, b=10),
-                hovermode="x unified",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Returns data not available for chart.")
-    except Exception as _e:
-        st.warning(f"Chart unavailable: {_e}")
+        fig = px.line(
+            growth_plot,
+            x="Date",
+            y=["Portfolio", "Policy Benchmark"],
+            title=f"{selected_client} — Blended Portfolio vs Policy Benchmark (Growth of $10,000)",
+            labels={"value": "Portfolio Value ($)", "Date": "", "variable": ""},
+            color_discrete_map={
+                "Portfolio":       "#1f77b4",
+                "Policy Benchmark": "#aaaaaa",
+            },
+        )
+        fig.update_traces(
+            selector=dict(name="Policy Benchmark"),
+            line=dict(dash="dash", width=1),
+        )
+        fig.update_layout(
+            height=420,
+            hovermode="x unified",
+            yaxis_tickformat="$,.0f",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(POLICY_LABELS.get(risk_profile, "") + " · Weighted by actual holdings")
+    else:
+        st.info("Portfolio return data loading... yfinance may be rate-limited.")
 
-    # ── Section 2: Trailing-return metric cards ───────────────────────────────
-    def _trailing_raw(ret_series, today):
-        r = ret_series.copy()
-        r.index = pd.to_datetime(r.index)
+    # ── Section 2: Trailing Returns vs Policy Benchmark ───────────────────────
+    st.subheader("Trailing Returns")
 
-        def _pr(start):
-            s = r[(r.index >= start) & (r.index <= today)]
+    if not port_r.empty:
+        _today = pd.Timestamp.today()
+
+        def _ret(series, start):
+            mask = (series.index >= start) & (series.index <= _today)
+            s = series[mask]
             return float((1 + s).prod() - 1) if len(s) > 0 else None
 
-        q = (today.month - 1) // 3
-        qtd_start = pd.Timestamp(today.year, q * 3 + 1, 1)
-        cum_3 = _pr(today - pd.DateOffset(years=3))
-        cum_5 = _pr(today - pd.DateOffset(years=5))
-        return {
-            "QTD":           _pr(qtd_start),
-            "YTD":           _pr(pd.Timestamp(today.year, 1, 1)),
-            "1 Year":        _pr(today - pd.DateOffset(years=1)),
-            "3 Year (Ann.)": ((1 + cum_3) ** (1 / 3) - 1) if cum_3 is not None else None,
-            "5 Year (Ann.)": ((1 + cum_5) ** (1 / 5) - 1) if cum_5 is not None else None,
+        _q = (_today.month - 1) // 3
+        _periods = {
+            "QTD":    pd.Timestamp(_today.year, _q * 3 + 1, 1),
+            "YTD":    pd.Timestamp(_today.year, 1, 1),
+            "1 Year": _today - pd.DateOffset(years=1),
+            "3 Year": _today - pd.DateOffset(years=3),
+            "5 Year": _today - pd.DateOffset(years=5),
         }
 
-    today = pd.Timestamp.today()
-    strat_vals = {}
-    bench_vals = {}
+        _tr_cols = st.columns(len(_periods))
+        for _col, (_label, _start) in zip(_tr_cols, _periods.items()):
+            pr = _ret(port_r, _start)
+            br = _ret(bench_r, _start) if not bench_r.empty else None
 
-    try:
-        sr_all2 = utils.get_strategy_returns()
-        if strat in sr_all2.columns:
-            strat_vals = _trailing_raw(sr_all2.set_index("as_of_date")[strat].dropna(), today)
-    except Exception:
-        pass
+            if _label == "3 Year" and pr is not None:
+                pr = (1 + pr) ** (1 / 3) - 1
+                br = (1 + br) ** (1 / 3) - 1 if br is not None else None
+            elif _label == "5 Year" and pr is not None:
+                pr = (1 + pr) ** (1 / 5) - 1
+                br = (1 + br) ** (1 / 5) - 1 if br is not None else None
 
-    try:
-        if bench:
-            br_all2 = utils.load_benchmark_returns()
-            if bench in br_all2.columns:
-                bench_vals = _trailing_raw(br_all2.set_index("as_of_date")[bench].dropna(), today)
-    except Exception:
-        pass
-
-    periods = ["QTD", "YTD", "1 Year", "3 Year (Ann.)", "5 Year (Ann.)"]
-    metric_cols = st.columns(5)
-    for i, period in enumerate(periods):
-        val = strat_vals.get(period)
-        bval = bench_vals.get(period)
-        delta_str = None
-        if val is not None and bval is not None:
-            delta_str = f"{val - bval:+.1%} vs bmk"
-        with metric_cols[i]:
-            st.metric(
-                label=period,
-                value=f"{val:.1%}" if val is not None else "—",
-                delta=delta_str,
-            )
+            if pr is not None:
+                _delta = f"{pr - br:+.1%} vs bmk" if br is not None else None
+                _col.metric(_label, f"{pr:.1%}", delta=_delta)
+            else:
+                _col.metric(_label, "—")
 
     st.divider()
 
-    # ── Section 3: Holdings aggregated by ticker ──────────────────────────────
+    # ── Section 3: Sleeve Performance Cards ───────────────────────────────────
+    st.subheader("Performance by Asset Class")
+    st.caption("Each sleeve shown vs its natural benchmark ETF · 3-year trailing")
+
+    with st.spinner("Loading sleeve returns..."):
+        sleeves = utils.get_sleeve_returns(client_id)
+
+    if sleeves:
+        SLEEVE_BENCHMARKS = {
+            "Equity":             ("Russell 3000", "IWV"),
+            "Concentrated Stock": ("S&P 500",      "SPY"),
+            "Intl Equity":        ("MSCI EAFE",    "EFA"),
+            "Fixed Income":       ("US Agg Bond",  "AGG"),
+            "High Yield":         ("HY Index",     "HYG"),
+            "Real Estate":        ("FTSE NAREIT",  "VNQ"),
+            "Commodities":        ("Bloomberg Cmdty", "PDBC"),
+        }
+
+        # Fetch IWV once for equity sleeve benchmark
+        try:
+            _iwv_end   = pd.Timestamp.today()
+            _iwv_start = _iwv_end - pd.DateOffset(years=3)
+            _iwv_raw   = yf.download("IWV", start=_iwv_start, end=_iwv_end,
+                                     interval="1mo", progress=False, auto_adjust=True)
+            if not _iwv_raw.empty:
+                _iwv_close = _iwv_raw["Close"].squeeze()
+                if hasattr(_iwv_close.index, "tz") and _iwv_close.index.tz is not None:
+                    _iwv_close.index = _iwv_close.index.tz_convert(None)
+                iwv = _iwv_close.pct_change().dropna()
+            else:
+                iwv = pd.Series(dtype=float)
+        except Exception:
+            iwv = pd.Series(dtype=float)
+
+        sleeve_list  = list(sleeves.items())
+        cols_per_row = 3
+
+        for _i in range(0, len(sleeve_list), cols_per_row):
+            _row = sleeve_list[_i : _i + cols_per_row]
+            _scols = st.columns(len(_row))
+
+            for _scol, (asset_class, _data) in zip(_scols, _row):
+                _r     = _data["returns"]
+                _etf   = _data["etf"]
+                _value = _data["value"]
+
+                _bench_name, _ = SLEEVE_BENCHMARKS.get(asset_class, ("Benchmark", _etf))
+                _bench_r_s = iwv if asset_class in ("Equity", "Concentrated Stock") and not iwv.empty else _r
+
+                _yr1_start = pd.Timestamp.today() - pd.DateOffset(years=1)
+                _mask      = _r.index >= _yr1_start
+                _yr1       = float((1 + _r[_mask]).prod() - 1) if _mask.any() else None
+                _mask_b    = _bench_r_s.index >= _yr1_start
+                _yr1_b     = float((1 + _bench_r_s[_mask_b]).prod() - 1) if _mask_b.any() else None
+
+                _spark = ((1 + _r).cumprod() * 100).reset_index()
+                _spark.columns = ["date", "value"]
+
+                _fig = px.line(_spark, x="date", y="value", height=120)
+                _fig.update_layout(
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    showlegend=False,
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                )
+                _fig.update_traces(
+                    line_color="#2ecc71" if _yr1 is not None and _yr1 > 0 else "#e74c3c",
+                    line_width=2,
+                )
+
+                with _scol:
+                    st.markdown(f"**{asset_class}**")
+                    st.caption(f"${_value / 1e6:.2f}M · vs {_bench_name}")
+                    st.plotly_chart(_fig, use_container_width=True,
+                                    config={"displayModeBar": False})
+                    if _yr1 is not None:
+                        _d = (f"{_yr1 - _yr1_b:+.1%} vs {_bench_name}"
+                              if _yr1_b is not None else None)
+                        st.metric("1yr Return", f"{_yr1:.1%}", delta=_d)
+                    else:
+                        st.metric("1yr Return", "—")
+    else:
+        st.info("Sleeve data loading...")
+
+    st.divider()
+
+    # ── Section 4: Holdings Table ─────────────────────────────────────────────
     st.subheader("Holdings")
     try:
         lots = utils.load_tax_lots(client_id=client_id) if client_id else pd.DataFrame()
@@ -3082,38 +3148,42 @@ def display_portfolio(selected_client, selected_strategy):
             for _col in ("shares", "cost_basis_total", "current_value", "unrealized_gl_dollars"):
                 lots[_col] = pd.to_numeric(lots[_col], errors="coerce")
 
-            total_mv = lots["current_value"].sum()
             holdings = (
-                lots.groupby("ticker", as_index=False)
+                lots.groupby(["ticker", "asset_class"], as_index=False)
                 .agg(
                     Shares=("shares", "sum"),
-                    **{"Market Value": ("current_value", "sum")},
-                    **{"Cost Basis": ("cost_basis_total", "sum")},
-                    **{"G/L $": ("unrealized_gl_dollars", "sum")},
+                    Market_Value=("current_value", "sum"),
+                    Cost_Basis=("cost_basis_total", "sum"),
+                    GL_Dollars=("unrealized_gl_dollars", "sum"),
                 )
-                .sort_values("Market Value", ascending=False)
+                .sort_values("Market_Value", ascending=False)
                 .reset_index(drop=True)
             )
-            holdings["G/L %"] = (holdings["G/L $"] / holdings["Cost Basis"]) * 100
-            holdings["Weight %"] = (holdings["Market Value"] / total_mv) * 100
-            holdings = holdings.rename(columns={"ticker": "Ticker"})
+            holdings["GL_Pct"] = (holdings["GL_Dollars"] / holdings["Cost_Basis"] * 100).round(1)
+            holdings["Weight"] = (
+                holdings["Market_Value"] / holdings["Market_Value"].sum() * 100
+            ).round(1)
+            holdings = holdings.rename(columns={"ticker": "Ticker", "asset_class": "Asset Class"})
 
-            col_cfg = {
-                "Shares":       st.column_config.NumberColumn(format="%,.0f"),
-                "Market Value": st.column_config.NumberColumn(format="$%,.0f"),
-                "Cost Basis":   st.column_config.NumberColumn(format="$%,.0f"),
-                "G/L $":        st.column_config.NumberColumn(format="$%+,.0f"),
-                "G/L %":        st.column_config.NumberColumn(format="%.1f%%"),
-                "Weight %":     st.column_config.NumberColumn(format="%.1f%%"),
-            }
-            st.dataframe(holdings, hide_index=True, use_container_width=True, column_config=col_cfg)
-
-            total_gl = lots["unrealized_gl_dollars"].sum()
-            n_pos = len(holdings)
+            st.dataframe(
+                holdings,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Shares":       st.column_config.NumberColumn("Shares",       format="%,.0f"),
+                    "Market_Value": st.column_config.NumberColumn("Market Value", format="$%,.0f"),
+                    "Cost_Basis":   st.column_config.NumberColumn("Cost Basis",   format="$%,.0f"),
+                    "GL_Dollars":   st.column_config.NumberColumn("G/L $",        format="$%,.0f"),
+                    "GL_Pct":       st.column_config.NumberColumn("G/L %",        format="%.1f%%"),
+                    "Weight":       st.column_config.NumberColumn("Weight %",     format="%.1f%%"),
+                },
+            )
+            total_val = holdings["Market_Value"].sum()
+            total_gl  = holdings["GL_Dollars"].sum()
             st.caption(
-                f"Total Market Value: ${total_mv:,.0f}  ·  "
-                f"Total G/L: ${total_gl:+,.0f}  ·  "
-                f"{n_pos} position{'s' if n_pos != 1 else ''}"
+                f"Total market value: ${total_val:,.0f} · "
+                f"Total G/L: ${total_gl:,.0f} · "
+                f"{len(holdings)} positions"
             )
     except Exception as _e:
         st.info(f"Holdings unavailable: {_e}")

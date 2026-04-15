@@ -2734,7 +2734,10 @@ def get_blended_portfolio_returns(
         lots["current_value"] = pd.to_numeric(lots["current_value"], errors="coerce").fillna(0)
         lots["etf_proxy"] = lots["asset_class"].map(ASSET_ETF).fillna("SPY")
 
-        weights = lots.groupby("etf_proxy")["current_value"].sum()
+        # Exclude illiquid positions (no observable ETF returns — QOZ, PE, Alternatives)
+        _ILLIQUID = {"Private Equity", "Alternative"}
+        liquid_lots = lots[~lots["asset_class"].isin(_ILLIQUID)]
+        weights = liquid_lots.groupby("etf_proxy")["current_value"].sum()
         weights = weights / weights.sum()
 
         policy = POLICY_WEIGHTS.get(risk_profile, POLICY_WEIGHTS["Moderate"])

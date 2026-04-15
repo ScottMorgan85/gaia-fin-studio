@@ -3010,7 +3010,10 @@ def display_portfolio(selected_client, selected_strategy):
             "Incept.": _inception or pd.Timestamp("2015-01-01"),
         }.get(period, _t - pd.DateOffset(years=3))
 
-    # ── Section 0: Donut + LLM Insights side-by-side (FIX 3) ──────────────────
+    # Pre-read current period from session state (needed for insights cache key before buttons render)
+    _current_period = st.session_state.get("port_period", "3Y")
+
+    # ── Section 0: Donut + LLM Insights side-by-side ───────────────────────────
     try:
         _lots_sun = utils.load_tax_lots(client_id=client_id) if client_id else pd.DataFrame()
         if not _lots_sun.empty:
@@ -3067,15 +3070,16 @@ def display_portfolio(selected_client, selected_strategy):
                 )
 
             with col_insights:
-                st.markdown("**Portfolio Insights**")
+                st.markdown("**Performance Attribution & Outlook**")
                 _ins_key = (
-                    f"port_insights_{selected_client}_"
+                    f"port_attr_{selected_client}_"
+                    f"{_current_period}_"
                     f"{pd.Timestamp.today().strftime('%Y%m%d')}"
                 )
 
                 if _ins_key not in st.session_state:
                     # Illiquid-position note (use already-loaded _lots_sun)
-                    _ill_mask_i = _lots_sun["asset_class"].isin({"Private Equity", "Alternative"})
+                    _ill_mask_i     = _lots_sun["asset_class"].isin({"Private Equity", "Alternative"})
                     _illiquid_val_i = float(_lots_sun.loc[_ill_mask_i, "current_value"].sum())
                     _illiquid_note_i = (
                         f"Note: ${_illiquid_val_i:,.0f} in illiquid positions (QOZ/PE) excluded "
@@ -3086,60 +3090,62 @@ def display_portfolio(selected_client, selected_strategy):
 
                     with st.spinner("Generating insights..."):
                         try:
-                            _today_i = pd.Timestamp.today()
-                            _qtd_s_i = pd.Timestamp(
-                                _today_i.year,
-                                ((_today_i.month - 1) // 3) * 3 + 1, 1
-                            )
+                            _today_i   = pd.Timestamp.today()
+                            _p_start_i = _period_start(_current_period, inception_date)
+
                             _slv_lines = []
                             for _ac, _d in sleeves.items():
                                 _rs  = _d["returns"]
                                 _brs = _d.get("bench_returns", _rs)
-                                _m   = _rs.index >= _qtd_s_i
-                                _qtd = float((1 + _rs[_m]).prod() - 1) if _m.any() else None
-                                _mb  = _brs.index >= _qtd_s_i
-                                _qtdb = float((1 + _brs[_mb]).prod() - 1) if _mb.any() else None
-                                if _qtd is not None:
-                                    _act = _qtd - _qtdb if _qtdb is not None else None
+                                _m   = _rs.index >= _p_start_i
+                                _pr  = float((1 + _rs[_m]).prod() - 1) if _m.any() else None
+                                _mb  = _brs.index >= _p_start_i
+                                _prb = float((1 + _brs[_mb]).prod() - 1) if _mb.any() else None
+                                if _pr is not None:
+                                    _act = _pr - _prb if _prb is not None else None
                                     _slv_lines.append(
-                                        f"{_ac}: {_qtd:.1%} QTD"
+                                        f"{_ac}: {_pr:.1%} ({_current_period})"
                                         + (f" (vs benchmark: {_act:+.1%})" if _act is not None else "")
                                     )
 
                             if not port_r.empty:
-                                _pm = port_r.index >= _qtd_s_i
-                                _qtd_port = (f"{float((1 + port_r[_pm]).prod() - 1):.1%}"
-                                             if _pm.any() else "N/A")
-                                _bm = bench_r.index >= _qtd_s_i
-                                _qtd_bench = (f"{float((1 + bench_r[_bm]).prod() - 1):.1%}"
-                                              if (_bm.any() and not bench_r.empty) else "N/A")
+                                _pm        = port_r.index >= _p_start_i
+                                _port_val  = float((1 + port_r[_pm]).prod() - 1) if _pm.any() else None
+                                _bm        = bench_r.index >= _p_start_i
+                                _bench_val = float((1 + bench_r[_bm]).prod() - 1) if (_bm.any() and not bench_r.empty) else None
+                                _act_val   = (_port_val - _bench_val) if (_port_val is not None and _bench_val is not None) else None
+                                _overall_str = f"{_port_val:.1%}"  if _port_val  is not None else "N/A"
+                                _bench_str   = f"{_bench_val:.1%}" if _bench_val is not None else "N/A"
+                                _active_str  = f"{_act_val:+.1%}"  if _act_val   is not None else "N/A"
                             else:
-                                _qtd_port = "N/A"
-                                _qtd_bench = "N/A"
+                                _overall_str = _bench_str = _active_str = "N/A"
 
-                            _q_num = (_today_i.month - 1) // 3 + 1
                             _prompt = (
-                                f"You are a senior portfolio analyst writing a brief attribution "
-                                f"note for an advisor.\n\n"
+                                f"You are a senior portfolio analyst writing a performance "
+                                f"attribution note for an advisor.\n\n"
                                 f"Client: {selected_client}\n"
                                 f"Risk Profile: {risk_profile}\n"
-                                f"Inception Date: {inception_str}\n"
-                                f"Quarter: Q{_q_num} {_today_i.year}\n\n"
-                                f"Sleeve performance vs benchmarks this quarter:\n"
+                                f"Period analyzed: {_current_period} "
+                                f"(ending {_today_i.strftime('%B %d, %Y')})\n"
+                                f"Inception: {inception_str}\n\n"
+                                f"Sleeve performance vs benchmarks for {_current_period}:\n"
                                 f"{chr(10).join(_slv_lines) if _slv_lines else 'No sleeve data available'}\n\n"
-                                f"Overall portfolio QTD: {_qtd_port}\n"
-                                f"vs Policy Benchmark: {_qtd_bench}\n\n"
+                                f"Overall portfolio {_current_period} return (Gross): {_overall_str}\n"
+                                f"vs IPS Policy Benchmark: {_bench_str}\n"
+                                f"Active return: {_active_str}\n\n"
                                 + (f"{_illiquid_note_i}\n\n" if _illiquid_note_i else "")
-                                + "Write exactly 3 sentences:\n"
-                                "1. What drove QTD return — name the top contributor and top "
-                                "detractor sleeve with specific numbers\n"
-                                f"2. If portfolio is underperforming benchmark: explain WHY the "
-                                f"positioning makes sense for this client's {risk_profile} risk "
-                                f"profile and horizon (do NOT just say underperformance — explain "
-                                f"the rationale e.g. defensive tilt, income focus, concentration "
-                                f"in quality names)\n"
-                                "3. One forward-looking sentence on market positioning\n\n"
-                                "Under 90 words. No generic statements. Be specific."
+                                + f"Write exactly 4 sentences — attribution note style:\n"
+                                f"1. Overall {_current_period} performance summary with specific "
+                                f"gross return and active return vs policy benchmark\n"
+                                f"2. Top contributing sleeve and top detracting sleeve with specific "
+                                f"numbers and brief reason why\n"
+                                f"3. If underperforming: explain the strategic rationale for the "
+                                f"positioning given this client's {risk_profile} risk profile and "
+                                f"time horizon — frame as intentional not failure\n"
+                                f"4. Forward outlook: one specific positioning view for next quarter "
+                                f"given current macro environment\n\n"
+                                f"Style: confident, precise, CFA-level language. "
+                                f"Use 'gross of fees' when referencing returns. Max 120 words."
                             )
                             _raw = utils.groq_chat(
                                 messages=[
@@ -3148,7 +3154,7 @@ def display_portfolio(selected_client, selected_strategy):
                                     {"role": "user", "content": _prompt},
                                 ],
                                 feature="port_attribution",
-                                max_tokens=200,
+                                max_tokens=250,
                                 temperature=0.2,
                             )
                             if hasattr(_raw, "choices"):
@@ -3160,9 +3166,13 @@ def display_portfolio(selected_client, selected_strategy):
                             st.session_state[_ins_key] = f"Attribution unavailable: {_e_ins}"
 
                 _commentary_text = st.session_state.get(_ins_key, "")
+                st.caption(
+                    f"AI-generated · {_current_period} period · "
+                    f"As of {pd.Timestamp.today().strftime('%B %d, %Y')} · Gross of fees"
+                )
                 st.markdown(
                     f'<div style="background:rgba(76,155,232,0.08);border-left:3px solid #4C9BE8;'
-                    f'border-radius:4px;padding:14px 16px;font-size:14px;line-height:1.6;'
+                    f'border-radius:4px;padding:14px 16px;font-size:13px;line-height:1.65;'
                     f'color:inherit;">{_commentary_text}</div>',
                     unsafe_allow_html=True,
                 )
@@ -3207,7 +3217,7 @@ def display_portfolio(selected_client, selected_strategy):
             growth_plot,
             x="Date",
             y=["Portfolio", "Policy Benchmark"],
-            title=f"Growth of $10,000 · {selected_period} · As of {_today_label}",
+            title=f"Growth of $10,000 (Gross) · {selected_period} · As of {_today_label}",
             labels={"value": "Portfolio Value ($)", "Date": "", "variable": ""},
             color_discrete_map={
                 "Portfolio":        "#1f77b4",
@@ -3233,8 +3243,8 @@ def display_portfolio(selected_client, selected_strategy):
         st.info("Portfolio return data loading... yfinance may be rate-limited.")
 
     # ── Section 2: Trailing Returns — colored HTML table (FIX 4) ──────────────
-    st.subheader(f"Trailing Returns · As of {_today_short}")
-    st.caption("Multi-year returns annualized · All periods vs IPS Policy Benchmark")
+    st.subheader(f"Trailing Returns (Gross of Fees) · As of {_today_short}")
+    st.caption("Returns shown gross of management fees · Multi-year returns annualized · vs IPS Policy Benchmark")
 
     if not port_r.empty:
         _today = pd.Timestamp.today()
@@ -3309,65 +3319,317 @@ def display_portfolio(selected_client, selected_strategy):
 
     st.divider()
 
-    # ── Section 3: Sleeve Performance Cards (FIX 2 — distinct benchmark ETFs) ──
-    st.subheader("Performance by Asset Class")
-    st.caption(f"Each sleeve vs its distinct benchmark ETF · {selected_period} period")
+    # ── Section 2b: Risk & Return Profile ─────────────────────────────────────
+    st.subheader(f"Risk & Return Profile · As of {_today_short}")
+    st.caption("Based on monthly gross returns · vs IPS Policy Benchmark")
 
-    if sleeves:
-        _sleeve_start = _period_start(selected_period, inception_date)
-        sleeve_list   = list(sleeves.items())
-        cols_per_row  = 3
+    def _compute_risk_metrics(returns, bench, period_start_ts):
+        r = returns[returns.index >= period_start_ts]
+        b = bench[bench.index >= period_start_ts] if not bench.empty else pd.Series(dtype=float)
+        if len(r) < 6:
+            return {}
+        ann_ret  = (1 + r).prod() ** (12 / len(r)) - 1
+        ann_vol  = r.std() * (12 ** 0.5)
+        rf_mo    = 0.05 / 12
+        excess   = r - rf_mo
+        sharpe   = (excess.mean() / excess.std() * (12 ** 0.5)
+                    if excess.std() > 0 else None)
+        downside = excess[excess < 0]
+        sortino  = (excess.mean() / downside.std() * (12 ** 0.5)
+                    if len(downside) > 2 else None)
+        cum      = (1 + r).cumprod()
+        roll_max = cum.cummax()
+        max_dd   = float(((cum - roll_max) / roll_max).min())
+        calmar   = (ann_ret / abs(max_dd) if max_dd != 0 else None)
+        aligned  = pd.concat([r, b], axis=1).dropna()
+        aligned.columns = ["port", "bench"]
+        if len(aligned) >= 12:
+            cov   = aligned.cov().iloc[0, 1]
+            var   = aligned["bench"].var()
+            beta  = cov / var if var > 0 else None
+            alpha = (ann_ret - beta * ((1 + aligned["bench"]).prod() ** (12 / len(aligned)) - 1)
+                     if beta is not None else None)
+        else:
+            beta = alpha = None
+        return {
+            "Ann. Return (Gross)": ann_ret,
+            "Ann. Volatility":     ann_vol,
+            "Sharpe Ratio":        sharpe,
+            "Sortino Ratio":       sortino,
+            "Max Drawdown":        max_dd,
+            "Calmar Ratio":        calmar,
+            "Beta":                beta,
+            "Alpha (Ann.)":        alpha,
+        }
 
-        for _i in range(0, len(sleeve_list), cols_per_row):
-            _row   = sleeve_list[_i : _i + cols_per_row]
-            _scols = st.columns(len(_row))
+    if not port_r.empty:
+        _rm = _compute_risk_metrics(
+            port_r, bench_r,
+            _period_start(selected_period, inception_date)
+        )
+        if _rm:
+            _c1, _c2, _c3, _c4 = st.columns(4)
+            _c1.metric(
+                "Ann. Return (Gross)",
+                f"{_rm['Ann. Return (Gross)']:.1%}" if _rm.get("Ann. Return (Gross)") is not None else "—"
+            )
+            _c2.metric(
+                "Ann. Volatility",
+                f"{_rm['Ann. Volatility']:.1%}" if _rm.get("Ann. Volatility") is not None else "—"
+            )
+            _c3.metric(
+                "Max Drawdown",
+                f"{_rm['Max Drawdown']:.1%}" if _rm.get("Max Drawdown") is not None else "—"
+            )
+            _c4.metric(
+                "Sharpe Ratio",
+                f"{_rm['Sharpe Ratio']:.2f}" if _rm.get("Sharpe Ratio") is not None else "—",
+                help="(Return − 5% risk-free) / Volatility"
+            )
+            _c5, _c6, _c7, _c8 = st.columns(4)
+            _c5.metric(
+                "Sortino Ratio",
+                f"{_rm['Sortino Ratio']:.2f}" if _rm.get("Sortino Ratio") is not None else "—",
+                help="Return / downside deviation only"
+            )
+            _c6.metric(
+                "Calmar Ratio",
+                f"{_rm['Calmar Ratio']:.2f}" if _rm.get("Calmar Ratio") is not None else "—",
+                help="Ann. return / Max drawdown"
+            )
+            _c7.metric(
+                "Beta vs Benchmark",
+                f"{_rm['Beta']:.2f}" if _rm.get("Beta") is not None else "—"
+            )
+            _c8.metric(
+                "Alpha (Ann., Gross)",
+                f"{_rm['Alpha (Ann.)']:.1%}" if _rm.get("Alpha (Ann.)") is not None else "—"
+            )
 
-            for _scol, (asset_class, _data) in zip(_scols, _row):
-                _r          = _data["returns"]
-                _bench_r_s  = _data.get("bench_returns", _r)
-                _bench_name = _data.get("bench_name", "Benchmark")
-                _value      = _data["value"]
-
-                _last_date = _r.index[-1].strftime("%b %d, %Y") if not _r.empty else "N/A"
-
-                _mask_p = _r.index >= _sleeve_start
-                _r_filt = _r[_mask_p] if _mask_p.any() else _r
-                _pret   = float((1 + _r_filt).prod() - 1) if not _r_filt.empty else None
-
-                _mask_pb = _bench_r_s.index >= _sleeve_start
-                _pbret   = (float((1 + _bench_r_s[_mask_pb]).prod() - 1)
-                            if _mask_pb.any() else None)
-
-                _spark = ((1 + _r_filt).cumprod() * 100).reset_index()
-                _spark.columns = ["date", "value"]
-
-                _fig = px.line(_spark, x="date", y="value", height=120)
-                _fig.update_layout(
-                    margin=dict(l=0, r=0, t=0, b=0),
-                    showlegend=False,
-                    xaxis=dict(visible=False),
-                    yaxis=dict(visible=False),
+            # Rolling 12-month volatility chart
+            _rvp   = (port_r.rolling(12).std() * (12 ** 0.5)).dropna()
+            _rvb   = (bench_r.rolling(12).std() * (12 ** 0.5)).dropna() if not bench_r.empty else pd.Series(dtype=float)
+            _pst   = _period_start(selected_period, inception_date)
+            _rvp_f = _rvp[_rvp.index >= _pst]
+            if not _rvp_f.empty:
+                _fig_vol = go.Figure()
+                _fig_vol.add_trace(go.Scatter(
+                    x=_rvp_f.index, y=_rvp_f.values,
+                    fill="tozeroy",
+                    fillcolor="rgba(76,155,232,0.15)",
+                    line=dict(color="#4C9BE8", width=1.5),
+                    name="Portfolio Vol"
+                ))
+                if not _rvb.empty:
+                    _rvb_f = _rvb[_rvb.index >= _pst]
+                    if not _rvb_f.empty:
+                        _fig_vol.add_trace(go.Scatter(
+                            x=_rvb_f.index, y=_rvb_f.values,
+                            line=dict(color="#888888", width=1, dash="dash"),
+                            name="Benchmark Vol"
+                        ))
+                _fig_vol.update_layout(
+                    title=dict(
+                        text="Rolling 12-Month Volatility (Annualized) · Gross",
+                        font=dict(size=12)
+                    ),
+                    height=200,
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    yaxis=dict(tickformat=".0%", title="Ann. Volatility"),
+                    hovermode="x unified",
+                    legend=dict(orientation="h", y=1.15),
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
                 )
-                _fig.update_traces(
-                    line_color="#2ecc71" if _pret is not None and _pret > 0 else "#e74c3c",
-                    line_width=2,
+                st.plotly_chart(_fig_vol, use_container_width=True)
+                st.caption(
+                    "Rolling 12-month realized volatility · Gross of fees · "
+                    "Blue fill = portfolio, gray dashed = policy benchmark"
                 )
 
-                with _scol:
-                    st.markdown(f"**{asset_class}**")
-                    st.caption(
-                        f"${_value / 1e6:.2f}M · vs {_bench_name} · As of {_last_date}"
+    st.divider()
+
+    # ── Section 3: Sleeve Performance Cards ───────────────────────────────────
+    st.subheader("Performance by Asset Class")
+    st.caption(f"Each sleeve vs its distinct benchmark ETF · {selected_period} period · Gross of fees")
+
+    SLEEVE_COLORS = {
+        "Equity":             "#4C9BE8",
+        "Concentrated Stock": "#E87C4C",
+        "Intl Equity":        "#9B4CE8",
+        "Fixed Income":       "#4CE8A7",
+        "High Yield":         "#E8D84C",
+        "Real Estate":        "#4CE87C",
+        "Commodities":        "#E84CAD",
+        "Private Equity":     "#4CE8D8",
+        "Cash":               "#888888",
+    }
+
+    if sleeves:
+        from plotly.subplots import make_subplots as _make_subplots
+        sleeve_list = list(sleeves.items())
+
+        for _si in range(0, len(sleeve_list), 3):
+            _row_items = sleeve_list[_si: _si + 3]
+            _scols     = st.columns(3)
+
+            for _sj, _scol in enumerate(_scols):
+                if _sj >= len(_row_items):
+                    continue
+
+                _asset_class, _data = _row_items[_sj]
+                _r           = _data["returns"]
+                _bench_r_s   = _data.get("bench_returns", pd.Series(dtype=float))
+                _bench_name  = _data.get("bench_name", "Benchmark")
+                _value       = _data["value"]
+                _sleeve_color = SLEEVE_COLORS.get(_asset_class, "#4C9BE8")
+
+                _sleeve_start = _period_start(selected_period, inception_date)
+                _r_f  = _r[_r.index >= _sleeve_start] if not _r.empty else _r
+                _br_f = (_bench_r_s[_bench_r_s.index >= _sleeve_start]
+                         if not _bench_r_s.empty else pd.Series(dtype=float))
+
+                if _r_f.empty:
+                    with _scol:
+                        st.markdown(f"**{_asset_class}**")
+                        st.caption("No data for period")
+                    continue
+
+                _growth_p = (1 + _r_f).cumprod() * 100
+
+                if not _br_f.empty:
+                    _growth_b = (1 + _br_f).cumprod() * 100
+                    _comb     = pd.concat([_growth_p, _growth_b], axis=1).dropna()
+                    _comb.columns = ["portfolio", "bench"]
+                    _active_s = _comb["portfolio"] - _comb["bench"]
+                else:
+                    _comb     = None
+                    _active_s = pd.Series(dtype=float)
+
+                _fig_sl = _make_subplots(specs=[[{"secondary_y": True}]])
+
+                # Portfolio return line (colored)
+                _fig_sl.add_trace(
+                    go.Scatter(
+                        x=_growth_p.index, y=_growth_p.values,
+                        name=_asset_class,
+                        line=dict(color=_sleeve_color, width=2),
+                        showlegend=False,
+                        hovertemplate="%{x|%b %Y}: %{y:.1f}<extra></extra>"
+                    ),
+                    secondary_y=False
+                )
+
+                if _comb is not None and not _active_s.empty:
+                    # Benchmark line — gray dashed
+                    _fig_sl.add_trace(
+                        go.Scatter(
+                            x=_comb.index, y=_comb["bench"].values,
+                            name=_bench_name,
+                            line=dict(color="#666666", width=1, dash="dash"),
+                            showlegend=False,
+                            hovertemplate=f"{_bench_name} %{{x|%b %Y}}: %{{y:.1f}}<extra></extra>"
+                        ),
+                        secondary_y=False
                     )
-                    st.plotly_chart(_fig, use_container_width=True,
+                    # Active return — positive green dotted
+                    _pos_a = _active_s.where(_active_s > 0)
+                    _fig_sl.add_trace(
+                        go.Scatter(
+                            x=_active_s.index, y=_pos_a.values,
+                            name="Active (+)",
+                            line=dict(color="#2ECC71", width=1, dash="dot"),
+                            showlegend=False, opacity=0.7,
+                        ),
+                        secondary_y=True
+                    )
+                    # Active return — negative red dotted
+                    _neg_a = _active_s.where(_active_s < 0)
+                    _fig_sl.add_trace(
+                        go.Scatter(
+                            x=_active_s.index, y=_neg_a.values,
+                            name="Active (-)",
+                            line=dict(color="#E74C3C", width=1, dash="dot"),
+                            showlegend=False, opacity=0.7,
+                        ),
+                        secondary_y=True
+                    )
+                    # Zero reference line on secondary axis
+                    _fig_sl.add_trace(
+                        go.Scatter(
+                            x=[_active_s.index[0], _active_s.index[-1]],
+                            y=[0, 0],
+                            mode="lines",
+                            line=dict(color="#444", width=0.5),
+                            showlegend=False, hoverinfo="skip",
+                        ),
+                        secondary_y=True
+                    )
+
+                # Rolling vol band (6-month window, annualized)
+                if len(_r_f) >= 6:
+                    _roll_vol  = (_r_f.rolling(6).std() * (12 ** 0.5)) * 100
+                    _vol_upper = (_growth_p + _roll_vol * 2).dropna()
+                    _vol_lower = (_growth_p - _roll_vol * 2).dropna()
+                    if not _vol_upper.empty and not _vol_lower.empty:
+                        _vb = pd.concat([_vol_upper, _vol_lower], axis=1).dropna()
+                        _vb.columns = ["upper", "lower"]
+                        try:
+                            _fill_c = (
+                                f"rgba({int(_sleeve_color[1:3],16)},"
+                                f"{int(_sleeve_color[3:5],16)},"
+                                f"{int(_sleeve_color[5:7],16)},0.10)"
+                            )
+                        except Exception:
+                            _fill_c = "rgba(76,155,232,0.10)"
+                        _fig_sl.add_trace(
+                            go.Scatter(
+                                x=_vb.index.tolist() + _vb.index.tolist()[::-1],
+                                y=_vb["upper"].tolist() + _vb["lower"].tolist()[::-1],
+                                fill="toself",
+                                fillcolor=_fill_c,
+                                line=dict(width=0),
+                                showlegend=False, hoverinfo="skip",
+                                name="Vol band"
+                            ),
+                            secondary_y=False
+                        )
+
+                _fig_sl.update_layout(
+                    height=160,
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    showlegend=False,
+                    xaxis=dict(visible=True, showticklabels=False, showgrid=False),
+                    yaxis=dict(visible=False, showgrid=False),
+                    yaxis2=dict(visible=False, showgrid=False),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    hovermode="x unified",
+                )
+
+                _period_ret = float((1 + _r_f).prod() - 1) if not _r_f.empty else None
+                _bench_ret  = float((1 + _br_f).prod() - 1) if not _br_f.empty else None
+                _active_ret = ((_period_ret - _bench_ret)
+                               if (_period_ret is not None and _bench_ret is not None) else None)
+                _last_date  = _r.index[-1].strftime("%b %d, %Y") if not _r.empty else "N/A"
+
+                with _scol:
+                    st.markdown(f"**{_asset_class}**")
+                    st.caption(f"${_value / 1e6:.2f}M · vs {_bench_name} · As of {_last_date}")
+                    st.plotly_chart(_fig_sl, use_container_width=True,
                                     config={"displayModeBar": False})
-                    if _pret is not None:
-                        _d = (f"{_pret - _pbret:+.1%} vs {_bench_name}"
-                              if _pbret is not None else None)
-                        st.metric(f"{selected_period} Return", f"{_pret:.1%}", delta=_d)
+                    if _period_ret is not None:
+                        _delta_str = (
+                            f"{_active_ret:+.1%} vs {_bench_name}"
+                            if _active_ret is not None else None
+                        )
+                        st.metric(
+                            f"{selected_period} Return (Gross)",
+                            f"{_period_ret:.1%}",
+                            delta=_delta_str
+                        )
                     else:
-                        st.metric(f"{selected_period} Return", "—")
+                        st.metric(f"{selected_period} Return (Gross)", "—")
     else:
         st.info("Sleeve data loading...")
 

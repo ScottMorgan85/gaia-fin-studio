@@ -2785,11 +2785,23 @@ def get_blended_portfolio_returns(
 @st.cache_data(ttl=3600)
 def get_sleeve_returns(client_id: str) -> dict:
     """
-    Returns monthly returns per asset-class sleeve using ETF proxies.
-    Return shape: {asset_class: {"returns": pd.Series, "etf": str, "value": float}}
+    Returns monthly returns per asset-class sleeve.
+    Portfolio proxy ETF and a DISTINCT benchmark ETF are downloaded so
+    the active-return spread is meaningful (not always 0.0%).
+
+    Return shape:
+      {asset_class: {
+          "returns":       pd.Series,   # proxy ETF (what client roughly holds)
+          "bench_returns": pd.Series,   # benchmark ETF (distinct comparison)
+          "etf":           str,
+          "bench_etf":     str,
+          "bench_name":    str,
+          "value":         float,
+      }}
     """
     import yfinance as yf
 
+    # Portfolio proxy — represents what the client holds
     ASSET_ETF = {
         "Equity":             "SPY",
         "Concentrated Stock": "SPY",
@@ -2797,8 +2809,33 @@ def get_sleeve_returns(client_id: str) -> dict:
         "Fixed Income":       "AGG",
         "High Yield":         "HYG",
         "Real Estate":        "VNQ",
-        "Commodities":        "PDBC",
+        "Commodities":        "DJP",   # iPath Bloomberg Commodity
+        "Private Equity":     "PSP",
     }
+
+    # Benchmark — what we compare the sleeve against
+    BENCH_ETF = {
+        "Equity":             ("Russell 3000",        "IWV"),
+        "Concentrated Stock": ("Russell 3000",        "IWV"),
+        "Intl Equity":        ("Vanguard Dev Mkts",   "VEA"),
+        "Fixed Income":       ("Vanguard Total Bond", "BND"),
+        "High Yield":         ("SPDR HY Bond",        "JNK"),
+        "Real Estate":        ("Schwab US REIT",      "SCHH"),
+        "Commodities":        ("Invesco Cmdty",       "PDBC"),
+        "Private Equity":     ("Listed PE",           "PSP"),  # same — no good alt
+    }
+
+    def _dl(ticker, start, end):
+        raw = yf.download(
+            ticker, start=start, end=end,
+            interval="1mo", progress=False, auto_adjust=True,
+        )
+        if raw.empty:
+            return pd.Series(dtype=float)
+        close = raw["Close"].squeeze()
+        if hasattr(close.index, "tz") and close.index.tz is not None:
+            close.index = close.index.tz_convert(None)
+        return close.pct_change().dropna()
 
     try:
         lots = load_tax_lots(client_id=client_id)
@@ -2813,24 +2850,27 @@ def get_sleeve_returns(client_id: str) -> dict:
 
         result: dict = {}
         for asset_class, value in sleeve_values.items():
-            etf = ASSET_ETF.get(asset_class)
-            if not etf:
+            proxy_etf = ASSET_ETF.get(asset_class)
+            if not proxy_etf:
                 continue
+
+            bench_name, bench_etf = BENCH_ETF.get(asset_class, ("Benchmark", proxy_etf))
+
             try:
-                raw = yf.download(
-                    etf, start=start, end=end,
-                    interval="1mo", progress=False, auto_adjust=True,
-                )
-                if not raw.empty:
-                    close = raw["Close"].squeeze()
-                    if hasattr(close.index, "tz") and close.index.tz is not None:
-                        close.index = close.index.tz_convert(None)
-                    r = close.pct_change().dropna()
-                    result[asset_class] = {
-                        "returns": r,
-                        "etf":     etf,
-                        "value":   float(value),
-                    }
+                r = _dl(proxy_etf, start, end)
+                if r.empty:
+                    continue
+
+                bench_r = r.copy() if bench_etf == proxy_etf else _dl(bench_etf, start, end)
+
+                result[asset_class] = {
+                    "returns":       r,
+                    "bench_returns": bench_r,
+                    "etf":           proxy_etf,
+                    "bench_etf":     bench_etf,
+                    "bench_name":    bench_name,
+                    "value":         float(value),
+                }
             except Exception:
                 pass
 

@@ -37,7 +37,7 @@ streamlit-vertical-slider>=2.5,<3.0
 st-annotated-text>=4.0,<5.0
 openpyxl==3.1.5
 
-# ── RAG / Vector store ───────────────
-chromadb>=0.4.0
-sentence-transformers>=2.2.0
-PyPDF2>=3.0.0
+# RAG dependencies — local only, not on DO
+# Install manually: pip install chromadb
+#   sentence-transformers PyPDF2
+#   --break-system-packages

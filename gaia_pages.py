@@ -4935,82 +4935,85 @@ def display_llm_observatory():
     st.divider()
     st.subheader("RAG Document Activity")
 
-    rag_log_path = "data/rag_log.csv"
+    if not utils.RAG_AVAILABLE:
+        st.info("RAG monitoring available in local development mode only.")
+    else:
+        rag_log_path = "data/rag_log.csv"
 
-    try:
-        if (os.path.exists(rag_log_path) and
-                os.path.getsize(rag_log_path) > 50):
+        try:
+            if (os.path.exists(rag_log_path) and
+                    os.path.getsize(rag_log_path) > 50):
 
-            rag_df = pd.read_csv(rag_log_path)
+                rag_df = pd.read_csv(rag_log_path)
 
-            if not rag_df.empty:
-                ingests   = rag_df[rag_df["event_type"] == "ingest"]
-                retrieves = rag_df[rag_df["event_type"] == "retrieve"]
+                if not rag_df.empty:
+                    ingests   = rag_df[rag_df["event_type"] == "ingest"]
+                    retrieves = rag_df[rag_df["event_type"] == "retrieve"]
 
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Docs Indexed",    len(ingests))
-                c2.metric("RAG Queries",     len(retrieves))
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Docs Indexed",    len(ingests))
+                    c2.metric("RAG Queries",     len(retrieves))
 
-                avg_score = pd.to_numeric(
-                    retrieves["top_score"], errors="coerce"
-                ).mean()
-                c3.metric(
-                    "Avg Top Score",
-                    f"{avg_score:.2f}" if not pd.isna(avg_score) else "—"
-                )
-                c4.metric("Clients w/ Docs", rag_df["client"].nunique())
-
-                st.subheader("Recent Events")
-                show_cols = [c for c in [
-                    "timestamp", "event_type", "client", "filename",
-                    "query", "chunks_retrieved", "top_score"
-                ] if c in rag_df.columns]
-                st.dataframe(
-                    rag_df[show_cols].tail(20).sort_values(
-                        "timestamp", ascending=False
-                    ),
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                if not retrieves.empty:
-                    scores = pd.to_numeric(
+                    avg_score = pd.to_numeric(
                         retrieves["top_score"], errors="coerce"
-                    ).dropna()
-                    if not scores.empty:
-                        fig_rag = px.histogram(
-                            x=scores,
-                            nbins=15,
-                            title="RAG Retrieval Relevance Scores",
-                            labels={"x": "Relevance Score", "count": "Queries"},
-                            color_discrete_sequence=["#4C9BE8"]
-                        )
-                        fig_rag.add_vline(
-                            x=0.7, line_dash="dash", line_color="#2ECC71",
-                            annotation_text="Good match",
-                            annotation_position="top right"
-                        )
-                        fig_rag.add_vline(
-                            x=0.4, line_dash="dash", line_color="#E74C3C",
-                            annotation_text="Weak match",
-                            annotation_position="top right"
-                        )
-                        fig_rag.update_layout(height=250)
-                        st.plotly_chart(fig_rag, use_container_width=True)
-                        st.caption(
-                            "Score > 0.7: high relevance · Score < 0.4: weak match · "
-                            "Consider adding more specific documents"
-                        )
+                    ).mean()
+                    c3.metric(
+                        "Avg Top Score",
+                        f"{avg_score:.2f}" if not pd.isna(avg_score) else "—"
+                    )
+                    c4.metric("Clients w/ Docs", rag_df["client"].nunique())
+
+                    st.subheader("Recent Events")
+                    show_cols = [c for c in [
+                        "timestamp", "event_type", "client", "filename",
+                        "query", "chunks_retrieved", "top_score"
+                    ] if c in rag_df.columns]
+                    st.dataframe(
+                        rag_df[show_cols].tail(20).sort_values(
+                            "timestamp", ascending=False
+                        ),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    if not retrieves.empty:
+                        scores = pd.to_numeric(
+                            retrieves["top_score"], errors="coerce"
+                        ).dropna()
+                        if not scores.empty:
+                            fig_rag = px.histogram(
+                                x=scores,
+                                nbins=15,
+                                title="RAG Retrieval Relevance Scores",
+                                labels={"x": "Relevance Score", "count": "Queries"},
+                                color_discrete_sequence=["#4C9BE8"]
+                            )
+                            fig_rag.add_vline(
+                                x=0.7, line_dash="dash", line_color="#2ECC71",
+                                annotation_text="Good match",
+                                annotation_position="top right"
+                            )
+                            fig_rag.add_vline(
+                                x=0.4, line_dash="dash", line_color="#E74C3C",
+                                annotation_text="Weak match",
+                                annotation_position="top right"
+                            )
+                            fig_rag.update_layout(height=250)
+                            st.plotly_chart(fig_rag, use_container_width=True)
+                            st.caption(
+                                "Score > 0.7: high relevance · Score < 0.4: weak match · "
+                                "Consider adding more specific documents"
+                            )
+                else:
+                    st.info(
+                        "No RAG activity yet — upload documents in Research Assistant."
+                    )
             else:
                 st.info(
-                    "No RAG activity yet — upload documents in Research Assistant."
+                    "No RAG activity yet — upload documents in Research Assistant to get started."
                 )
-        else:
-            st.info(
-                "No RAG activity yet — upload documents in Research Assistant to get started."
-            )
-    except Exception as e:
-        st.warning(f"RAG monitoring unavailable: {e}")
+        except Exception as e:
+            st.warning(f"RAG monitoring unavailable: {e}")
 
 
 # ── RAG Research Assistant ────────────────────────────────────────────────────
@@ -5179,51 +5182,57 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
         else "📁 Knowledge Base — No documents yet"
     )
     with st.expander(expander_label, expanded=(doc_count == 0)):
-        if docs:
-            for doc in docs:
-                c1, c2, c3 = st.columns([3, 2, 1])
-                c1.write(f"📄 {doc['filename']}")
-                c2.caption(f"{doc['doc_type']} · {doc['ingested_at']}")
-                if c3.button(
-                    "🗑",
-                    key=f"rag_del_{doc['filename']}",
-                    help="Remove document"
-                ):
-                    utils.rag_delete_document(selected_client, doc["filename"])
-                    st.rerun()
-            st.divider()
+        if not utils.RAG_AVAILABLE:
+            st.info(
+                "📂 Document RAG is available in local development only. "
+                "Coming soon to the hosted version."
+            )
+        else:
+            if docs:
+                for doc in docs:
+                    c1, c2, c3 = st.columns([3, 2, 1])
+                    c1.write(f"📄 {doc['filename']}")
+                    c2.caption(f"{doc['doc_type']} · {doc['ingested_at']}")
+                    if c3.button(
+                        "🗑",
+                        key=f"rag_del_{doc['filename']}",
+                        help="Remove document"
+                    ):
+                        utils.rag_delete_document(selected_client, doc["filename"])
+                        st.rerun()
+                st.divider()
 
-        doc_type = st.selectbox(
-            "Document type",
-            ["Estate Plan", "Tax Return", "Meeting Notes", "Investment Policy",
-             "Financial Plan", "CIO Commentary", "Other"],
-            key="rag_doc_type_sel"
-        )
-        uploaded_file = st.file_uploader(
-            "Upload PDF or TXT",
-            type=["pdf", "txt"],
-            key="rag_file_upload"
-        )
-        if uploaded_file is not None:
-            if st.button(
-                f"Index '{uploaded_file.name}'",
-                key="rag_index_btn",
-                type="primary"
-            ):
-                with st.spinner("Indexing document..."):
-                    result = utils.rag_ingest_document(
-                        client_name=selected_client,
-                        file_content=uploaded_file.read(),
-                        filename=uploaded_file.name,
-                        doc_type=doc_type
-                    )
-                if result["success"]:
-                    st.success(
-                        f"✓ Indexed {result['chunks']} chunks from {uploaded_file.name}"
-                    )
-                    st.rerun()
-                else:
-                    st.error(f"Failed: {result.get('error', 'unknown')}")
+            doc_type = st.selectbox(
+                "Document type",
+                ["Estate Plan", "Tax Return", "Meeting Notes", "Investment Policy",
+                 "Financial Plan", "CIO Commentary", "Other"],
+                key="rag_doc_type_sel"
+            )
+            uploaded_file = st.file_uploader(
+                "Upload PDF or TXT",
+                type=["pdf", "txt"],
+                key="rag_file_upload"
+            )
+            if uploaded_file is not None:
+                if st.button(
+                    f"Index '{uploaded_file.name}'",
+                    key="rag_index_btn",
+                    type="primary"
+                ):
+                    with st.spinner("Indexing document..."):
+                        result = utils.rag_ingest_document(
+                            client_name=selected_client,
+                            file_content=uploaded_file.read(),
+                            filename=uploaded_file.name,
+                            doc_type=doc_type
+                        )
+                    if result["success"]:
+                        st.success(
+                            f"✓ Indexed {result['chunks']} chunks from {uploaded_file.name}"
+                        )
+                        st.rerun()
+                    else:
+                        st.error(f"Failed: {result.get('error', 'unknown')}")
 
     # ── Context banner + Clear chat button ────────────────────────────────────
     banner_col, clear_col = st.columns([4, 1])

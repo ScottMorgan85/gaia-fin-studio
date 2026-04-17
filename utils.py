@@ -26,6 +26,14 @@ import data.client_central_fact as fact_data
 import data.client_interactions_data as interactions
 from groq import Groq
 
+try:
+    import chromadb
+    from sentence_transformers import SentenceTransformer
+    import PyPDF2
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+
 def get_fred_key() -> str:
     """Return FRED API key from env var, falling back to hardcoded public key."""
     return os.environ.get("FRED_API_KEY", "f4ac14beb82a2e5cf49e141465baa458")
@@ -2932,6 +2940,8 @@ def rag_ingest_document(
     Chunks text, embeds, stores per-client.
     Returns dict with success, chunks, error.
     """
+    if not RAG_AVAILABLE:
+        return {"success": False, "error": "RAG not available on this deployment"}
     try:
         # Extract text
         text = ""
@@ -3026,6 +3036,8 @@ def rag_retrieve(
     Semantic search — returns top N relevant chunks.
     Each result: {text, filename, relevance_score}
     """
+    if not RAG_AVAILABLE:
+        return []
     try:
         collection = _get_rag_collection(client_name)
         if not collection:
@@ -3071,6 +3083,8 @@ def rag_retrieve(
 
 def rag_list_documents(client_name: str) -> list:
     """List all indexed documents for a client."""
+    if not RAG_AVAILABLE:
+        return []
     try:
         collection = _get_rag_collection(client_name)
         if not collection or collection.count() == 0:
@@ -3093,6 +3107,8 @@ def rag_list_documents(client_name: str) -> list:
 
 def rag_delete_document(client_name: str, filename: str) -> bool:
     """Delete all chunks for a document."""
+    if not RAG_AVAILABLE:
+        return False
     try:
         collection = _get_rag_collection(client_name)
         if not collection:

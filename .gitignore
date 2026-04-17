@@ -29,6 +29,10 @@ Thumbs.db
 data/visitor_log.csv
 data/rec_log.csv
 data/client_interactions.csv
+data/rag_log.csv
+
+# ChromaDB local vector store — local only, not persisted to DO
+data/chroma_db/
 
 # Logs
 *.log

@@ -2882,3 +2882,260 @@ def get_sleeve_returns(client_id: str) -> dict:
     except Exception as e:
         print(f"[GAIA] sleeve returns failed: {e}", flush=True)
         return {}
+
+
+# ── ChromaDB RAG — Persistent Document Intelligence ───────────────────────────
+
+def _get_chroma_client():
+    """Get ChromaDB persistent client."""
+    import chromadb
+    os.makedirs("data/chroma_db", exist_ok=True)
+    return chromadb.PersistentClient(path="data/chroma_db")
+
+
+def _get_embedder():
+    """
+    Get sentence-transformers embedder.
+    Downloads model once, cached locally.
+    Small fast model: all-MiniLM-L6-v2 (80MB)
+    """
+    from sentence_transformers import SentenceTransformer
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+def _get_rag_collection(client_name: str):
+    """Get or create per-client ChromaDB collection."""
+    try:
+        chroma = _get_chroma_client()
+        safe = (
+            client_name.lower()
+            .replace(" ", "_")
+            .replace("-", "_")[:40]
+        )
+        return chroma.get_or_create_collection(
+            name=f"gaia_{safe}",
+            metadata={"client": client_name}
+        )
+    except Exception as e:
+        print(f"[GAIA RAG] Collection error: {e}", flush=True)
+        return None
+
+
+def rag_ingest_document(
+    client_name: str,
+    file_content: bytes,
+    filename: str,
+    doc_type: str = "general"
+) -> dict:
+    """
+    Ingest a PDF or TXT into ChromaDB.
+    Chunks text, embeds, stores per-client.
+    Returns dict with success, chunks, error.
+    """
+    try:
+        # Extract text
+        text = ""
+        if filename.lower().endswith(".pdf"):
+            import PyPDF2, io
+            reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+        else:
+            text = file_content.decode("utf-8", errors="ignore")
+
+        if not text.strip():
+            return {"success": False, "error": "No text could be extracted"}
+
+        # Chunk with overlap
+        chunk_size = 500
+        overlap = 75
+        chunks = []
+        i = 0
+        while i < len(text):
+            chunk = text[i:i + chunk_size].strip()
+            if chunk:
+                chunks.append(chunk)
+            i += chunk_size - overlap
+
+        if not chunks:
+            return {"success": False, "error": "No chunks created"}
+
+        # Embed
+        embedder = _get_embedder()
+        embeddings = embedder.encode(chunks, show_progress_bar=False).tolist()
+
+        # Store
+        collection = _get_rag_collection(client_name)
+        if not collection:
+            return {"success": False, "error": "ChromaDB unavailable"}
+
+        import hashlib
+        doc_hash = hashlib.md5(file_content).hexdigest()[:8]
+
+        # Remove existing chunks for this file
+        try:
+            existing = collection.get(where={"filename": filename})
+            if existing["ids"]:
+                collection.delete(ids=existing["ids"])
+        except Exception:
+            pass
+
+        # Add new chunks
+        ids = [f"{doc_hash}_c{j}" for j in range(len(chunks))]
+        collection.add(
+            documents=chunks,
+            embeddings=embeddings,
+            ids=ids,
+            metadatas=[{
+                "filename": filename,
+                "doc_type": doc_type,
+                "client": client_name,
+                "chunk_index": j,
+                "ingested_at": pd.Timestamp.today().isoformat()
+            } for j in range(len(chunks))]
+        )
+
+        _rag_log(
+            event_type="ingest",
+            client=client_name,
+            filename=filename,
+            doc_type=doc_type,
+            chunks=len(chunks)
+        )
+
+        return {
+            "success": True,
+            "filename": filename,
+            "chunks": len(chunks),
+            "doc_type": doc_type,
+        }
+
+    except Exception as e:
+        print(f"[GAIA RAG] Ingest error: {e}", flush=True)
+        return {"success": False, "error": str(e)}
+
+
+def rag_retrieve(
+    client_name: str,
+    query: str,
+    n_results: int = 4
+) -> list:
+    """
+    Semantic search — returns top N relevant chunks.
+    Each result: {text, filename, relevance_score}
+    """
+    try:
+        collection = _get_rag_collection(client_name)
+        if not collection:
+            return []
+
+        count = collection.count()
+        if count == 0:
+            return []
+
+        embedder = _get_embedder()
+        q_embed = embedder.encode([query], show_progress_bar=False).tolist()
+
+        results = collection.query(
+            query_embeddings=q_embed,
+            n_results=min(n_results, count),
+            include=["documents", "metadatas", "distances"]
+        )
+
+        chunks = []
+        for i, doc in enumerate(results["documents"][0]):
+            score = round(1 - results["distances"][0][i], 3)
+            chunks.append({
+                "text": doc,
+                "filename": results["metadatas"][0][i].get("filename", "unknown"),
+                "doc_type": results["metadatas"][0][i].get("doc_type", "general"),
+                "relevance_score": score,
+            })
+
+        _rag_log(
+            event_type="retrieve",
+            client=client_name,
+            query=query,
+            chunks_retrieved=len(chunks),
+            top_score=(chunks[0]["relevance_score"] if chunks else 0)
+        )
+
+        return chunks
+
+    except Exception as e:
+        print(f"[GAIA RAG] Retrieve error: {e}", flush=True)
+        return []
+
+
+def rag_list_documents(client_name: str) -> list:
+    """List all indexed documents for a client."""
+    try:
+        collection = _get_rag_collection(client_name)
+        if not collection or collection.count() == 0:
+            return []
+
+        all_items = collection.get(include=["metadatas"])
+        seen = {}
+        for meta in all_items["metadatas"]:
+            fname = meta.get("filename", "unknown")
+            if fname not in seen:
+                seen[fname] = {
+                    "filename": fname,
+                    "doc_type": meta.get("doc_type", "general"),
+                    "ingested_at": meta.get("ingested_at", "")[:10],
+                }
+        return list(seen.values())
+    except Exception:
+        return []
+
+
+def rag_delete_document(client_name: str, filename: str) -> bool:
+    """Delete all chunks for a document."""
+    try:
+        collection = _get_rag_collection(client_name)
+        if not collection:
+            return False
+        existing = collection.get(where={"filename": filename})
+        if existing["ids"]:
+            collection.delete(ids=existing["ids"])
+            _rag_log(
+                event_type="delete",
+                client=client_name,
+                filename=filename
+            )
+            return True
+        return False
+    except Exception:
+        return False
+
+
+def _rag_log(**kwargs):
+    """Append a RAG event to data/rag_log.csv."""
+    try:
+        log_path = "data/rag_log.csv"
+        cols = [
+            "timestamp", "event_type", "client",
+            "filename", "doc_type", "query",
+            "chunks", "chunks_retrieved", "top_score"
+        ]
+        row = {
+            "timestamp": pd.Timestamp.today().isoformat(),
+            "event_type": kwargs.get("event_type", ""),
+            "client": kwargs.get("client", ""),
+            "filename": kwargs.get("filename", ""),
+            "doc_type": kwargs.get("doc_type", ""),
+            "query": str(kwargs.get("query", ""))[:200],
+            "chunks": kwargs.get("chunks", ""),
+            "chunks_retrieved": kwargs.get("chunks_retrieved", ""),
+            "top_score": kwargs.get("top_score", ""),
+        }
+        if os.path.exists(log_path):
+            df = pd.read_csv(log_path)
+        else:
+            df = pd.DataFrame(columns=cols)
+        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        df.to_csv(log_path, index=False)
+    except Exception as e:
+        print(f"[GAIA RAG] Log error: {e}", flush=True)

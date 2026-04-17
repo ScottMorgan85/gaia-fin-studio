@@ -4931,6 +4931,87 @@ def display_llm_observatory():
         recent["success"] = recent["success"].map({1: "✓", 0: "✗"})
         st.dataframe(recent.set_index("ts"), use_container_width=True)
 
+    # ── RAG Activity ──────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("RAG Document Activity")
+
+    rag_log_path = "data/rag_log.csv"
+
+    try:
+        if (os.path.exists(rag_log_path) and
+                os.path.getsize(rag_log_path) > 50):
+
+            rag_df = pd.read_csv(rag_log_path)
+
+            if not rag_df.empty:
+                ingests   = rag_df[rag_df["event_type"] == "ingest"]
+                retrieves = rag_df[rag_df["event_type"] == "retrieve"]
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Docs Indexed",    len(ingests))
+                c2.metric("RAG Queries",     len(retrieves))
+
+                avg_score = pd.to_numeric(
+                    retrieves["top_score"], errors="coerce"
+                ).mean()
+                c3.metric(
+                    "Avg Top Score",
+                    f"{avg_score:.2f}" if not pd.isna(avg_score) else "—"
+                )
+                c4.metric("Clients w/ Docs", rag_df["client"].nunique())
+
+                st.subheader("Recent Events")
+                show_cols = [c for c in [
+                    "timestamp", "event_type", "client", "filename",
+                    "query", "chunks_retrieved", "top_score"
+                ] if c in rag_df.columns]
+                st.dataframe(
+                    rag_df[show_cols].tail(20).sort_values(
+                        "timestamp", ascending=False
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                if not retrieves.empty:
+                    scores = pd.to_numeric(
+                        retrieves["top_score"], errors="coerce"
+                    ).dropna()
+                    if not scores.empty:
+                        fig_rag = px.histogram(
+                            x=scores,
+                            nbins=15,
+                            title="RAG Retrieval Relevance Scores",
+                            labels={"x": "Relevance Score", "count": "Queries"},
+                            color_discrete_sequence=["#4C9BE8"]
+                        )
+                        fig_rag.add_vline(
+                            x=0.7, line_dash="dash", line_color="#2ECC71",
+                            annotation_text="Good match",
+                            annotation_position="top right"
+                        )
+                        fig_rag.add_vline(
+                            x=0.4, line_dash="dash", line_color="#E74C3C",
+                            annotation_text="Weak match",
+                            annotation_position="top right"
+                        )
+                        fig_rag.update_layout(height=250)
+                        st.plotly_chart(fig_rag, use_container_width=True)
+                        st.caption(
+                            "Score > 0.7: high relevance · Score < 0.4: weak match · "
+                            "Consider adding more specific documents"
+                        )
+            else:
+                st.info(
+                    "No RAG activity yet — upload documents in Research Assistant."
+                )
+        else:
+            st.info(
+                "No RAG activity yet — upload documents in Research Assistant to get started."
+            )
+    except Exception as e:
+        st.warning(f"RAG monitoring unavailable: {e}")
+
 
 # ── RAG Research Assistant ────────────────────────────────────────────────────
 
@@ -5079,6 +5160,71 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
     n_alerts  = meta["n_alerts"]
     total_aum = meta["total_aum"]
 
+    # ── Title + caption ───────────────────────────────────────────────────────
+    st.title("Research Assistant")
+    st.caption(
+        f"Client: {selected_client} · "
+        f"RAG-enabled · "
+        f"Ask questions about uploaded documents"
+    )
+
+    # ── ChromaDB document management ─────────────────────────────────────────
+    docs = utils.rag_list_documents(selected_client)
+    doc_count = len(docs)
+
+    expander_label = (
+        f"📁 Knowledge Base "
+        f"({'%d doc%s' % (doc_count, 's' if doc_count != 1 else '')} indexed)"
+        if doc_count > 0
+        else "📁 Knowledge Base — No documents yet"
+    )
+    with st.expander(expander_label, expanded=(doc_count == 0)):
+        if docs:
+            for doc in docs:
+                c1, c2, c3 = st.columns([3, 2, 1])
+                c1.write(f"📄 {doc['filename']}")
+                c2.caption(f"{doc['doc_type']} · {doc['ingested_at']}")
+                if c3.button(
+                    "🗑",
+                    key=f"rag_del_{doc['filename']}",
+                    help="Remove document"
+                ):
+                    utils.rag_delete_document(selected_client, doc["filename"])
+                    st.rerun()
+            st.divider()
+
+        doc_type = st.selectbox(
+            "Document type",
+            ["Estate Plan", "Tax Return", "Meeting Notes", "Investment Policy",
+             "Financial Plan", "CIO Commentary", "Other"],
+            key="rag_doc_type_sel"
+        )
+        uploaded_file = st.file_uploader(
+            "Upload PDF or TXT",
+            type=["pdf", "txt"],
+            key="rag_file_upload"
+        )
+        if uploaded_file is not None:
+            if st.button(
+                f"Index '{uploaded_file.name}'",
+                key="rag_index_btn",
+                type="primary"
+            ):
+                with st.spinner("Indexing document..."):
+                    result = utils.rag_ingest_document(
+                        client_name=selected_client,
+                        file_content=uploaded_file.read(),
+                        filename=uploaded_file.name,
+                        doc_type=doc_type
+                    )
+                if result["success"]:
+                    st.success(
+                        f"✓ Indexed {result['chunks']} chunks from {uploaded_file.name}"
+                    )
+                    st.rerun()
+                else:
+                    st.error(f"Failed: {result.get('error', 'unknown')}")
+
     # ── Context banner + Clear chat button ────────────────────────────────────
     banner_col, clear_col = st.columns([4, 1])
     history_key = f"ra_history_{selected_client}"
@@ -5220,30 +5366,76 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
             today = pd.Timestamp.today().strftime("%B %d, %Y")
             results = []
 
-            # Retrieve document chunks if a document is indexed
+            # Retrieve relevant document chunks (ChromaDB)
+            rag_chunks = utils.rag_retrieve(
+                client_name=selected_client,
+                query=user_query,
+                n_results=4
+            )
+
+            # Build RAG context block
+            if rag_chunks:
+                rag_block = "\n\nRELEVANT DOCUMENT EXCERPTS:\n"
+                for chunk in rag_chunks:
+                    rag_block += (
+                        f"\n[Source: {chunk['filename']} "
+                        f"| Relevance: {chunk['relevance_score']:.2f}]\n"
+                        f"{chunk['text']}\n"
+                    )
+
+                with st.expander(
+                    f"📚 {len(rag_chunks)} chunks retrieved "
+                    f"(top score: {rag_chunks[0]['relevance_score']:.2f})",
+                    expanded=False
+                ):
+                    for chunk in rag_chunks:
+                        st.caption(
+                            f"**{chunk['filename']}** · "
+                            f"score: {chunk['relevance_score']:.2f}"
+                        )
+                        st.text(chunk["text"][:400] + "...")
+                        st.divider()
+            else:
+                rag_block = ""
+
+            # Show RAG status
+            if rag_chunks:
+                st.caption(
+                    f"📚 Answering with {len(rag_chunks)} document chunks · "
+                    f"Top relevance: {rag_chunks[0]['relevance_score']:.2f}"
+                )
+            elif doc_count > 0:
+                st.caption(
+                    f"📂 {doc_count} doc(s) indexed · No chunks matched this query"
+                )
+            else:
+                st.caption("📂 No documents indexed · Upload above to enable RAG")
+
+            # Also retrieve from in-memory TF-IDF index if available
             doc_section = ""
             if idx:
                 with st.spinner("Retrieving relevant sections…"):
                     results = utils.retrieve_chunks(user_query, idx, top_k=5)
                 if results:
                     parts = [f"[Excerpt {i+1}]\n{chunk}" for i, (chunk, _) in enumerate(results)]
-                    doc_section = "\n\nDOCUMENT EXCERPTS:\n\n" + "\n\n---\n\n".join(parts)
+                    doc_section = "\n\nIN-SESSION DOCUMENT EXCERPTS:\n\n" + "\n\n---\n\n".join(parts)
 
-            system_prompt = (
-                "You are GAIA — an AI research assistant embedded in a wealth management platform.\n"
-                "You have full context about the advisor's current client and their portfolio situation.\n\n"
-                "You help advisors with:\n"
-                "- Investment research and market analysis\n"
-                "- Tax strategy questions (TLH, RSU planning, etc.)\n"
-                "- Portfolio construction and risk analysis\n"
-                "- Client communication drafting\n"
-                "- Regulatory and compliance questions\n\n"
-                "Always ground your answers in the client context below. When relevant, reference "
-                "specific numbers from their portfolio. Be concise and actionable.\n\n"
-                f"{client_ctx}\n"
-                f"Today's date: {today}"
-                f"{doc_section}"
-            )
+            system_prompt = f"""You are GAIA — an AI research assistant for wealth advisors.
+
+CLIENT CONTEXT:
+{client_ctx}
+
+{rag_block if rag_block else "No documents uploaded for this client yet."}
+{doc_section}
+Instructions:
+- Ground answers in the data and documents above
+- Cite document filenames when referencing them
+- Be specific with numbers from the client context
+- Flag uncertainty clearly
+- Be concise and advisor-focused
+
+Today: {today}
+"""
 
             # Last 6 turns for context window efficiency
             convo = [

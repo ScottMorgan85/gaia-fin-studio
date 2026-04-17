@@ -5163,31 +5163,22 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
     n_alerts  = meta["n_alerts"]
     total_aum = meta["total_aum"]
 
-    # ── Title + caption ───────────────────────────────────────────────────────
-    st.title("Research Assistant")
-    st.caption(
-        f"Client: {selected_client} · "
-        f"RAG-enabled · "
-        f"Ask questions about uploaded documents"
-    )
+    # ── Knowledge Base (ChromaDB — local only) ────────────────────────────────
+    if utils.RAG_AVAILABLE:
+        docs = utils.rag_list_documents(selected_client)
+        doc_count = len(docs)
 
-    # ── ChromaDB document management ─────────────────────────────────────────
-    docs = utils.rag_list_documents(selected_client)
-    doc_count = len(docs)
-
-    expander_label = (
-        f"📁 Knowledge Base "
-        f"({'%d doc%s' % (doc_count, 's' if doc_count != 1 else '')} indexed)"
-        if doc_count > 0
-        else "📁 Knowledge Base — No documents yet"
-    )
-    with st.expander(expander_label, expanded=(doc_count == 0)):
-        if not utils.RAG_AVAILABLE:
-            st.info(
-                "📂 Document RAG is available in local development only. "
-                "Coming soon to the hosted version."
+        expander_label = (
+            f"📁 Knowledge Base — {len(docs)} doc(s) indexed"
+            if docs else
+            "📁 Knowledge Base — Upload client documents"
+        )
+        with st.expander(expander_label, expanded=False):
+            st.caption(
+                "Upload estate plans, tax returns, meeting notes, or financial plans. "
+                "The assistant will reference these documents when answering questions."
             )
-        else:
+
             if docs:
                 for doc in docs:
                     c1, c2, c3 = st.columns([3, 2, 1])
@@ -5195,8 +5186,8 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
                     c2.caption(f"{doc['doc_type']} · {doc['ingested_at']}")
                     if c3.button(
                         "🗑",
-                        key=f"rag_del_{doc['filename']}",
-                        help="Remove document"
+                        key=f"del_{doc['filename']}",
+                        help="Remove"
                     ):
                         utils.rag_delete_document(selected_client, doc["filename"])
                         st.rerun()
@@ -5213,13 +5204,13 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
                 type=["pdf", "txt"],
                 key="rag_file_upload"
             )
-            if uploaded_file is not None:
+            if uploaded_file:
                 if st.button(
                     f"Index '{uploaded_file.name}'",
                     key="rag_index_btn",
                     type="primary"
                 ):
-                    with st.spinner("Indexing document..."):
+                    with st.spinner("Indexing..."):
                         result = utils.rag_ingest_document(
                             client_name=selected_client,
                             file_content=uploaded_file.read(),
@@ -5228,11 +5219,13 @@ def display_rag_research(selected_client: str = "", selected_strategy: str = "")
                         )
                     if result["success"]:
                         st.success(
-                            f"✓ Indexed {result['chunks']} chunks from {uploaded_file.name}"
+                            f"✓ {result['chunks']} chunks indexed from {uploaded_file.name}"
                         )
                         st.rerun()
                     else:
-                        st.error(f"Failed: {result.get('error', 'unknown')}")
+                        st.error(f"Failed: {result.get('error')}")
+    else:
+        doc_count = 0
 
     # ── Context banner + Clear chat button ────────────────────────────────────
     banner_col, clear_col = st.columns([4, 1])
